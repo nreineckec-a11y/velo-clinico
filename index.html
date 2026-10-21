@@ -127,6 +127,7 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
 .modal-info{font-size:15px; padding-block:8px; padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
 .lienzo-wrap{flex:1; min-height:0; display:flex; align-items:flex-start; justify-content:center; padding:8px; overflow:hidden}
 #lienzo{display:block; touch-action:pinch-zoom; cursor:crosshair; border-radius:6px; box-shadow:0 0 0 1px var(--line); max-width:none}
+.lupa{position:fixed; width:150px; height:150px; border-radius:50%; border:3px solid #fff; box-shadow:0 0 0 2px var(--accent), 0 8px 22px rgba(0,0,0,.35); pointer-events:none; z-index:25; background:#000}
 .toast{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(24px + env(safe-area-inset-bottom,0px)); background:var(--ink); color:var(--bg); padding:10px 16px; border-radius:999px; font-size:14px; z-index:30; width:max-content; max-width:calc(100% - 32px); text-align:center}
 </style>
 </head>
@@ -153,6 +154,7 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
     <input type="file" id="adjunto" accept="image/*,.pdf,application/pdf,.docx,.txt" multiple hidden>
     <p class="nota" id="adjInfo" hidden></p>
     <div class="fotos" id="fotos" hidden></div>
+    <p class="nota" id="consejoFoto" hidden>Si solo necesitas el texto de una foto, es más fácil: en la app Fotos toca el botón de texto (Texto en vivo), copia y pégalo en el cuadro. Los datos se ocultan solos y no envías la imagen.</p>
   </section>
 
   <section class="bloque" id="bloqueEnvio" aria-label="Enviar" hidden>
@@ -202,7 +204,8 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
     <button class="btn sec chico" id="edCancelar" type="button">Cancelar</button>
     <button class="btn chico" id="fotoListo" type="button">Listo</button>
   </div>
-  <p class="modal-info" id="edInfo">Marca con el dedo un recuadro sobre la única parte que quieres enviar, por ejemplo los resultados. Lo de afuera no sale del teléfono.</p>
+  <p class="modal-info" id="edInfo">Arrastra el dedo sobre la parte que quieres enviar. Mientras lo mueves, una lupa te muestra el detalle.</p>
+  <canvas id="lupa" class="lupa" hidden aria-hidden="true"></canvas>
   <div class="lienzo-wrap" id="lienzoWrap"><canvas id="lienzo" aria-label="Imagen: marca la parte que quieres enviar"></canvas></div>
 </div>
 
@@ -724,7 +727,7 @@ if (enMarco && window.claude && typeof window.claude.use === "function"){
 const nuevoEstado = () => ({res:null, cons:null, fotos:[], turnos:[], registro:new Map(), cont:{}, mapa:{}, fotosEnviadas:[]});
 let caso = nuevoEstado();
 let enCurso = false, ctl = null, avisoBloqueo = false, otrasAuto = false;
-const ed = {idx:-1, respaldo:[], dib:null, puntero:null};
+const ed = {idx:-1, respaldo:null, gesto:null};
 const fotosListas = () => caso.fotos.filter(f => !f.pendiente && f.blob);
 const fotosPendientes = () => caso.fotos.filter(f => f.pendiente).length;
 // Claude responde aquí mismo solo cuando la página está abierta dentro de Claude
@@ -1064,7 +1067,7 @@ function agregarImagen(blob){
     const src = URL.createObjectURL(blob), im = new Image();
     im.onload = () => {
       const k = Math.min(1, MAXL / Math.max(im.naturalWidth, im.naturalHeight));
-      caso.fotos.push({img:im, src, w:Math.max(1, Math.round(im.naturalWidth * k)), h:Math.max(1, Math.round(im.naturalHeight * k)), sel:null, blob:null, url:null, pendiente:true});
+      caso.fotos.push({img:im, src, w:Math.max(1, Math.round(im.naturalWidth * k)), h:Math.max(1, Math.round(im.naturalHeight * k)), pts:null, blob:null, url:null, pendiente:true});
       res(true);
     };
     im.onerror = () => { URL.revokeObjectURL(src); res(false); };
@@ -1185,6 +1188,7 @@ document.addEventListener("drop", e => {
 function pintarFotos(){
   const g = $("fotos");
   g.hidden = !caso.fotos.length;
+  $("consejoFoto").hidden = !caso.fotos.length;
   g.innerHTML = caso.fotos.map((f, i) => {
     const info = f.pendiente ? "⚠ Falta elegir qué enviar" : "Se enviará solo el recorte";
     return '<div class="foto-item' + (f.pendiente ? " pend" : "") + '"><img src="' + esc(f.url || f.src) + '" alt="Imagen ' + (i + 1) + '">' +
@@ -1205,67 +1209,124 @@ function quitarFoto(i){
   pintarFotos(); pintarEnvio();
 }
 
-/* ===================== elegir con un recuadro la parte que se envía ===================== */
+/* ===================== elegir la parte que se envía: 4 esquinas ajustables y lupa ===================== */
 const lz = $("lienzo"), cx = lz.getContext("2d");
+const lupa = $("lupa"), lx = lupa.getContext("2d");
+const LUPA = 150, ZOOM = 3;   // diámetro de la lupa en pantalla y aumento
 function abrirEditor(i){
   const f = caso.fotos[i]; if (!f) return;
-  ed.idx = i; ed.respaldo = f.sel ? Object.assign({}, f.sel) : null; ed.dib = null;
+  ed.idx = i; ed.respaldo = f.pts ? f.pts.map(q => Object.assign({}, q)) : null; ed.gesto = null;
   lz.width = f.w; lz.height = f.h;
   $("edTitulo").textContent = caso.fotos.length > 1 ? "Imagen " + (i + 1) + " de " + caso.fotos.length : "Elige qué enviar";
   $("editor").hidden = false; document.body.classList.add("modal-abierto");
   requestAnimationFrame(() => { ajustarLienzo(); redibujar(); });
 }
-function cerrarEditor(){ $("editor").hidden = true; document.body.classList.remove("modal-abierto"); ed.idx = -1; ed.dib = null; }
+function cerrarEditor(){ $("editor").hidden = true; lupa.hidden = true; document.body.classList.remove("modal-abierto"); ed.idx = -1; ed.gesto = null; }
 function ajustarLienzo(){
   const f = caso.fotos[ed.idx]; if (!f) return;
   const w = $("lienzoWrap"), W = Math.max(100, w.clientWidth - 16), H = Math.max(100, w.clientHeight - 16);
   const k = Math.min(W / f.w, H / f.h);
   lz.style.width = Math.round(f.w * k) + "px"; lz.style.height = Math.round(f.h * k) + "px";
 }
-window.addEventListener("resize", () => { if (!$("editor").hidden) ajustarLienzo(); });
-const normCaja = d => ({x:Math.min(d.x0, d.x1), y:Math.min(d.y0, d.y1), w:Math.abs(d.x1 - d.x0), h:Math.abs(d.y1 - d.y0)});
-function dentro(b){
-  const x = Math.max(0, b.x), y = Math.max(0, b.y);
-  return {x, y, w:Math.min(lz.width, b.x + b.w) - x, h:Math.min(lz.height, b.y + b.h) - y};
-}
+window.addEventListener("resize", () => { if (!$("editor").hidden){ ajustarLienzo(); redibujar(); } });
+// Píxeles de la imagen por cada píxel de pantalla
+const escala = () => { const r = lz.getBoundingClientRect(); return r.width ? lz.width / r.width : 1; };
 function punto(e){ const r = lz.getBoundingClientRect(); return {x:(e.clientX - r.left) * lz.width / r.width, y:(e.clientY - r.top) * lz.height / r.height}; }
+const limitar = p => ({x:Math.min(lz.width, Math.max(0, p.x)), y:Math.min(lz.height, Math.max(0, p.y))});
+const copiaPts = pts => pts ? pts.map(q => ({x:q.x, y:q.y})) : null;
+function rectAPts(a, b){
+  const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x), y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y);
+  return [{x:x0, y:y0}, {x:x1, y:y0}, {x:x1, y:y1}, {x:x0, y:y1}];
+}
+function camino(ctx, pts){ ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.closePath(); }
+function dentroPoligono(p, pts){
+  let d = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++){
+    const a = pts[i], b = pts[j];
+    if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) d = !d;
+  }
+  return d;
+}
+function area(pts){ let s2 = 0; for (let i = 0; i < pts.length; i++){ const a = pts[i], b = pts[(i + 1) % pts.length]; s2 += a.x * b.y - b.x * a.y; } return Math.abs(s2) / 2; }
+const valido = pts => !!pts && area(pts) > (lz.width * lz.height) / 500;
 function redibujar(){
   const f = caso.fotos[ed.idx]; if (!f) return;
+  const k = escala(), pts = f.pts;
   cx.drawImage(f.img, 0, 0, lz.width, lz.height);
-  const b = ed.dib ? dentro(normCaja(ed.dib)) : f.sel;
-  if (b){
-    // Lo que queda fuera del recuadro se oscurece: no se enviará
-    cx.fillStyle = "rgba(0,0,0,.62)";
-    cx.fillRect(0, 0, lz.width, b.y);
-    cx.fillRect(0, b.y + b.h, lz.width, lz.height - b.y - b.h);
-    cx.fillRect(0, b.y, b.x, b.h);
-    cx.fillRect(b.x + b.w, b.y, lz.width - b.x - b.w, b.h);
-    cx.strokeStyle = "#2fd29b"; cx.lineWidth = Math.max(3, lz.width / 250); cx.strokeRect(b.x, b.y, b.w, b.h);
+  if (pts){
+    // Lo que queda fuera de la forma se oscurece: no se enviará
+    cx.save(); cx.fillStyle = "rgba(0,0,0,.62)";
+    cx.beginPath(); cx.rect(0, 0, lz.width, lz.height);
+    pts.forEach((q, i) => i ? cx.lineTo(q.x, q.y) : cx.moveTo(q.x, q.y)); cx.closePath();
+    cx.fill("evenodd"); cx.restore();
+    camino(cx, pts); cx.strokeStyle = "#2fd29b"; cx.lineWidth = 3 * k; cx.stroke();
+    pts.forEach(q => {
+      cx.beginPath(); cx.arc(q.x, q.y, 13 * k, 0, Math.PI * 2);
+      cx.fillStyle = "rgba(255,255,255,.92)"; cx.fill(); cx.lineWidth = 3 * k; cx.strokeStyle = "#1d6b57"; cx.stroke();
+    });
   }
-  $("fotoListo").disabled = !f.sel;
-  $("edInfo").textContent = f.sel
-    ? "Solo se enviará lo que está dentro del recuadro. Para cambiarlo, marca otro."
-    : "Marca con el dedo un recuadro sobre la única parte que quieres enviar, por ejemplo los resultados. Lo de afuera no sale del teléfono.";
+  $("fotoListo").disabled = !valido(pts);
+  $("edInfo").textContent = pts
+    ? "Arrastra cada esquina para dejar fuera el nombre y el RUT; la lupa te muestra el detalle. Arrastra por dentro para mover la forma."
+    : "Arrastra el dedo sobre la parte que quieres enviar. Mientras lo mueves, una lupa te muestra el detalle.";
+}
+function mostrarLupa(e, p){
+  const dpr = window.devicePixelRatio || 1, lado = LUPA / ZOOM * escala();
+  if (lupa.width !== Math.round(LUPA * dpr)){ lupa.width = lupa.height = Math.round(LUPA * dpr); }
+  const c = lupa.width / 2, m = 11 * dpr;
+  lx.fillStyle = "#000"; lx.fillRect(0, 0, lupa.width, lupa.height);
+  lx.drawImage(lz, p.x - lado / 2, p.y - lado / 2, lado, lado, 0, 0, lupa.width, lupa.height);
+  // La cruz marca el punto exacto bajo el dedo
+  lx.strokeStyle = "#e5484d"; lx.lineWidth = 2 * dpr;
+  lx.beginPath(); lx.moveTo(c - m, c); lx.lineTo(c + m, c); lx.moveTo(c, c - m); lx.lineTo(c, c + m); lx.stroke();
+  // Va arriba del dedo para que no lo tape; si no cabe, abajo
+  let left = e.clientX - LUPA / 2, top = e.clientY - LUPA - 56;
+  if (top < 8) top = e.clientY + 56;
+  left = Math.max(8, Math.min(window.innerWidth - LUPA - 8, left));
+  lupa.style.left = left + "px"; lupa.style.top = top + "px"; lupa.hidden = false;
+}
+function terminarGesto(cancelar){
+  const g = ed.gesto, f = caso.fotos[ed.idx];
+  if (!g) return;
+  // Un toque, una forma mínima o un pellizco no reemplazan lo que ya estaba marcado
+  if (f && (cancelar || (g.tipo === "nuevo" && !valido(f.pts)))) f.pts = g.orig;
+  ed.gesto = null; lupa.hidden = true; redibujar();
 }
 lz.addEventListener("pointerdown", e => {
   if (ed.idx < 0) return;
-  // Un segundo dedo significa que la persona quiere acercar: se cancela el recuadro en curso
-  if (ed.dib && ed.puntero !== e.pointerId){ ed.dib = null; redibujar(); return; }
+  const f = caso.fotos[ed.idx]; if (!f) return;
+  // Un segundo dedo significa que la persona quiere acercar con pellizco
+  if (ed.gesto && ed.gesto.id !== e.pointerId){ terminarGesto(true); return; }
   e.preventDefault(); try { lz.setPointerCapture(e.pointerId); } catch(_){}
-  ed.puntero = e.pointerId;
-  const p = punto(e); ed.dib = {x0:p.x, y0:p.y, x1:p.x, y1:p.y}; redibujar();
+  const p = limitar(punto(e)), g = {id:e.pointerId, ini:p, orig:copiaPts(f.pts)};
+  if (f.pts){
+    const i = f.pts.findIndex(q => Math.hypot(q.x - p.x, q.y - p.y) <= 32 * escala());
+    if (i >= 0){ g.tipo = "esquina"; g.i = i; }
+    else if (dentroPoligono(p, f.pts)) g.tipo = "mover";
+  }
+  if (!g.tipo){ g.tipo = "nuevo"; f.pts = rectAPts(p, p); }
+  ed.gesto = g; redibujar();
+  if (g.tipo !== "mover") mostrarLupa(e, g.tipo === "esquina" ? f.pts[g.i] : p);
 });
-lz.addEventListener("pointermove", e => { if (!ed.dib || e.pointerId !== ed.puntero) return; e.preventDefault(); const p = punto(e); ed.dib.x1 = p.x; ed.dib.y1 = p.y; redibujar(); });
-lz.addEventListener("pointerup", e => {
-  if (!ed.dib || e.pointerId !== ed.puntero) return;
-  const b = dentro(normCaja(ed.dib)); ed.dib = null;
-  const f = caso.fotos[ed.idx], min = lz.width / 40;
-  if (f && b.w > min && b.h > min) f.sel = b;
+lz.addEventListener("pointermove", e => {
+  const g = ed.gesto; if (!g || e.pointerId !== g.id) return;
+  e.preventDefault();
+  const f = caso.fotos[ed.idx], p = limitar(punto(e));
+  if (g.tipo === "esquina") f.pts[g.i] = p;
+  else if (g.tipo === "nuevo") f.pts = rectAPts(g.ini, p);
+  else {
+    const xs = g.orig.map(q => q.x), ys = g.orig.map(q => q.y);
+    const dx = Math.max(-Math.min(...xs), Math.min(lz.width - Math.max(...xs), p.x - g.ini.x));
+    const dy = Math.max(-Math.min(...ys), Math.min(lz.height - Math.max(...ys), p.y - g.ini.y));
+    f.pts = g.orig.map(q => ({x:q.x + dx, y:q.y + dy}));
+  }
   redibujar();
+  if (g.tipo !== "mover") mostrarLupa(e, p);
 });
-lz.addEventListener("pointercancel", () => { ed.dib = null; redibujar(); });
+lz.addEventListener("pointerup", e => { if (ed.gesto && e.pointerId === ed.gesto.id) terminarGesto(false); });
+lz.addEventListener("pointercancel", e => { if (ed.gesto && e.pointerId === ed.gesto.id) terminarGesto(true); });
 $("edCancelar").addEventListener("click", () => {
-  const f = caso.fotos[ed.idx]; if (f) f.sel = ed.respaldo;
+  const f = caso.fotos[ed.idx]; if (f) f.pts = copiaPts(ed.respaldo);
   cerrarEditor(); pintarFotos(); pintarEnvio();
 });
 $("edQuitar").addEventListener("click", () => {
@@ -1274,14 +1335,18 @@ $("edQuitar").addEventListener("click", () => {
   if (sig >= 0) abrirEditor(sig);
 });
 $("fotoListo").addEventListener("click", () => {
-  const i = ed.idx, f = caso.fotos[i]; if (!f || !f.sel) return;
+  const i = ed.idx, f = caso.fotos[i]; if (!f || !valido(f.pts)) return;
   // El recorte se toma de la foto original, para que el texto pequeño quede nítido
-  const k = f.img.naturalWidth / f.w;
-  const sx = f.sel.x * k, sy = f.sel.y * k, sw = f.sel.w * k, sh = f.sel.h * k;
-  const esc2 = Math.min(1, MAXL / Math.max(sw, sh));
+  const k = f.img.naturalWidth / f.w, P = f.pts.map(q => ({x:q.x * k, y:q.y * k}));
+  const x0 = Math.max(0, Math.min(...P.map(q => q.x))), y0 = Math.max(0, Math.min(...P.map(q => q.y)));
+  const x1 = Math.min(f.img.naturalWidth, Math.max(...P.map(q => q.x))), y1 = Math.min(f.img.naturalHeight, Math.max(...P.map(q => q.y)));
+  const sw = x1 - x0, sh = y1 - y0, s2 = Math.min(1, MAXL / Math.max(sw, sh));
   const c = document.createElement("canvas");
-  c.width = Math.max(1, Math.round(sw * esc2)); c.height = Math.max(1, Math.round(sh * esc2));
-  c.getContext("2d").drawImage(f.img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  c.width = Math.max(1, Math.round(sw * s2)); c.height = Math.max(1, Math.round(sh * s2));
+  const g = c.getContext("2d");
+  g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);   // fuera de la forma elegida queda en blanco
+  g.save(); camino(g, P.map(q => ({x:(q.x - x0) * s2, y:(q.y - y0) * s2}))); g.clip();
+  g.drawImage(f.img, x0, y0, sw, sh, 0, 0, c.width, c.height); g.restore();
   // Re-codificar en JPEG también elimina la ubicación GPS y demás metadatos de la foto original
   c.toBlob(blob => {
     if (!blob){ toast("No se pudo preparar el recorte."); return; }
