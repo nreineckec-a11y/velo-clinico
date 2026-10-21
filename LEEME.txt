@@ -1,0 +1,31 @@
+VELO CLÍNICO · versión instalable
+
+QUÉ ES
+Una app web que anonimiza casos clínicos (texto, fotos, PDF y Word) en el teléfono o el computador y los consulta con Claude, ChatGPT o Gemini. La respuesta llega dentro de la app con los datos reales repuestos, y puedes seguir conversando. No tiene servidor propio: lo único que sale del dispositivo es el texto anonimizado y las imágenes tachadas que envías a la IA que elijas.
+
+PUBLICARLA (una sola vez, gratis, sin programar) · GitHub Pages
+1. Crea una cuenta en github.com.
+2. Crea un repositorio nuevo llamado velo-clinico (público).
+3. Elige subir archivos existentes y arrastra TODOS los archivos de esta carpeta (los archivos, no la carpeta). Confirma.
+4. En Settings > Pages, publica desde la rama main, carpeta raíz (/ root) y guarda.
+5. En uno o dos minutos queda en https://TU-USUARIO.github.io/velo-clinico/
+
+INSTALARLA EN EL IPHONE
+Abre esa dirección en Safari > Compartir > Agregar a pantalla de inicio.
+Anonimiza sin internet; para consultar a la IA necesita conexión.
+
+CONECTAR LA IA SIN SALIR DE LA APP (clave API, pago por uso)
+- Claude: platform.claude.com/settings/keys (al crear la clave, elige un workspace).
+- ChatGPT: platform.openai.com/api-keys
+- Gemini: aistudio.google.com/apikey. Activa la facturación: en el nivel gratuito Google puede usar el contenido para mejorar sus productos y revisarlo con personas.
+Pega la clave en Ajustes > Conexión directa con clave API > Probar conexión.
+Las suscripciones de las apps (Claude Pro, ChatGPT Plus, etc.) no incluyen acceso por API: se paga aparte, según uso. Fija un límite de gasto mensual en la cuenta de cada proveedor.
+Sin clave también funciona con "Copiar y abrir", usando tu cuenta habitual.
+
+PRIVACIDAD
+- La app solo puede conectarse a api.anthropic.com, api.openai.com y generativelanguage.googleapis.com; el navegador bloquea cualquier otra dirección.
+- Las claves, ajustes y plantillas quedan solo en el dispositivo. Los casos no se guardan.
+- El paso 3 (revisar lo que saldrá) es obligatorio: la detección automática no llega al 100 %.
+
+COMPARTIR CON COLEGAS
+Envíales la dirección. Cada uno usa su propia cuenta o clave; ningún dato pasa por ti.

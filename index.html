@@ -1,0 +1,1945 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- La app solo puede conectarse a estas tres direcciones (las IA). Ningún otro servidor recibe datos. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1d6b57">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Velo">
+
+<title>Velo Clínico</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: app de una columna para el teléfono. Barra superior fija, pestañas abajo, el caso avanza en pasos numerados. */
+:root{
+  --bg:#eef2f0; --surface:#ffffff; --ink:#16201c; --muted:#56655f; --line:#d3dcd8;
+  --accent:#1d6b57; --accent-ink:#ffffff; --accent-soft:#dcebe5;
+  --warn-ink:#7a4a00; --warn-bg:#fff3df; --warn-line:#e8c27f;
+  --err-ink:#a3221b; --err-bg:#fdeceb; --ok-ink:#1d6b57;
+  --m-nombre:#f3d4d0; --m-rut:#d9e1f7; --m-fecha:#d6ecdc; --m-tel:#f5e1c6; --m-dir:#e4d9f2;
+  --m-ficha:#f0e7bd; --m-lugar:#d0e9f1; --m-otro:#e3e3e0; --m-rest:#cfe8dd;
+  --f-display: ui-serif, "New York", "Iowan Old Style", Charter, Georgia, serif;
+  --f-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --f-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --r:14px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1513; --surface:#18201d; --ink:#e3eae6; --muted:#97a6a0; --line:#2b3632;
+    --accent:#4fb08f; --accent-ink:#06130e; --accent-soft:#1b362d;
+    --warn-ink:#f2c27a; --warn-bg:#33270f; --warn-line:#6a4e1c;
+    --err-ink:#ff9b93; --err-bg:#3a1714; --ok-ink:#6fcaa9;
+    --m-nombre:#5b2e2a; --m-rut:#2c3862; --m-fecha:#21462c; --m-tel:#55401e; --m-dir:#432f56;
+    --m-ficha:#4b4320; --m-lugar:#1d4655; --m-otro:#383b39; --m-rest:#1f4a3b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1513; --surface:#18201d; --ink:#e3eae6; --muted:#97a6a0; --line:#2b3632;
+  --accent:#4fb08f; --accent-ink:#06130e; --accent-soft:#1b362d;
+  --warn-ink:#f2c27a; --warn-bg:#33270f; --warn-line:#6a4e1c;
+  --err-ink:#ff9b93; --err-bg:#3a1714; --ok-ink:#6fcaa9;
+  --m-nombre:#5b2e2a; --m-rut:#2c3862; --m-fecha:#21462c; --m-tel:#55401e; --m-dir:#432f56;
+  --m-ficha:#4b4320; --m-lugar:#1d4655; --m-otro:#383b39; --m-rest:#1f4a3b;
+  color-scheme: dark;
+}
+:root{padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none !important}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 var(--f-body)}
+body::before{content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top,0px); z-index:10; background:var(--bg)}
+body.modal-abierto{overflow:hidden}
+.gutter{padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
+
+/* barra superior */
+.top{position:sticky; top:env(safe-area-inset-top,0px); z-index:9; background:var(--bg); display:flex; align-items:center; justify-content:space-between; gap:12px; padding-block:10px}
+.top > *{min-width:0}
+.marca{display:flex; align-items:center; gap:8px; font:600 20px/1.1 var(--f-display); letter-spacing:.01em; white-space:nowrap}
+.marca svg{flex:none}
+.pill{border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:999px; padding:6px 12px; font:500 13px/1.2 var(--f-body); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer}
+.pill::before{content:""; display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent); margin-right:6px; vertical-align:1px}
+
+/* vistas y pasos */
+.vista{max-width:720px; margin:0 auto; display:grid; gap:14px; padding-block:6px 88px}
+.paso{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:16px; display:grid; gap:12px; min-width:0}
+.paso > *{min-width:0}
+.paso-h{display:flex; align-items:baseline; gap:10px}
+.num{font:600 22px/1 var(--f-display); color:var(--accent); font-variant-numeric:tabular-nums}
+h2{font:600 19px/1.25 var(--f-display); margin:0; text-wrap:balance}
+h3{font:600 16px/1.3 var(--f-body); margin:6px 0 0}
+p{margin:0}
+.nota{color:var(--muted); font-size:14px; margin:0}
+.lbl{font-weight:600; font-size:15px; display:block; margin-bottom:-6px}
+.opc{font-weight:500; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.07em; margin-left:6px}
+input[type=text], input[type=password], textarea, select{width:100%; font:16px/1.45 var(--f-body); color:var(--ink); background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:11px 12px}
+textarea{resize:vertical; min-height:120px; display:block}
+input:focus, textarea:focus, select:focus{outline:2px solid var(--accent); outline-offset:1px}
+:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+.fila{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+
+/* botones */
+.btn{appearance:none; border:0; border-radius:12px; padding:11px 16px; min-height:46px; font:600 16px/1.2 var(--f-body); background:var(--accent); color:var(--accent-ink); text-decoration:none; display:inline-flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; text-align:center}
+.btn.sec{background:var(--surface); color:var(--ink); border:1px solid var(--line)}
+.btn.ancho{width:100%}
+.btn.chico{min-height:38px; padding:7px 12px; font-size:15px}
+.btn:disabled, .btn[aria-disabled="true"]{opacity:.42; pointer-events:none}
+.btn-texto{background:none; border:0; color:var(--accent); font:600 15px var(--f-body); padding:2px 0; cursor:pointer; text-decoration:underline; text-underline-offset:3px; justify-self:start}
+
+/* tareas */
+.chips{display:flex; flex-wrap:wrap; gap:8px}
+.chip{border:1px solid var(--line); background:var(--bg); color:var(--ink); border-radius:999px; padding:8px 14px; min-height:40px; font:500 15px/1.2 var(--f-body); cursor:pointer}
+.chip[aria-checked="true"]{background:var(--accent); color:var(--accent-ink); border-color:var(--accent)}
+.desc-tarea{display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden}
+
+/* vista previa y marcadores */
+.out{font:14px/1.6 var(--f-mono); white-space:pre-wrap; overflow-wrap:anywhere; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:12px; max-height:55vh; overflow:auto}
+.tenue{color:var(--muted)}
+mark{color:inherit; border-radius:4px; padding:0 3px; -webkit-box-decoration-break:clone; box-decoration-break:clone}
+.m-NOMBRE{background:var(--m-nombre)} .m-RUT{background:var(--m-rut)} .m-FECHA{background:var(--m-fecha)}
+.m-TELEFONO,.m-CORREO{background:var(--m-tel)} .m-DIRECCION{background:var(--m-dir)} .m-FICHA{background:var(--m-ficha)}
+.m-LUGAR{background:var(--m-lugar)} .m-OTRO,.m-EDAD,.m-tok{background:var(--m-otro)} .m-rest{background:var(--m-rest)}
+details{border-top:1px solid var(--line); padding-top:10px}
+summary{cursor:pointer; font-weight:600; font-size:15px}
+.tabla-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch; margin:6px 0}
+table{border-collapse:collapse; width:100%; font-size:14px; font-variant-numeric:tabular-nums}
+th,td{text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top}
+th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.05em}
+td.c{width:30px}
+tr.off td:not(.c){opacity:.45; text-decoration:line-through}
+.foto-mini{display:flex; gap:12px; align-items:center}
+.foto-mini img{width:84px; height:84px; object-fit:cover; border-radius:8px; border:1px solid var(--line); flex:none; background:var(--bg)}
+.foto-mini > div{display:grid; gap:8px; min-width:0}
+.foto-previa{max-width:100%; max-height:280px; object-fit:contain; border-radius:8px; border:1px solid var(--line); justify-self:start}
+
+/* revisión y estado */
+.check{display:flex; gap:12px; align-items:flex-start; padding:12px; border-radius:10px; background:var(--warn-bg); border:1px solid var(--warn-line); font-size:15px; cursor:pointer}
+.check input{width:22px; height:22px; margin:1px 0 0; flex:none; accent-color:var(--accent)}
+.check.simple{background:transparent; border:0; padding:2px 0}
+.estado{font-size:15px; min-height:1.3em}
+.estado:empty{display:none}
+.estado.error{color:var(--err-ink)} .estado.ok{color:var(--ok-ink)} .estado.aviso{color:var(--warn-ink)}
+.estado.cargando::before{content:""; display:inline-block; width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--accent); border-radius:50%; margin-right:8px; vertical-align:-2px; animation:giro .8s linear infinite}
+@keyframes giro{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.estado.cargando::before{animation:none}}
+ol.copiar{margin:0; padding-left:24px; display:grid; gap:14px}
+ol.copiar li{padding-left:4px}
+ol.copiar li > * + *{margin-top:6px}
+
+/* resultado */
+.resp{font:15.5px/1.6 var(--f-body); white-space:pre-wrap; overflow-wrap:anywhere; background:var(--bg); border-radius:10px; padding:12px; border:1px solid var(--line); max-height:65vh; overflow:auto}
+.resp .tabla-wrap{white-space:normal}
+.resp table{background:var(--surface)}
+.aviso-ia{font-size:13.5px; color:var(--muted)}
+
+/* ajustes */
+.seg{display:grid; grid-template-columns:repeat(3,1fr); background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:3px; gap:3px}
+.seg button{border:0; background:transparent; border-radius:9px; padding:10px 4px; min-height:42px; font:600 15px var(--f-body); color:var(--muted); cursor:pointer}
+.seg button[aria-checked="true"]{background:var(--surface); color:var(--ink); box-shadow:0 1px 3px rgb(0 0 0 / .14)}
+fieldset{border:0; padding:0; margin:0; display:grid; gap:8px; min-width:0}
+legend{padding:0; margin-bottom:8px; font-weight:600; font-size:15px}
+.opcion{display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border:1px solid var(--line); border-radius:10px; cursor:pointer}
+.opcion input{margin-top:3px; width:20px; height:20px; accent-color:var(--accent); flex:none}
+.opcion:has(input:checked){border-color:var(--accent); background:var(--accent-soft)}
+.opts{display:grid; grid-template-columns:1fr 1fr; gap:8px 14px}
+@media (max-width:480px){.opts{grid-template-columns:1fr}}
+.opts label{display:flex; gap:8px; align-items:center; font-size:15px}
+.opts input{width:20px; height:20px; accent-color:var(--accent); flex:none}
+.confirma{display:grid; gap:10px; padding:12px; border-radius:10px; background:var(--err-bg)}
+.enlace{color:var(--accent); font-weight:600; font-size:15px; justify-self:start}
+
+/* ayuda */
+.ayuda p, .ayuda li{font-size:15.5px; max-width:65ch}
+.ayuda ol, .ayuda ul{margin:0; padding-left:22px; display:grid; gap:6px}
+.en-claude .solo-indep, .independiente .solo-claude{display:none !important}
+
+/* pestañas */
+.tabbar{position:fixed; left:0; right:0; bottom:0; z-index:9; background:var(--surface); border-top:1px solid var(--line); display:grid; grid-template-columns:repeat(3,1fr); padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabbar button{background:none; border:0; padding:9px 4px 8px; display:flex; flex-direction:column; align-items:center; gap:3px; font:600 12px var(--f-body); color:var(--muted); cursor:pointer}
+.tabbar button[aria-current="page"]{color:var(--accent)}
+.tabbar svg{width:24px; height:24px}
+
+/* editor de foto */
+.modal{position:fixed; inset:0; z-index:20; background:var(--bg); display:flex; flex-direction:column; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px)}
+.modal-bar{display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding-block:10px; border-bottom:1px solid var(--line); background:var(--surface)}
+.modal-bar .sep{flex:1}
+.modal-info{font-size:14px; color:var(--muted); padding-block:8px}
+.lienzo-wrap{flex:1; overflow:auto; -webkit-overflow-scrolling:touch; padding:8px}
+#lienzo{display:block; touch-action:none; cursor:crosshair; border-radius:6px; box-shadow:0 0 0 1px var(--line); max-width:none}
+.lienzo-wrap.mover #lienzo{touch-action:auto; cursor:grab}
+.segm{display:inline-flex; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+.segm button{border:0; background:var(--surface); color:var(--ink); padding:8px 12px; font:600 14px var(--f-body); min-height:40px; cursor:pointer}
+.segm button[aria-pressed="true"]{background:var(--accent); color:var(--accent-ink)}
+.zoom{font-variant-numeric:tabular-nums; font-size:14px; color:var(--muted); min-width:3.6em; text-align:center}
+.fotos{display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px}
+.foto-item{display:grid; gap:6px; align-content:start; border:1px solid var(--line); border-radius:10px; padding:8px; background:var(--bg); min-width:0}
+.foto-item img{width:100%; max-width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:6px; background:var(--surface)}
+.foto-item.pend{border-color:var(--warn-line); background:var(--warn-bg)}
+.foto-item .fila{gap:6px}
+.fotos-previa{display:flex; flex-wrap:wrap; gap:8px}
+.fotos-previa:empty{display:none}
+.fotos-previa img{height:120px; max-width:100%; object-fit:contain; border-radius:6px; border:1px solid var(--line); background:var(--surface)}
+.hilo{display:grid; gap:14px}
+.turno{min-width:0}
+.turno.yo{justify-self:end; max-width:88%}
+.burbuja{background:var(--accent-soft); border-radius:14px 14px 4px 14px; padding:10px 12px; white-space:pre-wrap; overflow-wrap:anywhere; font-size:15.5px}
+details.turno.yo{justify-self:stretch; max-width:none; border:0; padding:0}
+.turno.ia{display:grid; gap:6px}
+.pensando{color:var(--muted); font-style:italic}
+.seguir{display:grid; gap:10px; border-top:1px solid var(--line); padding-top:12px}
+#segCopiar{display:grid; gap:10px}
+.out.mini{max-height:160px; font-size:13.5px}
+.toast{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(84px + env(safe-area-inset-bottom,0px)); background:var(--ink); color:var(--bg); padding:10px 16px; border-radius:999px; font-size:14px; z-index:30; width:max-content; max-width:calc(100% - 32px); text-align:center}
+</style>
+</head>
+<body>
+
+<header class="top gutter">
+  <div class="marca">
+    <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2.5 4.5 7v8.2c0 7.2 4.9 12.4 11.5 14.3 6.6-1.9 11.5-7.1 11.5-14.3V7z" fill="var(--accent)"/><rect x="9" y="12" width="14" height="4.2" rx="1" fill="var(--accent-ink)"/><rect x="9" y="18.6" width="9" height="2.2" rx="1.1" fill="var(--accent-ink)" opacity=".7"/></svg>
+    <span>Velo Clínico</span>
+  </div>
+  <button class="pill" id="pill" type="button" aria-label="IA y forma de conexión: abrir ajustes"></button>
+</header>
+
+<!-- ===================== CASO ===================== -->
+<main id="v-caso" class="vista gutter">
+  <section class="paso" aria-labelledby="h-1">
+    <div class="paso-h"><span class="num">1</span><h2 id="h-1">Qué necesitas</h2></div>
+    <div class="chips" id="tareas" role="radiogroup" aria-labelledby="h-1"></div>
+    <label class="lbl" for="prompt">Tu instrucción para la IA</label>
+    <textarea id="prompt" rows="5" placeholder="Escribe qué necesitas, o elige una tarea arriba y ajústala."></textarea>
+    <p class="nota">Cada tarea carga una instrucción base que puedes editar aquí mismo. También se anonimiza.</p>
+  </section>
+
+  <section class="paso" aria-labelledby="h-2">
+    <div class="paso-h"><span class="num">2</span><h2 id="h-2">Datos del caso</h2></div>
+    <textarea id="entrada" rows="7" placeholder="Pega o dicta el caso. Puedes dejar nombres, RUT y fechas: se ocultan en este dispositivo antes de enviar."></textarea>
+    <div class="fila">
+      <button class="btn sec" id="btnAdjuntar" type="button">Adjuntar foto, PDF o Word</button>
+      <button class="btn-texto" id="btnEjemplo" type="button">Cargar caso ficticio</button>
+    </div>
+    <input type="file" id="adjunto" accept="image/*,.pdf,application/pdf,.docx,.txt,.md" multiple hidden>
+    <p class="nota" id="adjInfo"></p>
+    <div class="fotos" id="fotos" hidden></div>
+  </section>
+
+  <section class="paso" aria-labelledby="h-3">
+    <div class="paso-h"><span class="num">3</span><h2 id="h-3">Revisa lo que saldrá del teléfono</h2></div>
+    <div class="out" id="previa"></div>
+    <div class="fotos-previa" id="fotosPrevia"></div>
+    <details id="detalles" hidden>
+      <summary id="detSum">Datos ocultos</summary>
+      <div class="tabla-wrap"><table><thead><tr><th></th><th>Tipo</th><th>Original</th><th>Sale como</th></tr></thead><tbody id="detBody"></tbody></table></div>
+      <p class="nota">Desmarca lo que no sea un dato personal.</p>
+    </details>
+    <label class="lbl" for="ocultar">¿Se escapó algo? Escríbelo aquí</label>
+    <input id="ocultar" type="text" autocomplete="off" placeholder="Apodo, colegio, empresa… separados por coma">
+    <label class="check"><input type="checkbox" id="revisado"><span>Revisé el texto y la foto: no queda nada que identifique al paciente.</span></label>
+  </section>
+
+  <section class="paso" aria-labelledby="h-4">
+    <div class="paso-h"><span class="num">4</span><h2 id="h-4">Enviar a la IA</h2></div>
+    <p class="nota" id="hint"></p>
+    <div id="bloqueDirecto" class="fila">
+      <button class="btn ancho" id="enviar" type="button">Enviar</button>
+      <button class="btn sec ancho" id="detener" type="button" hidden>Detener</button>
+    </div>
+    <ol class="copiar" id="bloqueCopiar" hidden>
+      <li id="liFoto" hidden>
+        <button class="btn sec ancho" id="guardarFoto" type="button">Guardar las imágenes tachadas</button>
+        <p class="nota">Después adjúntalas en la app de la IA.</p>
+      </li>
+      <li>
+        <a class="btn ancho" id="copiarAbrir" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer">Copiar y abrir</a>
+        <p class="nota">Pega el texto en la conversación nueva y envíalo.</p>
+        <textarea id="textoManual" rows="5" readonly hidden aria-label="Texto para copiar a mano"></textarea>
+      </li>
+      <li>
+        <label class="lbl" for="pegada">Pega aquí la respuesta de la IA</label>
+        <textarea id="pegada" rows="5" placeholder="Copia la respuesta completa y pégala aquí"></textarea>
+        <button class="btn sec" id="agregarResp" type="button">Agregar respuesta</button>
+      </li>
+    </ol>
+    <p class="estado" id="estado" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="paso" id="conv" aria-labelledby="h-5" hidden>
+    <div class="paso-h"><span class="num">5</span><h2 id="h-5">Conversación</h2></div>
+    <div class="hilo" id="hilo" aria-live="polite"></div>
+    <div class="fila"><button class="btn sec chico" id="verAnon" type="button" aria-pressed="false">Ver lo que recibió la IA</button></div>
+    <div class="seguir" id="seguir">
+      <label class="lbl" for="seguimiento">Seguir conversando</label>
+      <textarea id="seguimiento" rows="3" placeholder="Pregunta o pide un cambio. También se anonimiza antes de enviar."></textarea>
+      <div class="out mini" id="segPrevia" hidden></div>
+      <div class="fila" id="segDirecto">
+        <button class="btn" id="enviarSeg" type="button">Enviar</button>
+        <button class="btn sec" id="detenerSeg" type="button" hidden>Detener</button>
+      </div>
+      <div id="segCopiar" hidden>
+        <a class="btn" id="copiarSeg" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer">Copiar y abrir</a>
+        <label class="lbl" for="pegadaSeg">Pega la respuesta</label>
+        <textarea id="pegadaSeg" rows="4"></textarea>
+        <button class="btn sec" id="agregarSeg" type="button">Agregar respuesta</button>
+      </div>
+      <p class="estado" id="estadoSeg" role="status" aria-live="polite"></p>
+    </div>
+    <p class="aviso-ia">La IA puede equivocarse. Verifica diagnósticos, dosis y conductas antes de usar el texto.</p>
+  </section>
+
+  <button class="btn sec ancho" id="nuevo" type="button">Nuevo caso · borra todo</button>
+</main>
+
+<!-- ===================== AJUSTES ===================== -->
+<main id="v-ajustes" class="vista gutter" hidden>
+  <section class="paso" aria-labelledby="h-ia">
+    <h2 id="h-ia">Inteligencia artificial</h2>
+    <div class="seg" id="segProv" role="radiogroup" aria-labelledby="h-ia">
+      <button type="button" role="radio" data-prov="claude">Claude</button>
+      <button type="button" role="radio" data-prov="chatgpt">ChatGPT</button>
+      <button type="button" role="radio" data-prov="gemini">Gemini</button>
+    </div>
+    <fieldset id="modos" class="solo-indep">
+      <legend>Cómo se conecta</legend>
+      <label class="opcion"><input type="radio" name="modo" value="copiar"><span><b>Copiar y abrir la app</b><br><span class="nota">Usa tu cuenta de siempre, gratis o de pago. Pegas el texto en la IA y traes la respuesta de vuelta.</span></span></label>
+      <label class="opcion"><input type="radio" name="modo" value="api"><span><b>Conexión directa con clave API</b><br><span class="nota">La respuesta llega sola. Se paga por uso en la cuenta de desarrollador del proveedor.</span></span></label>
+    </fieldset>
+    <p class="nota solo-claude" id="notaMarco">Aquí dentro, <b>Claude</b> responde directo con tu cuenta, sin clave. <b>ChatGPT</b> y <b>Gemini</b> funcionan con “Copiar y abrir”. La conexión con clave API está en la versión instalable.</p>
+    <div id="apiCampos" class="solo-indep" hidden>
+      <div style="display:grid; gap:12px">
+        <label class="lbl" for="clave">Clave API de <span id="provNom1">Claude</span></label>
+        <input id="clave" type="password" autocomplete="off" spellcheck="false">
+        <a class="enlace" id="claveLink" href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener noreferrer">Crear una clave</a>
+        <label class="lbl" for="modelo">Modelo</label>
+        <input id="modelo" type="text" autocomplete="off" spellcheck="false" autocapitalize="off">
+        <p class="nota" id="modeloNota"></p>
+        <div id="wsCampo" style="display:grid; gap:12px">
+          <label class="lbl" for="workspace">ID de workspace <span class="opc">solo si la clave lo pide</span></label>
+          <input id="workspace" type="text" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="wrkspc_…">
+        </div>
+        <label class="check simple"><input type="checkbox" id="recordar"><span>Recordar la clave en este dispositivo</span></label>
+        <div class="fila"><button class="btn sec chico" id="probar" type="button">Probar conexión</button></div>
+        <p class="estado" id="estadoProbar" role="status"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="paso" aria-labelledby="h-ins">
+    <h2 id="h-ins">Instrucciones para la IA</h2>
+    <label class="lbl" for="sistema">Instrucciones generales <span class="opc">van en cada envío</span></label>
+    <textarea id="sistema" rows="9"></textarea>
+    <h3>Plantillas de tareas</h3>
+    <select id="plSel" aria-label="Plantilla a editar"></select>
+    <label class="lbl" for="plNombre">Nombre</label>
+    <input id="plNombre" type="text" autocomplete="off">
+    <label class="lbl" for="plTexto">Instrucción</label>
+    <textarea id="plTexto" rows="6"></textarea>
+    <div class="fila">
+      <button class="btn chico" id="plGuardar" type="button">Guardar plantilla</button>
+      <button class="btn sec chico" id="plNueva" type="button">Nueva</button>
+      <button class="btn sec chico" id="plBorrar" type="button">Eliminar</button>
+    </div>
+    <button class="btn-texto" id="plReset" type="button">Volver a las plantillas e instrucciones originales</button>
+    <div class="confirma" id="confReset" hidden>
+      <p>Se reemplazan tus plantillas e instrucciones por las originales.</p>
+      <div class="fila"><button class="btn chico" id="confResetSi" type="button">Sí, restaurar</button><button class="btn sec chico" id="confResetNo" type="button">Cancelar</button></div>
+    </div>
+  </section>
+
+  <section class="paso" aria-labelledby="h-anon">
+    <h2 id="h-anon">Qué se oculta</h2>
+    <div class="opts" id="opts">
+      <label><input type="checkbox" data-opt="nombres"> Nombres de personas</label>
+      <label><input type="checkbox" data-opt="rut"> RUT / RUN</label>
+      <label><input type="checkbox" data-opt="telefonos"> Teléfonos</label>
+      <label><input type="checkbox" data-opt="correos"> Correos</label>
+      <label><input type="checkbox" data-opt="direcciones"> Direcciones</label>
+      <label><input type="checkbox" data-opt="fichas"> N° de ficha, folio, biopsia</label>
+      <label><input type="checkbox" data-opt="lugares"> Comunas y ciudades</label>
+      <label><input type="checkbox" data-opt="fechas"> Fechas</label>
+      <label><input type="checkbox" data-opt="edades"> Edad en rangos (67 → 60-69)</label>
+    </div>
+    <label class="lbl" for="modoFecha">Fechas</label>
+    <select id="modoFecha">
+      <option value="token">Ocultarlas completas</option>
+      <option value="mesano">Dejar solo mes y año (la de nacimiento siempre se oculta)</option>
+    </select>
+    <label class="lbl" for="nunca">Nunca ocultar <span class="opc">una por línea</span></label>
+    <textarea id="nunca" rows="3" placeholder="Palabras que se marcan por error, p. ej. el nombre de tu CESFAM"></textarea>
+  </section>
+
+  <section class="paso" aria-labelledby="h-priv">
+    <h2 id="h-priv">Este dispositivo</h2>
+    <label class="check simple"><input type="checkbox" id="autoBorrado"><span>Borrar el caso tras 15 minutos sin uso</span></label>
+    <button class="btn sec" id="borrarTodo" type="button">Borrar ajustes y claves guardadas</button>
+    <div class="confirma" id="confBorrar" hidden>
+      <p>Se borran tus ajustes, plantillas y claves de este dispositivo.</p>
+      <div class="fila"><button class="btn chico" id="confBorrarSi" type="button">Sí, borrar</button><button class="btn sec chico" id="confBorrarNo" type="button">Cancelar</button></div>
+    </div>
+  </section>
+</main>
+
+<!-- ===================== AYUDA ===================== -->
+<main id="v-ayuda" class="vista gutter ayuda" hidden>
+  <section class="paso">
+    <h2>Cómo protege los datos</h2>
+    <ol>
+      <li>Escribes, dictas o pegas el caso, o adjuntas fotos, PDF o Word. Todo se lee en este dispositivo.</li>
+      <li>La app reemplaza nombres, RUT, fechas, teléfonos, direcciones y N° de ficha por marcadores como <b>[NOMBRE_1]</b>. Ocurre en el teléfono, sin internet.</li>
+      <li>Ves exactamente lo que va a salir y confirmas que no queda nada identificable.</li>
+      <li>Solo ese texto anonimizado, y la foto tachada si la hay, llega a la IA.</li>
+      <li>Cuando vuelve la respuesta, la app cambia los marcadores por los datos reales, otra vez en el teléfono.</li>
+    </ol>
+    <p>La relación entre marcadores y datos reales queda solo en la memoria de la app: no se guarda ni se envía, y se borra con “Nuevo caso”, al cerrar la app o tras 15 minutos sin uso. La app no tiene servidor propio.</p>
+  </section>
+  <section class="paso">
+    <h2>Formas de conectar la IA</h2>
+    <ul>
+      <li><b>Todo en la app:</b> eliges la IA, envías y la respuesta llega aquí mismo, con los datos reales repuestos. Puedes seguir conversando: cada mensaje nuevo también se anonimiza.</li>
+      <li><b>Copiar y abrir:</b> funciona con tu cuenta habitual de Claude, ChatGPT o Gemini. En esa app, desactiva la opción de usar tus conversaciones para entrenar modelos.</li>
+      <li class="solo-claude"><b>Claude dentro de Claude:</b> responde con tu propia cuenta, sin clave. La primera vez te pedirá permiso.</li>
+      <li class="solo-indep"><b>Conexión directa:</b> usas una clave API del proveedor y pagas por uso. Con Gemini, usa una clave con facturación activa: en el nivel gratuito Google puede usar el contenido para mejorar sus productos y puede revisarlo una persona.</li>
+    </ul>
+  </section>
+  <section class="paso solo-indep">
+    <h2>Instalar en el iPhone</h2>
+    <p>Abre la dirección de la app en Safari, toca <b>Compartir</b> y elige <b>Agregar a pantalla de inicio</b>. Queda con su ícono y anonimiza aunque no haya internet; para enviar a la IA sí necesita conexión.</p>
+  </section>
+  <section class="paso solo-claude">
+    <h2>Tenerla a mano</h2>
+    <p>Fija esta página en Claude para abrirla rápido. La versión instalable, con ícono propio y conexión directa a ChatGPT o Gemini, viene en el paquete que acompaña a esta página.</p>
+  </section>
+  <section class="paso">
+    <h2>Límites</h2>
+    <ul>
+      <li>La detección automática no llega al 100 %. Apellidos poco comunes sin “Sr.” o “Paciente:” delante, apodos o datos indirectos pueden escaparse: por eso el paso 3 es obligatorio.</li>
+      <li>Los PDF con texto se leen como texto y se anonimizan solos. Los PDF escaneados se convierten en imágenes para que tú taches los datos. Los nombres de archivo nunca se envían.</li>
+      <li>En las fotos, tú decides qué tachar. Revisa encabezado, pie de página, códigos de barra y etiquetas.</li>
+      <li>La IA puede equivocarse. Es un apoyo para redactar y pensar el caso; la decisión clínica es del médico tratante.</li>
+    </ul>
+  </section>
+</main>
+
+<nav class="tabbar gutter" aria-label="Secciones">
+  <button type="button" id="t-caso" data-v="caso" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg>Caso</button>
+  <button type="button" id="t-ajustes" data-v="ajustes" aria-current="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Ajustes</button>
+  <button type="button" id="t-ayuda" data-v="ayuda" aria-current="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z"/><path d="M9.5 12.2l1.8 1.8 3.4-3.6"/></svg>Ayuda</button>
+</nav>
+
+<!-- ===================== EDITOR DE FOTO ===================== -->
+<div class="modal" id="editor" role="dialog" aria-modal="true" aria-labelledby="edTitulo" hidden>
+  <div class="modal-bar gutter">
+    <strong id="edTitulo" style="font-family:var(--f-display); font-size:18px">Tachar datos</strong>
+    <span class="sep"></span>
+    <button class="btn sec chico" id="fotoDescartar" type="button">Descartar</button>
+    <button class="btn chico" id="fotoListo" type="button">Listo</button>
+  </div>
+  <div class="modal-bar gutter">
+    <div class="segm" role="group" aria-label="Modo">
+      <button type="button" id="modoTachar" aria-pressed="true">Tachar</button>
+      <button type="button" id="modoMover" aria-pressed="false">Mover</button>
+    </div>
+    <button class="btn sec chico" id="zoomMenos" type="button" aria-label="Alejar">−</button>
+    <span class="zoom" id="zoomVal">100 %</span>
+    <button class="btn sec chico" id="zoomMas" type="button" aria-label="Acercar">+</button>
+    <button class="btn sec chico" id="deshacer" type="button">Deshacer</button>
+  </div>
+  <p class="modal-info gutter" id="edInfo">Arrastra el dedo sobre nombre, RUT, N° de ficha, fecha de nacimiento y códigos de barra. Usa + y “Mover” para acercarte.</p>
+  <div class="lienzo-wrap" id="lienzoWrap"><canvas id="lienzo" aria-label="Foto del examen"></canvas></div>
+</div>
+
+<script id="motor">
+(function(root){
+"use strict";
+
+/* ---------- utilidades ---------- */
+function plegarCar(c){
+  const d = c.normalize("NFD");
+  const b = (d.length ? d[0] : c).toLowerCase();
+  return b.length === 1 ? b : c.toLowerCase()[0] || c;
+}
+// Minúsculas y sin tildes, conservando el largo exacto (para mapear posiciones)
+function plegar(s){
+  let o = "";
+  for (let i = 0; i < s.length; i++){
+    const c = s[i], k = c.charCodeAt(0);
+    o += (k >= 0xD800 && k <= 0xDFFF) ? c : plegarCar(c);
+  }
+  return o;
+}
+const set = s => new Set(s.trim().split(/\s+/));
+const esLetra = c => !!c && /\p{L}/u.test(c);
+const esDigito = c => !!c && /\p{N}/u.test(c);
+const esMayus = c => !!c && c !== c.toLowerCase() && c === c.toUpperCase();
+
+/* ---------- diccionarios (sin tildes, minúscula) ---------- */
+const NOMBRES = set(`
+juan jose luis carlos jorge manuel francisco pedro antonio miguel fernando sergio cristian christian cristobal felipe andres
+ricardo rodrigo patricio eduardo hector raul victor mario oscar alejandro diego daniel pablo javier gonzalo claudio marcelo
+mauricio nelson hugo roberto alfredo enrique arturo fabian ignacio matias nicolas sebastian benjamin vicente agustin tomas
+joaquin martin lucas maximiliano gaspar bastian kevin brian jonathan esteban ivan rene ruben ramon julio cesar alberto
+guillermo gustavo gabriel samuel david emilio leonardo lorenzo alonso renato bruno dante maximo franco angelo amaro clemente
+cristopher elias facundo emiliano luciano mateo thomas rafael domingo segundo humberto orlando osvaldo armando wladimir waldo
+jaime gerardo gilberto hernan horacio heriberto juvenal lautaro moises nibaldo octavio omar pascual rolando rosendo salvador
+teodoro ulises valentin german fidel efrain edgardo edison eugenio erwin eliseo ernesto fabio fermin flavio genaro ismael
+israel jacinto jeronimo joel jonas leandro leopoldo lisandro marco marcos mariano norberto nestor oliver alexis boris
+cristhian dagoberto dario exequiel ezequiel gaston gerson hans hernaldo isaac jeremias jhon john josue luciano manuel
+mirko patricio rigoberto rodolfo romulo sandro saul simon tobias vladimir washington yerko zacarias aldo alan anibal
+benito bernardo camilo emanuel enzo erick eric ignacio iñaki josemaria nicanor pio renan ricardo
+maria ana carmen rosa luisa juana patricia claudia carolina andrea paula daniela camila javiera francisca catalina constanza
+valentina fernanda josefa antonia isidora sofia florencia martina agustina emilia trinidad amanda belen karina katherine
+karen paola pamela marcela macarena alejandra veronica monica lorena ximena jimena cecilia gabriela natalia barbara viviana
+jacqueline yolanda margarita teresa elena isabel silvia sandra susana raquel ruth sara sarah rebeca miriam nancy olga norma
+ines irma hilda gladys elsa edith eliana erika fabiola gisela graciela hortensia ivonne johanna julia juliana laura leticia
+lidia liliana lucia lilian magdalena maritza marta nelly nora olivia pilar priscila regina rocio romina rosario roxana
+sonia tamara valeria vanessa virginia violeta yasna yessica jessica yanet janet zulema angelica angela adriana alicia alma
+amelia aurora beatriz berta blanca carla clara consuelo dolores elisa eloisa estela eugenia eva flor gloria ingrid irene
+jeannette karla luz maite marisol mercedes nicole noemi paz soledad victoria esperanza fresia magaly mirta nadia rosalia
+ivette carola denisse josefina emma mia julieta ignacia amparo antonella renata colomba montserrat monserrat almendra
+bernardita dominga loreto solange anais anahi aracely betsabe celeste constanza damaris deyanira dina edelmira elvira
+emperatriz ercilia flora francia georgina guadalupe herminia iris jazmin jeannette juanita katalina leonor lucila marcia
+marlene mireya natividad nayadet orfelina pascale pia ruby scarlett silvana tatiana uberlinda valeska wilma xiomara yanina
+yesenia zoila
+`);
+const APELLIDOS = set(`
+gonzalez munoz rojas diaz perez soto contreras silva martinez sepulveda morales rodriguez lopez araya fuentes hernandez
+torres espinoza flores castillo valenzuela ramirez reyes gutierrez castro vargas alvarez vasquez tapia fernandez sanchez
+carrasco gomez cortes herrera nunez jara vergara rivera figueroa riquelme garcia miranda bravo vera molina vega campos
+sandoval orellana zuniga olivares alarcon gallardo ortiz garrido salazar guzman henriquez saavedra navarro aguilera parra
+romero aravena vidal pizarro godoy pena caceres leiva escobar yanez valdes salinas jimenez lagos ruiz cardenas bustos
+medina maldonado moreno carvajal palma mendez troncoso alvarado acuna ramos inostroza navarrete paredes cifuentes poblete
+donoso farias toledo villalobos mella santibanez sanhueza alfaro rios ibarra cerda bustamante pino guerrero mora salas
+ulloa jorquera arancibia retamal osorio venegas calderon caro pavez quiroz ojeda hidalgo gajardo cespedes marin rubio
+cabrera cofre aguirre zamora parada hormazabal opazo bahamondes oyarzun barrientos solis espinosa barra aguilar baeza leon
+arriagada mardones gallegos gatica mansilla quezada quintana sotomayor tobar ubilla urrutia valencia velasquez villegas
+zapata acevedo alegria andrade avila barrera bello benavides briones burgos cabello cabezas cancino catalan cid concha
+cornejo correa cruz delgado duran echeverria estay faundez fierro gaete galvez gamboa huerta ibanez lillo llanos luna
+maturana meza montecinos montenegro moya neira oliva olave ortega pacheco palacios pinto ponce prieto quiroga rosales
+salgado sierra soza sotelo suazo tello toro valdebenito vallejos villarroel zambrano schmidt muller fischer larrain
+errazuriz undurraga matte ossa irarrazaval eyzaguirre edwards montt claro lyon walker hurtado clark reinecke huenchullan
+painemal nahuelpan millan antileo curin huaiquil catrileo llanquileo marileo quilodran ancatil caniulef lienlaf
+abarca adasme alcayaga allende altamirano alvear ampuero apablaza aracena aranda arenas arevalo arredondo astudillo
+avendano ayala barahona barros becerra bermudez bobadilla bugueno cabezas calquin campusano canales candia carmona
+castaneda castillo cea cerna chandia chavez colil collao corvalan cuevas davila diaz duarte elgueta encina escalona
+fajardo flores galaz gallegos garay godoy guajardo guerra gutierrez hermosilla jofre lagos lara lazcano ledezma letelier
+lobos lorca loyola lucero macaya manriquez marambio mejias melo mena merino monsalve montoya moraga mujica nova novoa
+ocampo olea orrego ortega osses pardo pastene pereira pinochet plaza puga quinteros riffo rivas robles roco rosas
+saez salamanca sagredo sanmartin sarmiento segura serrano sobarzo tamayo tejos ugarte urbina uribe valderrama vallejos
+varas vejar veliz vicencio vilches villagra villanueva yevenes zarate
+`);
+// Nombres/apellidos que también son palabras comunes: solo cuentan junto a otro nombre o tras "Sr./Paciente:", etc.
+const DEBILES = set(`
+rosa trinidad belen margarita pilar rocio rosario violeta alma aurora blanca clara consuelo dolores flor gloria luz mercedes
+paz soledad victoria esperanza amparo almendra loreto segundo salvador domingo franco julio claro bello cruz fuentes flores
+castillo bravo vega campos gallardo pena lagos moreno palma rios cerda pino guerrero mora salas caro rubio barra leon alegria
+cabello cabezas catalan concha delgado fierro huerta llanos luna oliva palacios pinto sierra toro valencia montt plaza guerra
+rosas encina serrano segura lobos varas pardo nova robles rivas melo mena merino tamayo lara roco sanmartin canales arenas
+marco marcos dina flora francia iris ruby celeste natividad emperatriz pascual simon
+`);
+const PARTICULAS = set(`de del la las los y e van von da di`);
+const STOP = set(`
+paciente pacientes pcte control consulta diagnostico diagnosticos hipotesis anamnesis examen examenes fisico plan indicaciones
+evolucion antecedentes motivo tratamiento medicamentos farmacos alergias habitos cirugia cirugias ingreso egreso alta epicrisis
+interconsulta derivacion informe resumen nota receta certificado servicio unidad urgencia hospital clinica cesfam cecosf sapu
+sar consultorio box sala piso cama doctor doctora dr dra sr sra srta don dona nombre nombres apellido apellidos edad sexo
+masculino femenino rut run fecha hora direccion domicilio telefono fono correo email prevision fonasa isapre ges auge minsal
+enero febrero marzo abril mayo junio agosto septiembre setiembre octubre noviembre diciembre lunes martes miercoles jueves
+viernes sabado hoy ayer manana refiere presenta niega acude consulta portador portadora usuario usuaria usuaria
+hipertenso hipertensa diabetico diabetica obeso obesa adulto adulta mayor menor lactante escolar adolescente
+no si sin con por para segun ver obs observacion total normal alterado negativo positivo pendiente solicitado
+hemograma perfil lipidico bioquimico orina urocultivo creatinina glicemia hemoglobina glicosilada potasio sodio
+cardiologia neurologia urologia medicina interna traumatologia cirugia ginecologia pediatria psiquiatria oftalmologia
+otorrinolaringologia dermatologia endocrinologia nefrologia gastroenterologia broncopulmonar reumatologia geriatria
+televascular telecardiologia teledermatologia telemedicina programa cardiovascular pscv salud mental chile region metropolitana
+atte atentamente estimado estimada colega saludos gracias firma timbre
+`);
+const LUGAR_PREFIJO = set(`
+san santa santo hospital clinica calle avenida av avda pasaje psje pje plaza villa poblacion colegio liceo escuela universidad
+parque metro estacion cesfam cecosf sapu sar consultorio centro instituto fundacion condominio edificio cerro rio lago volcan
+puerto puente sector comuna region provincia barrio fundo hacienda club teatro museo mall iglesia parroquia capilla
+cementerio aeropuerto terminal laboratorio farmacia ruta camino isla bahia valle canal hogar eleam residencia jardin sala
+`);
+const CTX_FUERTE = /(?:^|[^\p{L}])(?:srs?|sras?|srta|sres|don|dona|drs?|dras?|doctor|doctora|nombre(?:s)?(?:\s+(?:completo|social))?(?:\s+del?)?(?:\s+(?:paciente|usuario|usuaria|apoderado|apoderada|tutor|tutora|medico|profesional|madre|padre))?|apellidos?|a\s+nombre\s+de)\s*[.:\-]?\s*$/u;
+const CTX_DEBIL = /(?:^|[^\p{L}])(paciente|pcte|pac|usuario|usuaria|beneficiario|beneficiaria|titular|madre|padre|hij[oa]|espos[oa]|pareja|conyuge|apoderad[oa]|tutora?|cuidador[a]?|acompanad[oa]\s+(?:por|de)|familiar|herman[oa]|abuel[oa]|niet[oa]|ti[oa]|sobrin[oa]|vecin[oa]|amig[oa]|medic[oa]|enfermer[oa]|matron[a]?|kinesiolog[oa]|psicolog[oa]|nutricionista|tens|fonoaudiolog[oa]|terapeuta|atendid[oa]\s+por|firma|responsable|solicitante|profesional|derivad[oa]\s+por|interconsultor[a]?|colega)\s*([.:\-])?\s*$/u;
+
+const COMUNAS = [
+"Santiago","Santiago Centro","Cerrillos","Cerro Navia","Conchalí","El Bosque","Estación Central","Huechuraba","Independencia",
+"La Cisterna","La Florida","La Granja","La Pintana","La Reina","Las Condes","Lo Barnechea","Lo Espejo","Lo Prado","Macul",
+"Maipú","Ñuñoa","Pedro Aguirre Cerda","Peñalolén","Providencia","Pudahuel","Quilicura","Quinta Normal","Recoleta","Renca",
+"San Joaquín","San Miguel","San Ramón","Vitacura","Puente Alto","Pirque","San José de Maipo","Colina","Lampa","Tiltil","Til Til",
+"San Bernardo","Buin","Calera de Tango","Paine","Melipilla","Alhué","Curacaví","María Pinto","San Pedro","Talagante","El Monte",
+"Isla de Maipo","Padre Hurtado","Peñaflor","Valparaíso","Viña del Mar","Concepción","Temuco","Antofagasta","La Serena",
+"Rancagua","Talca","Arica","Iquique","Puerto Montt","Chillán","Osorno","Valdivia","Punta Arenas","Copiapó","Calama","Coquimbo",
+"Los Ángeles","Curicó","Quillota","San Antonio","Ovalle","Linares","Coyhaique","Quilpué","Villa Alemana","Talcahuano",
+"San Felipe","Los Andes","Castro","Angol","Puerto Varas","Machalí","Chicureo","La Dehesa","San Carlos de Apoquindo"
+];
+
+const MESES = "enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre";
+const TIPOS = ["NOMBRE","RUT","TELEFONO","CORREO","FECHA","DIRECCION","FICHA","LUGAR","OTRO","EDAD"];
+const ETIQUETA = {NOMBRE:"Nombre",RUT:"RUT",TELEFONO:"Teléfono",CORREO:"Correo",FECHA:"Fecha",DIRECCION:"Dirección",
+  FICHA:"N° ficha/folio",LUGAR:"Comuna/ciudad",OTRO:"Otro",EDAD:"Edad"};
+
+const OPC_DEF = {nombres:true,rut:true,telefonos:true,correos:true,direcciones:true,fichas:true,lugares:true,
+  fechas:true,modoFecha:"token",edades:false,extra:"",nunca:""};
+
+/* ---------- análisis ---------- */
+function analizar(texto, opcIn){
+  const o = Object.assign({}, OPC_DEF, opcIn || {});
+  const ft = plegar(texto);
+  const ocupado = new Uint8Array(texto.length);
+  const dets = [];
+  const nunca = new Set(String(o.nunca||"").split(/\n/).map(x=>plegar(x).trim().replace(/\s+/g," ")).filter(Boolean));
+
+  function libre(s,e){ for (let i=s;i<e;i++) if (ocupado[i]) return false; return true; }
+  function add(s, e, tipo, clave, repl){
+    while (s < e && /\s/.test(texto[s])) s++;
+    while (e > s && /[\s,;.]/.test(texto[e-1]) && !(tipo==="NOMBRE" && texto[e-1]==="." && e-s<=2)) e--;
+    if (e <= s || !libre(s,e)) return false;
+    const norm = ft.slice(s,e).trim().replace(/\s+/g," ");
+    if (nunca.has(norm)) return false;
+    for (let i=s;i<e;i++) ocupado[i]=1;
+    dets.push({s, e, tipo, clave: clave || norm, repl: repl || null});
+    return true;
+  }
+  function porRegex(rx, tipo, grupo, filtro, clave){
+    rx.lastIndex = 0; let m;
+    while ((m = rx.exec(texto))){
+      const ix = m.indices && m.indices[grupo||0];
+      if (!ix) { if (m[0]==="") rx.lastIndex++; continue; }
+      if (filtro && !filtro(m)) continue;
+      add(ix[0], ix[1], tipo, clave ? clave(m) : null);
+      if (m[0]==="") rx.lastIndex++;
+    }
+  }
+
+  // 1. Correos
+  if (o.correos) porRegex(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/gd, "CORREO");
+
+  // 2. RUT
+  if (o.rut){
+    const claveRut = m => m[1].replace(/[^\dkK]/g,"").toUpperCase();
+    porRegex(/(?<![\p{L}\p{N}.])(\d{1,2}\.\d{3}\.\d{3}\s?-\s?[\dkK]|\d{7,8}\s?-\s?[\dkK])(?![\p{L}\p{N}])/gud, "RUT", 1, null, claveRut);
+    porRegex(/(?:\bRU[TN]|\bR\.U\.[TN]\.?)\s*[:.]?\s*(?:N[°º]\s*)?(\d{1,2}\.?\d{3}\.?\d{3}\s?-?\s?[\dkK]?)(?![\p{N}])/giud, "RUT", 1, null, claveRut);
+  }
+
+  // 3. Teléfonos
+  if (o.telefonos){
+    const claveTel = m => m[0].replace(/\D/g,"").replace(/^56/,"");
+    porRegex(/(?:tel[eé]fonos?|fonos?|cel(?:ular)?|m[oó]vil|tel\.?|contacto)\s*[:.]?\s*((?:\+?56)?[\s\d()\-]{8,16}\d)/giud, "TELEFONO", 1, null, m=>m[1].replace(/\D/g,"").replace(/^56/,""));
+    porRegex(/(?<![\p{N}\-./,])(?:\+?56[\s-]?)?\(?[29]\)?(?:[ \-]?\d){8}(?![\p{N}\-/]|[.,]\d)/gud, "TELEFONO", 0, null, claveTel);
+  }
+
+  // 4. N° de ficha / folio / episodio
+  if (o.fichas){
+    porRegex(/(?:\bficha(?:\s+cl[ií]nica)?|\bfolio|\bepisodio|\bn[°º]\s*(?:de\s+)?(?:atenci[oó]n|solicitud|orden|interconsulta|ficha|registro|biopsia)|\bhistoria\s+cl[ií]nica|\bHC\b|\bSIC\b|\bID\s*(?:del?\s+)?paciente|\bbiopsia)\s*(?:n[°º.]?|nro\.?|n[uú]mero|#)?\s*[:.]?\s*(?=[A-Z0-9\-]*\d)([A-Z0-9][A-Z0-9\-]{3,})/giud, "FICHA", 1);
+  }
+
+  // 5. Direcciones
+  if (o.direcciones){
+    porRegex(/(?:direcci[oó]n|domicilio)(?:\s+particular)?\s*:\s*([^\n|]{3,}?)(?=\s*(?:\n|$|\||\s{3,}|\t))/giud, "DIRECCION", 1);
+    porRegex(/(?<![\p{L}])(?:Avenida|Avda\.?|Av\.?|Calle|Pasaje|Psje\.?|Pje\.?|Camino|Villa|Poblaci[oó]n|Pobl\.?)\s+(?:(?:[\p{Lu}\d][\p{L}\d'’.]*|de|del|la|las|los|el|y)\s+){1,6}?(?:#\s*|N[°º]\.?\s*)?\d{1,5}(?:\s*,?\s*(?:depto\.?|dpto\.?|departamento|casa|block|blk\.?|of\.?|oficina|torre|piso)\s*[\w\-]+)*/gud, "DIRECCION");
+  }
+
+  // 6. Fechas
+  if (o.fechas){
+    const valida = (d,m) => +d>=1 && +d<=31 && +m>=1 && +m<=12;
+    const esNac = s => /(?:nacimiento|f\.?\s*nac|fn|f\.n\.|nacid[oa]|naci[oó])\W{0,15}$/i.test(texto.slice(Math.max(0,s-30), s));
+    const mesNombre = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+    function addFecha(s, e, claveTxt, mesAno){
+      if (o.modoFecha === "mesano" && !esNac(s) && mesAno) add(s, e, "FECHA", claveTxt, mesAno);
+      else add(s, e, "FECHA", claveTxt);
+    }
+    let m, rx;
+    rx = /(?<![\p{N}.,\/\-])(\d{1,2})([\/.\-])(\d{1,2})\2(\d{4}|\d{2})(?![\p{N}]|[.,]\d)/gu;
+    while ((m = rx.exec(texto))) if (valida(m[1],m[3])) addFecha(m.index, m.index+m[0].length, null, `${m[3].padStart(2,"0")}/${m[4]}`);
+    rx = /(?<![\p{N}])(\d{4})-(\d{2})-(\d{2})(?![\p{N}])/gu;
+    while ((m = rx.exec(texto))) if (valida(m[3],m[2])) addFecha(m.index, m.index+m[0].length, null, `${m[2]}/${m[1]}`);
+    rx = new RegExp(`(?<![\\p{N}])(\\d{1,2})\\s+de\\s+(${MESES})(?:\\s+(?:de|del)\\s+(\\d{4}))?`, "giu");
+    while ((m = rx.exec(texto))){
+      const mes = m[2].toLowerCase();
+      addFecha(m.index, m.index+m[0].length, null, m[3] ? `${mes} de ${m[3]}` : mes);
+    }
+  }
+
+  // 7. Edades en rangos (no reversible, no es un marcador)
+  if (o.edades){
+    const rx = /(?<![\p{N}.,])(\d{1,3})\s*(años|año|a\.)(?![\p{L}])/gu; let m;
+    while ((m = rx.exec(texto))){
+      const n = +m[1]; if (n > 120) continue;
+      const r = n >= 90 ? "90 o más años" : n < 1 ? m[0] : `${Math.floor(n/10)*10}-${Math.floor(n/10)*10+9} años`;
+      if (r !== m[0]) add(m.index, m.index+m[0].length, "EDAD", "edad "+r, r);
+    }
+  }
+
+  // 8. Lista personalizada
+  const extras = String(o.extra||"").split(/\n/).map(x=>x.trim()).filter(x=>x.length>=2);
+  for (const x of extras){
+    const fx = plegar(x); let p = 0;
+    while ((p = ft.indexOf(fx, p)) !== -1){
+      const a = ft[p-1], b = ft[p+fx.length];
+      if (!esLetra(a) && !esLetra(b) && !esDigito(a) && !esDigito(b)) add(p, p+fx.length, "OTRO", fx.replace(/\s+/g," "));
+      p += fx.length;
+    }
+  }
+
+  // 9. Comunas y ciudades
+  if (o.lugares){
+    const lista = COMUNAS.slice().sort((a,b)=>b.length-a.length);
+    for (const c of lista){
+      const fc = plegar(c); let p = 0;
+      while ((p = ft.indexOf(fc, p)) !== -1){
+        const a = ft[p-1], b = ft[p+fc.length];
+        if (!esLetra(a) && !esLetra(b)){
+          const orig = texto.slice(p, p+fc.length);
+          const ok = orig.split(/\s+/).every(w => PARTICULAS.has(plegar(w)) || esMayus(w[0]));
+          // "María de los Ángeles", "Luis de San Antonio": parte de un nombre, no un lugar
+          const mAnt = ft.slice(Math.max(0, p-30), p).match(/(\p{L}+)\s+(?:de|del)\s+$/u);
+          const esNombre = mAnt && NOMBRES.has(mAnt[1]);
+          if (ok && !esNombre) add(p, p+fc.length, "LUGAR", fc);
+        }
+        p += fc.length;
+      }
+    }
+  }
+
+  // 10. Nombres
+  if (o.nombres) detectarNombres();
+
+  function detectarNombres(){
+    const T = []; const rx = /[\p{L}][\p{L}'’]*(?:-[\p{L}][\p{L}'’]*)*/gu; let m;
+    while ((m = rx.exec(texto))){
+      const w = m[0], s = m.index, e = s + w.length, f = ft.slice(s, e);
+      T.push({s, e, w, f, cap: esMayus(w[0]), allCaps: w === w.toUpperCase() && w !== w.toLowerCase(),
+        dict: NOMBRES.has(f) || APELLIDOS.has(f), given: NOMBRES.has(f), weak: DEBILES.has(f)});
+    }
+    const esCandidato = t => t.cap && !STOP.has(t.f) && !nunca.has(t.f) && !PARTICULAS.has(t.f) && t.f.length >= 2
+      && !esDigito(texto[t.e]) && libre(t.s, t.e) && (t.dict || !(t.allCaps && t.w.length <= 4));
+    const gapOk = (a, b) => { const g = texto.slice(a.e, b.s); return /^[ \t]+$/.test(g) || (a.w.length === 1 && /^\.[ \t]*$/.test(g)); };
+    const entidades = []; // {toks, clave}
+
+    let i = 0;
+    while (i < T.length){
+      if (!esCandidato(T[i])) { i++; continue; }
+      const span = [i]; let k = i;
+      while (span.length < 8){
+        const a = T[k], b = T[k+1];
+        if (!b || !gapOk(a, b)) break;
+        if (esCandidato(b)) { span.push(k+1); k++; continue; }
+        if (PARTICULAS.has(b.f)){
+          let q = k+1; const parts = [q];
+          while (parts.length < 2 && T[q+1] && PARTICULAS.has(T[q+1].f) && gapOk(T[q], T[q+1])) { q++; parts.push(q); }
+          const c = T[q+1];
+          if (c && gapOk(T[q], c) && esCandidato(c)) { span.push(...parts, q+1); k = q+1; continue; }
+        }
+        break;
+      }
+      i = k + 1;
+      evaluar(span.map(x => T[x]));
+    }
+
+    function previo(t){
+      const ini = Math.max(0, t.s - 60);
+      let p = ft.slice(ini, t.s);
+      const nl = p.lastIndexOf("\n"); if (nl >= 0) p = p.slice(nl+1);
+      return p;
+    }
+    function evaluar(S){
+      const nt = S.filter(t => !PARTICULAS.has(t.f));
+      if (!nt.length) return;
+      const prev = previo(S[0]);
+      // ¿Es un lugar? (Hospital X, San X, Calle X, Clínica Dr. X)
+      const mL = prev.match(/(\p{L}+)\.?\s+(?:(?:dr|dra|doctor|doctora|de|del|la|los|las)\.?\s+)*$/u);
+      if (mL && LUGAR_PREFIJO.has(mL[1])) return;
+      let ctx = CTX_FUERTE.test(prev) ? "fuerte" : null;
+      if (!ctx){ const md = prev.match(CTX_DEBIL); if (md) ctx = md[2] ? "fuerte" : "debil"; }
+      let acept;
+      if (ctx === "fuerte"){
+        acept = [];
+        for (const t of nt){ if (t.dict || (t.w.length >= 3 && !(t.allCaps && t.w.length <= 3))) acept.push(t); else break; }
+      } else {
+        const fuertes = nt.filter(t => t.dict && !t.weak).length, dicts = nt.filter(t => t.dict).length;
+        // Solo palabras "débiles" (Rosa, Paz, Vega…): cuentan si son 2+ seguidas sin "de/y" entre ellas
+        const debilesJuntas = nt.length >= 2 && dicts === nt.length && S.length === nt.length;
+        if (!(fuertes >= 1 || debilesJuntas || (ctx === "debil" && dicts >= 1))) return;
+        let a = 0; while (a < nt.length && !nt[a].dict) a++;
+        let b = nt.length - 1;
+        const hayNombre = nt.some(t => t.given);
+        let cola = 0, bb = b; while (bb >= a && !nt[bb].dict) { cola++; bb--; }
+        if (!hayNombre || cola > 2) b = bb;
+        acept = nt.slice(a, b+1);
+      }
+      if (!acept.length) return;
+      const s = acept[0].s, e = acept[acept.length-1].e;
+      const clave = acept.map(t => t.f).join(" ");
+      if (add(s, e, "NOMBRE", clave)) entidades.push({toks: acept, clave});
+    }
+
+    // Segunda pasada: apellidos o nombres sueltos de personas ya detectadas ("Sr. Pérez" → mismo marcador)
+    const partes = new Map();
+    for (const en of entidades){
+      for (const t of en.toks){
+        if (t.f.length < 3 || PARTICULAS.has(t.f) || nunca.has(t.f)) continue;
+        if (partes.has(t.f) && partes.get(t.f) !== en.clave) partes.set(t.f, null);
+        else partes.set(t.f, en.clave);
+      }
+    }
+    for (const t of T){
+      if (!t.cap || !partes.has(t.f) || !libre(t.s, t.e)) continue;
+      const c = partes.get(t.f);
+      add(t.s, t.e, "NOMBRE", c || t.f);
+    }
+  }
+
+  dets.sort((a,b)=>a.s-b.s);
+
+  // Un apellido o nombre suelto que pertenece a un único nombre completo recibe el mismo marcador
+  const completos = [...new Set(dets.filter(d => d.tipo === "NOMBRE" && d.clave.includes(" ")).map(d => d.clave))]
+    .map(k => ({k, w: new Set(k.split(" "))}));
+  for (const d of dets){
+    if (d.tipo !== "NOMBRE") continue;
+    const ws = d.clave.split(" ").filter(w => !PARTICULAS.has(w));
+    const c = completos.filter(g => g.k !== d.clave && g.w.size > ws.length && ws.every(w => g.w.has(w)));
+    if (c.length === 1) d.clave = c[0].k;
+  }
+
+  // Entidades y marcadores (numeración por orden de aparición)
+  const entidades = new Map(); const cont = {};
+  for (const d of dets){
+    const k = d.tipo + "|" + d.clave;
+    if (!entidades.has(k)){
+      let token = null;
+      if (!d.repl){ cont[d.tipo] = (cont[d.tipo]||0) + 1; token = `[${d.tipo}_${cont[d.tipo]}]`; }
+      entidades.set(k, {k, tipo: d.tipo, token, ejemplo: texto.slice(d.s, d.e), repl: d.repl, n: 0});
+    }
+    const en = entidades.get(k); en.n++;
+    d.k = k;
+    // Si la entidad tiene un ejemplo corto (apellido suelto) y aparece la forma completa, mostrar la completa
+    if (texto.slice(d.s,d.e).length > en.ejemplo.length) en.ejemplo = texto.slice(d.s, d.e);
+  }
+  return {texto, dets, entidades};
+}
+
+function construir(res, deshabilitadas){
+  const off = deshabilitadas || new Set();
+  let out = "", p = 0; const mapa = {}; const conteo = {};
+  for (const d of res.dets){
+    if (off.has(d.k)) continue;
+    const en = res.entidades.get(d.k);
+    out += res.texto.slice(p, d.s);
+    const r = en.token || en.repl;
+    out += r; p = d.e;
+    if (en.token && !(en.token in mapa)) mapa[en.token] = en.ejemplo;
+    conteo[d.tipo] = (conteo[d.tipo]||0) + 1;
+  }
+  out += res.texto.slice(p);
+  return {salida: out, mapa, conteo};
+}
+
+const RX_TOKEN = /\[\s*(NOMBRE|RUT|TELEFONO|TEL[ÉE]FONO|CORREO|FECHA|DIRECCION|DIRECCI[ÓO]N|FICHA|LUGAR|OTRO)[\s_\-]*(\d+)\s*\]/gi;
+function restaurar(texto, mapa){
+  let n = 0; const faltan = new Set();
+  const out = texto.replace(RX_TOKEN, (m, t, num) => {
+    const tipo = plegar(t).toUpperCase();
+    const k = `[${tipo}_${+num}]`;
+    if (Object.prototype.hasOwnProperty.call(mapa, k)) { n++; return mapa[k]; }
+    faltan.add(m.trim()); return m;
+  });
+  return {salida: out, n, faltan: [...faltan]};
+}
+
+/* ---------- lectura de .docx (sin librerías externas) ---------- */
+async function inflar(datos){
+  const ds = new DecompressionStream("deflate-raw");
+  const st = new Blob([datos]).stream().pipeThrough(ds);
+  return new Uint8Array(await new Response(st).arrayBuffer());
+}
+async function leerDocx(buf, DOMParserImpl){
+  const u8 = new Uint8Array(buf), dv = new DataView(buf instanceof ArrayBuffer ? buf : u8.buffer);
+  let eocd = -1;
+  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error("El archivo no parece un .docx válido.");
+  const total = dv.getUint16(eocd + 10, true); let p = dv.getUint32(eocd + 16, true);
+  const dec = new TextDecoder(); let ent = null;
+  for (let k = 0; k < total; k++){
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const metodo = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+    const nlen = dv.getUint16(p + 28, true), xlen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true);
+    const off = dv.getUint32(p + 42, true);
+    const nombre = dec.decode(u8.subarray(p + 46, p + 46 + nlen));
+    if (nombre === "word/document.xml") ent = {metodo, csize, off};
+    p += 46 + nlen + xlen + clen;
+  }
+  if (!ent) throw new Error("No se encontró el contenido del documento (¿es un .docx?).");
+  const n2 = dv.getUint16(ent.off + 26, true), x2 = dv.getUint16(ent.off + 28, true);
+  const ini = ent.off + 30 + n2 + x2;
+  let datos = u8.subarray(ini, ini + ent.csize);
+  if (ent.metodo === 8) datos = await inflar(datos);
+  else if (ent.metodo !== 0) throw new Error("Formato de compresión no soportado.");
+  const xml = dec.decode(datos);
+  const P = DOMParserImpl || root.DOMParser;
+  const doc = new P().parseFromString(xml, "application/xml");
+  const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+  const txtParrafo = par => {
+    let s = "";
+    const els = par.getElementsByTagNameNS(W, "*");
+    for (let i = 0; i < els.length; i++){
+      const e = els[i], ln = e.localName;
+      if (ln === "t") s += e.textContent;
+      else if (ln === "tab") s += "\t";
+      else if (ln === "br" || ln === "cr") s += "\n";
+      else if (ln === "noBreakHyphen") s += "-";
+    }
+    return s;
+  };
+  const lineas = [];
+  const bloque = nodo => {
+    for (let c = nodo.firstChild; c; c = c.nextSibling){
+      if (c.nodeType !== 1) continue;
+      const ln = c.localName;
+      if (ln === "p") lineas.push(txtParrafo(c));
+      else if (ln === "tbl"){
+        for (let r = c.firstChild; r; r = r.nextSibling){
+          if (r.nodeType !== 1 || r.localName !== "tr") continue;
+          const celdas = [];
+          for (let td = r.firstChild; td; td = td.nextSibling){
+            if (td.nodeType !== 1 || td.localName !== "tc") continue;
+            const ps = td.getElementsByTagNameNS(W, "p"); const partes = [];
+            for (let j = 0; j < ps.length; j++){ const t = txtParrafo(ps[j]).trim(); if (t) partes.push(t); }
+            celdas.push(partes.join(" "));
+          }
+          lineas.push(celdas.join(" | "));
+        }
+        lineas.push("");
+      }
+      else if (ln === "sdt" || ln === "sdtContent" || ln === "body" || ln === "customXml") bloque(c);
+    }
+  };
+  const body = doc.getElementsByTagNameNS(W, "body")[0];
+  if (!body) throw new Error("Documento vacío o dañado.");
+  bloque(body);
+  return lineas.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+root.Anon = {analizar, construir, restaurar, leerDocx, plegar, TIPOS, ETIQUETA, OPC_DEF};
+})(typeof window !== "undefined" ? window : globalThis);
+</script>
+<script>
+(function(){
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+// Dentro de Claude la página va en un marco: Claude responde con la cuenta del usuario y no hay conexión a otras API
+const enMarco = (() => { try { return window.self !== window.top; } catch(e){ return true; } })();
+document.documentElement.classList.add(enMarco ? "en-claude" : "independiente");
+
+/* ===================== proveedores e instrucciones ===================== */
+const PROV = {
+  claude:  {nombre:"Claude",  web:"https://claude.ai/new",         modelo:"claude-sonnet-5-5", clavePh:"sk-ant-…",
+            claveUrl:"https://platform.claude.com/settings/keys", notaModelo:"Para casos complejos puedes usar claude-opus-5-5."},
+  chatgpt: {nombre:"ChatGPT", web:"https://chatgpt.com/",          modelo:"gpt-6-sol",         clavePh:"sk-…",
+            claveUrl:"https://platform.openai.com/api-keys",       notaModelo:"Más económico: gpt-6-luna."},
+  gemini:  {nombre:"Gemini",  web:"https://gemini.google.com/app", modelo:"gemini-3.8-flash",  clavePh:"AIza…",
+            claveUrl:"https://aistudio.google.com/apikey",         notaModelo:"Más capaz: gemini-4-argon. Usa una clave con facturación activa."}
+};
+const SISTEMA_DEF = `Eres un asistente para médicos que trabajan en Chile.
+
+El caso fue anonimizado en el dispositivo del médico antes de enviártelo: los marcadores entre corchetes, como [NOMBRE_1], [RUT_1] o [FECHA_2], reemplazan datos personales.
+- Cuando necesites referirte a esos datos, escribe el marcador exactamente igual. No intentes adivinar ni completar lo que ocultan.
+- Si se adjuntan imágenes, las zonas negras son datos tachados a propósito.
+
+Responde en español de Chile, con terminología médica y abreviaturas clínicas estándar. Sé directo y conciso.
+Para conducta clínica prioriza normativa y guías MINSAL/GES; si usas una guía internacional, indica cuál y su año.
+Si falta información o algo es incierto, dilo en vez de suponer.
+Escribe texto listo para pegar en una ficha clínica: sin markdown decorativo (sin # ni negritas); usa tablas solo si la tarea lo pide.
+Tu respuesta es un apoyo: la decisión clínica es del médico tratante.`;
+const PLANTILLAS_DEF = [
+  {id:"libre", nombre:"Pregunta clínica", texto:"Responde mi pregunta sobre este caso de forma práctica: qué hacer, qué descartar y cuándo derivar."},
+  {id:"ic", nombre:"Interconsulta", texto:"Redacta una interconsulta formal y breve al especialista indicado (si no se indica, sugiere la especialidad). Incluye: motivo de derivación; antecedentes relevantes (mórbidos, fármacos, alergias); historia actual; examen físico pertinente; exámenes con su fecha; hipótesis diagnóstica; pregunta concreta al especialista y prioridad sugerida. Cifras en números y unidades con símbolo (mg, ml, cm)."},
+  {id:"epi", nombre:"Epicrisis", texto:"Redacta una epicrisis o resumen de atención: motivo de ingreso o consulta, evolución, procedimientos, exámenes relevantes, diagnósticos de egreso, indicaciones al alta y próximos controles. Tono formal y conciso."},
+  {id:"exam", nombre:"Transcribir examen", foto:true, texto:"Transcribe los resultados del examen en una tabla con columnas: Examen | Resultado | Unidad | Rango de referencia | Alterado (sí/no). Copia valores y unidades exactamente; si algo no se lee con claridad escribe [ilegible] en vez de suponer. Después de la tabla, lista en una línea los valores alterados. No interpretes salvo que se pida."},
+  {id:"pac", nombre:"Indicaciones al paciente", texto:"Redacta indicaciones para el paciente en lenguaje simple, con frases cortas y sin abreviaturas médicas: qué medicamentos tomar, cuánto y a qué hora; cuidados en casa; signos de alarma por los que debe consultar de urgencia; y cuándo es su próximo control."},
+  {id:"farm", nombre:"Revisar fármacos", texto:"Revisa la lista de medicamentos: interacciones clínicamente relevantes, duplicidades, ajustes por función renal o hepática si hay datos, y medicamentos potencialmente inapropiados en persona mayor si aplica. Indica en qué guía o fuente te basas."}
+];
+const ANON_DEF = {nombres:true, rut:true, telefonos:true, correos:true, direcciones:true, fichas:true, lugares:true, fechas:true, modoFecha:"token", edades:false};
+const MAX_FOTOS = 6;     // imágenes por caso
+const MAXL = 2000;       // lado máximo de cada imagen: legible para la IA y liviana para enviar
+const SEP = "\n\n§§§SEP§§§\n\n";
+const NOTA_FOTO = "(Se adjuntan imágenes del caso. Las zonas negras son datos personales tachados a propósito.)";
+
+/* ===================== ajustes (solo en este dispositivo) ===================== */
+const LS = "velo_ajustes";
+let primeraVez = false;
+function ajustesBase(){
+  return {prov:"claude", modo:"copiar", modelos:{}, claves:{}, workspace:"", recordar:true, sistema:SISTEMA_DEF,
+    plantillas:PLANTILLAS_DEF.map(p => Object.assign({}, p)), tarea:"ic", anon:Object.assign({}, ANON_DEF), nunca:"", autoBorrado:true};
+}
+function leerAjustes(){
+  let g = null;
+  try { g = JSON.parse(localStorage.getItem(LS) || "null"); } catch(e){}
+  if (!g || typeof g !== "object"){ primeraVez = true; return ajustesBase(); }
+  const a = Object.assign(ajustesBase(), g);
+  a.anon = Object.assign({}, ANON_DEF, g.anon || {});
+  a.modelos = Object.assign({}, g.modelos || {});
+  a.claves = Object.assign({}, g.claves || {});
+  if (!Array.isArray(a.plantillas) || !a.plantillas.length) a.plantillas = PLANTILLAS_DEF.map(p => Object.assign({}, p));
+  if (!PROV[a.prov]) a.prov = "claude";
+  if (a.modo !== "api") a.modo = "copiar";
+  if (typeof a.sistema !== "string") a.sistema = SISTEMA_DEF;
+  return a;
+}
+let aj = leerAjustes();
+let clavesSesion = {};
+function guardar(){
+  try { localStorage.setItem(LS, JSON.stringify(Object.assign({}, aj, {claves: aj.recordar ? aj.claves : {}}))); } catch(e){}
+}
+const claveDe = p => String((aj.recordar ? aj.claves[p] : clavesSesion[p]) || "").trim();
+const modeloDe = p => String(aj.modelos[p] || "").trim() || PROV[p].modelo;
+const sistemaActual = () => String(aj.sistema || "").trim();
+
+/* ===================== capacidades dentro de Claude ===================== */
+let sampleFn = null, sampleImg = false, sampleMax = MAX_FOTOS, guardador = null;
+if (enMarco && window.claude && typeof window.claude.use === "function"){
+  window.claude.use("sample").then(async s => {
+    if (!s) return;
+    sampleFn = s;
+    try { const l = await s.limits(); sampleImg = !!(l && l.images); if (sampleImg && l.images.maxCount) sampleMax = l.images.maxCount; } catch(e){}
+    pintarConexion();
+  }).catch(() => {});
+  window.claude.use("downloads").then(d => { guardador = d || null; }).catch(() => {});
+}
+
+/* ===================== estado del caso (solo en memoria) ===================== */
+const nuevoEstado = () => ({res:null, cons:null, desact:new Set(), fotos:[], turnos:[], registro:new Map(), cont:{}, mapa:{}, inicialReal:"", fotosEnviadas:[], verAnon:false});
+let caso = nuevoEstado();
+let enCurso = false, ctl = null;
+const ed = {idx:-1, respaldo:[], zoom:1, modo:"tachar", dib:null};
+const fotosListas = () => caso.fotos.filter(f => !f.pendiente && f.blob);
+const fotosPendientes = () => caso.fotos.filter(f => f.pendiente).length;
+
+function conexion(){
+  if (enMarco){
+    if (aj.prov !== "claude" || !sampleFn) return "copiar";
+    return (caso.fotos.length && !sampleImg) ? "copiar" : "cuenta";
+  }
+  return aj.modo === "api" ? "api" : "copiar";
+}
+const NOM_CON = {cuenta:"en la app con tu cuenta", api:"en la app con clave API", copiar:"copiar y abrir"};
+function pintarConexion(){
+  $("pill").textContent = PROV[aj.prov].nombre + " · " + NOM_CON[conexion()];
+  actualizarEnvio();
+}
+
+/* ===================== utilidades ===================== */
+function pintarEstado(id, msg, tipo){ const e = $(id); e.textContent = msg || ""; e.className = "estado" + (tipo ? " " + tipo : ""); }
+const estado = (m, t) => pintarEstado("estado", m, t);
+const estadoSeg = (m, t) => pintarEstado("estadoSeg", m, t);
+let toastT = null;
+function toast(msg){
+  let t = $("toast");
+  if (!t){ t = document.createElement("div"); t.id = "toast"; t.className = "toast"; t.setAttribute("role", "status"); document.body.appendChild(t); }
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 3000);
+}
+async function copiarTexto(texto){
+  try { await navigator.clipboard.writeText(texto); return true; } catch(e){}
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = texto; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.top = "0"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, texto.length);
+    const ok = document.execCommand("copy"); ta.remove(); return ok;
+  } catch(e){ return false; }
+}
+const reducido = () => !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+function desplazar(el){ if (el && el.scrollIntoView) el.scrollIntoView({behavior: reducido() ? "auto" : "smooth", block: "start"}); }
+
+/* ===================== anonimización con marcadores estables ===================== */
+// Un mismo dato conserva su marcador en toda la conversación; los datos nuevos reciben números nuevos
+function fijarTokens(res, reg, cont){
+  for (const en of res.entidades.values()){
+    if (!en.token) continue;
+    if (reg.has(en.k)){ en.token = reg.get(en.k); continue; }
+    cont[en.tipo] = (cont[en.tipo] || 0) + 1;
+    en.token = "[" + en.tipo + "_" + cont[en.tipo] + "]";
+    reg.set(en.k, en.token);
+  }
+}
+function opcionesAnon(){
+  return Object.assign({}, aj.anon, {
+    extra: $("ocultar").value.split(/[,;\n]/).map(s => s.trim()).filter(Boolean).join("\n"),
+    nunca: aj.nunca
+  });
+}
+function textoCombinado(){
+  const pr = $("prompt").value.trim(), c = $("entrada").value.trim();
+  return (pr ? "INSTRUCCIÓN:\n" + pr : "") + (pr && c ? "\n\n" : "") + (c ? "CASO:\n" + c : "");
+}
+function calcular(texto, reg, cont){
+  const res = Anon.analizar(texto, opcionesAnon());
+  fijarTokens(res, reg, cont);
+  return {res, cons: Anon.construir(res, caso.desact)};
+}
+function invalidarRevision(){ $("revisado").checked = false; }
+function analizar(){
+  const t = textoCombinado();
+  if (!t){ caso.res = caso.cons = null; }
+  else {
+    const r = calcular(t, new Map(), {});
+    caso.res = r.res;
+    caso.desact = new Set([...caso.desact].filter(k => caso.res.entidades.has(k)));
+    caso.cons = Anon.construir(caso.res, caso.desact);
+  }
+  invalidarRevision();
+  pintarPrevia();
+}
+function mensajeInicial(cons){ return (cons ? cons.salida : "") + (fotosListas().length ? (cons ? "\n\n" : "") + NOTA_FOTO : ""); }
+function marcar(textoEscapado){
+  return textoEscapado.replace(RX_TOK, m => '<mark class="m-tok">' + m + "</mark>");
+}
+
+/* ===================== pasos 1-3 ===================== */
+function tareaActual(){ return aj.plantillas.find(p => p.id === aj.tarea) || aj.plantillas[0]; }
+function pintarTareas(){
+  if (!aj.plantillas.some(p => p.id === aj.tarea)) aj.tarea = aj.plantillas[0].id;
+  const c = $("tareas"); c.innerHTML = "";
+  aj.plantillas.forEach(p => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.setAttribute("role", "radio");
+    b.setAttribute("aria-checked", p.id === aj.tarea ? "true" : "false");
+    b.textContent = p.nombre;
+    b.addEventListener("click", () => {
+      aj.tarea = p.id; guardar(); pintarTareas();
+      $("prompt").value = p.texto; analizar();
+      if (p.foto && !caso.fotos.length) toast("Para esta tarea puedes adjuntar la foto o el PDF del examen.");
+    });
+    c.appendChild(b);
+  });
+}
+
+function pintarPrevia(){
+  let html = "";
+  if (caso.res){
+    const t = caso.res.texto; let p = 0;
+    for (const d of caso.res.dets){
+      if (caso.desact.has(d.k)) continue;
+      const en = caso.res.entidades.get(d.k);
+      html += esc(t.slice(p, d.s)) + '<mark class="m-' + d.tipo + '">' + esc(en.token || en.repl) + "</mark>";
+      p = d.e;
+    }
+    html += esc(t.slice(p));
+  }
+  const nf = fotosListas().length;
+  if (nf) html += (html ? "\n\n" : "") + '<span class="tenue">' + esc(NOTA_FOTO) + "</span>";
+  if (!html) html = '<span class="tenue">Aquí verás exactamente lo que se enviará.</span>';
+  $("previa").innerHTML = html;
+  $("fotosPrevia").innerHTML = fotosListas().map((f, i) => '<img src="' + esc(f.url) + '" alt="Imagen tachada ' + (i + 1) + '">').join("");
+
+  const ents = caso.res ? [...caso.res.entidades.values()] : [];
+  $("detalles").hidden = !ents.length;
+  if (ents.length){
+    const activos = ents.filter(e => !caso.desact.has(e.k)).length;
+    $("detSum").textContent = "Datos ocultos: " + activos + (activos !== ents.length ? " de " + ents.length : "");
+    ents.sort((a, b) => Anon.TIPOS.indexOf(a.tipo) - Anon.TIPOS.indexOf(b.tipo));
+    $("detBody").innerHTML = ents.map(en => {
+      const off = caso.desact.has(en.k);
+      return '<tr class="' + (off ? "off" : "") + '"><td class="c"><input type="checkbox" data-k="' + esc(en.k) + '"' + (off ? "" : " checked") +
+        ' aria-label="Ocultar ' + esc(en.ejemplo) + '"></td><td>' + esc(Anon.ETIQUETA[en.tipo]) + "</td><td>" + esc(en.ejemplo) +
+        '</td><td><mark class="m-' + en.tipo + '">' + esc(en.token || en.repl) + "</mark></td></tr>";
+    }).join("");
+  }
+  $("btnEjemplo").hidden = !!($("entrada").value.trim() || caso.fotos.length);
+  actualizarEnvio();
+}
+$("detBody").addEventListener("change", e => {
+  const k = e.target && e.target.dataset ? e.target.dataset.k : null;
+  if (!k || !caso.res) return;
+  if (e.target.checked) caso.desact.delete(k); else caso.desact.add(k);
+  caso.cons = Anon.construir(caso.res, caso.desact);
+  invalidarRevision(); pintarPrevia();
+});
+
+let tAn = null;
+["prompt", "entrada", "ocultar"].forEach(id => $(id).addEventListener("input", () => {
+  invalidarRevision(); actualizarEnvio();
+  clearTimeout(tAn); tAn = setTimeout(analizar, 250);
+}));
+$("revisado").addEventListener("change", actualizarEnvio);
+
+const EJEMPLO = `Caso ficticio de prueba.
+Paciente: Juan Andrés Pérez Soto, RUT 12.345.678-5, 67 años.
+Domicilio: Pasaje Los Aromos 1234, Vitacura. Teléfono: +56 9 8765 4321.
+Antecedentes: HTA y DM2. Losartán 50 mg c/12 h, metformina 850 mg c/12 h. Sin alergias conocidas.
+Consulta el 15 de marzo de 2026 por nicturia de 3 episodios y chorro débil de 6 meses de evolución.
+APE 8,5 ng/ml (12/02/2026); previo 4,2 ng/ml (10/11/2024). Creatinina 1,1 mg/dl.
+Tacto rectal: próstata aumentada de tamaño, sin nódulos. Lo acompaña su hija Camila Rojas.`;
+function cargarEjemplo(){
+  const ic = aj.plantillas.find(p => p.id === "ic");
+  if (ic){ aj.tarea = "ic"; pintarTareas(); $("prompt").value = ic.texto + "\nDirigida a Urología."; }
+  $("entrada").value = EJEMPLO;
+  analizar();
+}
+$("btnEjemplo").addEventListener("click", cargarEjemplo);
+
+/* ===================== adjuntos: imágenes, PDF, Word, texto ===================== */
+function agregarTexto(t){
+  t = String(t || "").trim(); if (!t) return;
+  const e = $("entrada");
+  // El nombre del archivo no se agrega: puede contener el nombre del paciente
+  e.value = (e.value.trim() ? e.value.replace(/\s+$/, "") + "\n\n" : "") + t;
+}
+function agregarImagen(blob){
+  return new Promise(res => {
+    if (caso.fotos.length >= MAX_FOTOS){ res(false); return; }
+    const src = URL.createObjectURL(blob), im = new Image();
+    im.onload = () => {
+      const k = Math.min(1, MAXL / Math.max(im.naturalWidth, im.naturalHeight));
+      caso.fotos.push({img:im, src, w:Math.max(1, Math.round(im.naturalWidth * k)), h:Math.max(1, Math.round(im.naturalHeight * k)), cajas:[], blob:null, url:null, pendiente:true});
+      res(true);
+    };
+    im.onerror = () => { URL.revokeObjectURL(src); res(false); };
+    im.src = src;
+  });
+}
+let pdfjsPromesa = null;
+function cargarScript(src){
+  return new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = src; s.onload = () => res(); s.onerror = () => { s.remove(); rej(new Error("no se pudo cargar el lector de PDF")); };
+    (document.head || document.body).appendChild(s);
+  });
+}
+function cargarPdfjs(){
+  if (window.pdfjsLib && window.pdfjsWorker) return Promise.resolve(window.pdfjsLib);
+  if (!pdfjsPromesa){
+    // El lector de PDF corre completo en el dispositivo; el archivo nunca se sube a ningún lado
+    const fuentes = enMarco
+      ? ["https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/", "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/"]
+      : [""];
+    pdfjsPromesa = (async () => {
+      let ultimo = null;
+      for (const base of fuentes){
+        try {
+          if (!window.pdfjsLib) await cargarScript(base + "pdf.min.js");
+          if (!window.pdfjsWorker) await cargarScript(base + "pdf.worker.min.js");
+          if (window.pdfjsLib && window.pdfjsWorker) return window.pdfjsLib;
+        } catch(e){ ultimo = e; }
+      }
+      throw ultimo || new Error("lector de PDF no disponible");
+    })();
+    pdfjsPromesa.catch(() => { pdfjsPromesa = null; });
+  }
+  return pdfjsPromesa;
+}
+async function textoPdf(pdf){
+  const paginas = [];
+  for (let n = 1; n <= pdf.numPages; n++){
+    const tc = await (await pdf.getPage(n)).getTextContent();
+    const lineas = new Map();
+    for (const it of tc.items){
+      if (!it.str || !it.transform) continue;
+      const y = Math.round(it.transform[5] / 3) * 3;
+      if (!lineas.has(y)) lineas.set(y, []);
+      lineas.get(y).push({x:it.transform[4], s:it.str, w:it.width || 0});
+    }
+    const texto = [...lineas.keys()].sort((a, b) => b - a).map(y => {
+      let l = "", fin = null;
+      for (const it of lineas.get(y).sort((a, b) => a.x - b.x)){
+        if (fin !== null){ const gap = it.x - fin; l += gap > 12 ? "   " : (gap > 1.5 && !/\s$/.test(l) && !/^\s/.test(it.s) ? " " : ""); }
+        l += it.s; fin = it.x + it.w;
+      }
+      return l.replace(/\s+$/, "");
+    }).join("\n");
+    paginas.push(texto);
+  }
+  return paginas.join("\n\n").trim();
+}
+async function paginaComoImagen(pdf, n){
+  const pg = await pdf.getPage(n);
+  const v1 = pg.getViewport({scale:1});
+  const vp = pg.getViewport({scale: Math.min(3, MAXL / Math.max(v1.width, v1.height))});
+  const c = document.createElement("canvas"); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+  const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
+  await pg.render({canvasContext:g, viewport:vp}).promise;
+  return await new Promise(r => c.toBlob(r, "image/jpeg", 0.9));
+}
+async function leerPdf(f){
+  const lib = await cargarPdfjs();
+  const pdf = await lib.getDocument({data:new Uint8Array(await f.arrayBuffer()), isEvalSupported:false, useSystemFonts:true}).promise;
+  try {
+    const texto = await textoPdf(pdf);
+    if (texto.replace(/\s/g, "").length >= 40 * Math.min(pdf.numPages, 3)){
+      agregarTexto(texto);
+      return "Texto de " + f.name + " agregado al caso (" + pdf.numPages + (pdf.numPages === 1 ? " página)." : " páginas).");
+    }
+    // PDF escaneado: cada página pasa a ser una imagen para tachar
+    const libres = MAX_FOTOS - caso.fotos.length;
+    if (libres <= 0) return f.name + " es un PDF escaneado y ya no caben más imágenes en este caso.";
+    const n = Math.min(pdf.numPages, libres);
+    for (let p = 1; p <= n; p++){ const b = await paginaComoImagen(pdf, p); if (b) await agregarImagen(b); }
+    return f.name + " es un PDF escaneado: se agregó como " + n + (n === 1 ? " imagen" : " imágenes") + " para tachar" + (pdf.numPages > n ? " (solo las primeras " + n + " páginas)" : "") + ".";
+  } finally { try { pdf.destroy(); } catch(e){} }
+}
+async function procesarArchivos(lista){
+  const archivos = [...lista]; if (!archivos.length) return;
+  const antes = caso.fotos.length, msgs = [];
+  $("adjInfo").textContent = "Leyendo " + (archivos.length === 1 ? "el archivo" : archivos.length + " archivos") + "…";
+  for (const f of archivos){
+    const n = (f.name || "").toLowerCase(), tipo = f.type || "";
+    try {
+      if (tipo.startsWith("image/") || /\.(jpe?g|png|heic|heif|webp|gif)$/.test(n)){
+        if (caso.fotos.length >= MAX_FOTOS) msgs.push("Máximo " + MAX_FOTOS + " imágenes por caso.");
+        else if (await agregarImagen(f)) msgs.push("Imagen agregada.");
+        else msgs.push("No se pudo abrir una imagen: prueba con JPG o PNG.");
+      }
+      else if (tipo === "application/pdf" || n.endsWith(".pdf")) msgs.push(await leerPdf(f));
+      else if (n.endsWith(".docx")){ agregarTexto(await Anon.leerDocx(await f.arrayBuffer())); msgs.push("Texto de " + f.name + " agregado al caso."); }
+      else if (n.endsWith(".doc")) msgs.push(f.name + ": formato .doc antiguo; guárdalo como .docx o copia el texto.");
+      else if (tipo.startsWith("text/") || /\.(txt|md|csv)$/.test(n)){ agregarTexto(await f.text()); msgs.push("Texto de " + f.name + " agregado al caso."); }
+      else msgs.push(f.name + ": formato no compatible.");
+    } catch(err){ msgs.push(f.name + ": " + ((err && err.message) || "no se pudo leer") + "."); }
+  }
+  $("adjInfo").textContent = msgs.join(" ");
+  pintarFotos(); analizar(); pintarConexion();
+  const i = caso.fotos.findIndex((f, k) => k >= antes && f.pendiente);
+  if (i >= 0) abrirEditor(i);
+}
+$("btnAdjuntar").addEventListener("click", () => $("adjunto").click());
+$("adjunto").addEventListener("change", e => { const l = [...(e.target.files || [])]; e.target.value = ""; procesarArchivos(l); });
+document.addEventListener("dragover", e => { if ($("editor").hidden) e.preventDefault(); });
+document.addEventListener("drop", e => {
+  if (!$("editor").hidden) return;
+  e.preventDefault();
+  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length){ ir("caso"); procesarArchivos(e.dataTransfer.files); }
+});
+
+function pintarFotos(){
+  const g = $("fotos");
+  g.hidden = !caso.fotos.length;
+  g.innerHTML = caso.fotos.map((f, i) => {
+    const n = f.cajas.length;
+    const info = f.pendiente ? "⚠ Sin revisar: toca Tachar" : (n ? n + (n === 1 ? " zona tachada" : " zonas tachadas") : "Revisada, sin zonas tachadas");
+    return '<div class="foto-item' + (f.pendiente ? " pend" : "") + '"><img src="' + esc(f.url || f.src) + '" alt="Imagen ' + (i + 1) + '">' +
+      '<span class="nota">Imagen ' + (i + 1) + " · " + info + '</span><div class="fila">' +
+      '<button class="btn sec chico" type="button" data-tachar="' + i + '">Tachar</button>' +
+      '<button class="btn sec chico" type="button" data-quitar="' + i + '">Quitar</button></div></div>';
+  }).join("");
+}
+$("fotos").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.tachar !== undefined) abrirEditor(+b.dataset.tachar);
+  else if (b.dataset.quitar !== undefined) quitarFoto(+b.dataset.quitar);
+});
+function quitarFoto(i){
+  const f = caso.fotos[i]; if (!f) return;
+  URL.revokeObjectURL(f.src); if (f.url) URL.revokeObjectURL(f.url);
+  caso.fotos.splice(i, 1);
+  pintarFotos(); invalidarRevision(); pintarPrevia(); pintarConexion();
+}
+
+/* ===================== editor: tachar a mano ===================== */
+const lz = $("lienzo"), cx = lz.getContext("2d");
+function abrirEditor(i){
+  const f = caso.fotos[i]; if (!f) return;
+  ed.idx = i; ed.respaldo = f.cajas.slice(); ed.zoom = 1; ed.dib = null;
+  lz.width = f.w; lz.height = f.h;
+  $("edTitulo").textContent = "Tachar · imagen " + (i + 1) + " de " + caso.fotos.length;
+  $("editor").hidden = false; document.body.classList.add("modal-abierto");
+  fijarModo("tachar");
+  requestAnimationFrame(() => { aplicarZoom(); redibujar(); });
+}
+function cerrarEditor(){ $("editor").hidden = true; document.body.classList.remove("modal-abierto"); ed.idx = -1; }
+function aplicarZoom(){
+  const w = Math.max(200, $("lienzoWrap").clientWidth - 16);
+  lz.style.width = Math.round(w * ed.zoom) + "px"; lz.style.height = "auto";
+  $("zoomVal").textContent = Math.round(ed.zoom * 100) + " %";
+  $("zoomMenos").disabled = ed.zoom <= 1; $("zoomMas").disabled = ed.zoom >= 4;
+}
+function zoom(d){
+  const w = $("lienzoWrap");
+  const rx = (w.scrollLeft + w.clientWidth / 2) / Math.max(1, w.scrollWidth), ry = (w.scrollTop + w.clientHeight / 2) / Math.max(1, w.scrollHeight);
+  ed.zoom = Math.min(4, Math.max(1, ed.zoom + d)); aplicarZoom();
+  w.scrollLeft = rx * w.scrollWidth - w.clientWidth / 2; w.scrollTop = ry * w.scrollHeight - w.clientHeight / 2;
+}
+$("zoomMas").addEventListener("click", () => zoom(0.5));
+$("zoomMenos").addEventListener("click", () => zoom(-0.5));
+function fijarModo(m){
+  ed.modo = m; $("lienzoWrap").classList.toggle("mover", m === "mover");
+  $("modoTachar").setAttribute("aria-pressed", m === "tachar" ? "true" : "false");
+  $("modoMover").setAttribute("aria-pressed", m === "mover" ? "true" : "false");
+}
+$("modoTachar").addEventListener("click", () => fijarModo("tachar"));
+$("modoMover").addEventListener("click", () => fijarModo("mover"));
+const normCaja = d => ({x:Math.min(d.x0, d.x1), y:Math.min(d.y0, d.y1), w:Math.abs(d.x1 - d.x0), h:Math.abs(d.y1 - d.y0)});
+function punto(e){ const r = lz.getBoundingClientRect(); return {x:(e.clientX - r.left) * lz.width / r.width, y:(e.clientY - r.top) * lz.height / r.height}; }
+function redibujar(){
+  const f = caso.fotos[ed.idx]; if (!f) return;
+  cx.drawImage(f.img, 0, 0, lz.width, lz.height);
+  cx.fillStyle = "#000"; f.cajas.forEach(b => cx.fillRect(b.x, b.y, b.w, b.h));
+  if (ed.dib){
+    const b = normCaja(ed.dib);
+    cx.fillStyle = "rgba(0,0,0,.55)"; cx.fillRect(b.x, b.y, b.w, b.h);
+    cx.strokeStyle = "#e5484d"; cx.lineWidth = Math.max(2, lz.width / 400); cx.strokeRect(b.x, b.y, b.w, b.h);
+  }
+  const n = f.cajas.length;
+  $("deshacer").disabled = !n;
+  $("edInfo").textContent = n ? n + (n === 1 ? " zona tachada" : " zonas tachadas") + ". Revisa toda la hoja antes de tocar Listo."
+    : "Arrastra el dedo sobre nombre, RUT, N° de ficha, fecha de nacimiento y códigos de barra. Usa + y “Mover” para acercarte.";
+}
+lz.addEventListener("pointerdown", e => {
+  if (ed.modo !== "tachar" || ed.idx < 0) return;
+  e.preventDefault(); try { lz.setPointerCapture(e.pointerId); } catch(_){}
+  const p = punto(e); ed.dib = {x0:p.x, y0:p.y, x1:p.x, y1:p.y}; redibujar();
+});
+lz.addEventListener("pointermove", e => { if (!ed.dib) return; e.preventDefault(); const p = punto(e); ed.dib.x1 = p.x; ed.dib.y1 = p.y; redibujar(); });
+function soltar(){
+  if (!ed.dib) return;
+  const b = normCaja(ed.dib); ed.dib = null;
+  const min = lz.width / 150, f = caso.fotos[ed.idx];
+  if (f && b.w > min && b.h > min) f.cajas.push(b);
+  redibujar();
+}
+lz.addEventListener("pointerup", soltar); lz.addEventListener("pointercancel", soltar);
+$("deshacer").addEventListener("click", () => { const f = caso.fotos[ed.idx]; if (f){ f.cajas.pop(); redibujar(); } });
+$("fotoListo").addEventListener("click", () => {
+  const i = ed.idx, f = caso.fotos[i]; if (!f) return;
+  ed.dib = null; redibujar();
+  // Re-codificar en JPEG también elimina la ubicación GPS y demás metadatos de la foto original
+  lz.toBlob(blob => {
+    if (!blob){ toast("No se pudo preparar la imagen."); return; }
+    if (f.url) URL.revokeObjectURL(f.url);
+    f.blob = blob; f.url = URL.createObjectURL(blob); f.pendiente = false;
+    cerrarEditor(); pintarFotos(); invalidarRevision(); pintarPrevia(); pintarConexion();
+    const sig = caso.fotos.findIndex(x => x.pendiente);
+    if (sig >= 0) abrirEditor(sig);
+  }, "image/jpeg", 0.85);
+});
+function cancelarEditor(){
+  const i = ed.idx, f = caso.fotos[i];
+  cerrarEditor();
+  if (!f) return;
+  if (f.pendiente && !f.blob) quitarFoto(i);   // imagen nueva que nunca se revisó: se descarta
+  else { f.cajas = ed.respaldo.slice(); }
+}
+$("fotoDescartar").addEventListener("click", cancelarEditor);
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("editor").hidden) cancelarEditor(); });
+
+/* ===================== paso 4: enviar ===================== */
+function actualizarEnvio(){
+  const con = conexion(), P = PROV[aj.prov];
+  const instr = !!$("prompt").value.trim(), hay = !!(instr || $("entrada").value.trim() || caso.fotos.length);
+  const rev = $("revisado").checked, pend = fotosPendientes();
+  const falta = con === "api" && !claveDe(aj.prov);
+  const demasiadas = con === "cuenta" && fotosListas().length > sampleMax;
+  const listo = instr && rev && !falta && !pend && !demasiadas;
+  $("revisado").disabled = !hay;
+  $("bloqueDirecto").hidden = con === "copiar";
+  $("bloqueCopiar").hidden = con !== "copiar";
+  $("enviar").textContent = caso.turnos.length ? "Enviar de nuevo (conversación nueva)" : "Enviar a " + P.nombre;
+  $("enviar").disabled = !listo || enCurso;
+  const ca = $("copiarAbrir");
+  ca.textContent = "Copiar y abrir " + P.nombre; ca.href = P.web;
+  ca.setAttribute("aria-disabled", listo && !enCurso ? "false" : "true");
+  $("liFoto").hidden = !fotosListas().length;
+  let h = "";
+  if (!hay) h = "Escribe tu instrucción y el caso, o adjunta una foto o documento.";
+  else if (!instr) h = "Escribe qué necesitas en el paso 1.";
+  else if (pend) h = "Revisa y tacha " + (pend === 1 ? "la imagen pendiente" : "las " + pend + " imágenes pendientes") + " del paso 2.";
+  else if (falta) h = "Falta tu clave API de " + P.nombre + ": agrégala en Ajustes o cambia a “Copiar y abrir”.";
+  else if (demasiadas) h = "Aquí Claude acepta hasta " + sampleMax + " imágenes por envío: quita alguna.";
+  else if (!rev) h = "Marca la casilla del paso 3 para habilitar el envío.";
+  else if (con === "cuenta") h = "Claude responderá aquí mismo con tu cuenta. La primera vez te pedirá permiso.";
+  else if (con === "api") h = P.nombre + " responderá aquí mismo (modelo " + modeloDe(aj.prov) + ").";
+  else if (enMarco && aj.prov !== "claude") h = "Aquí dentro, solo Claude puede responder en la misma pantalla. Para " + P.nombre + " sin cambiar de app, usa la versión instalable con clave API.";
+  $("hint").textContent = h;
+  // seguimiento
+  $("segDirecto").hidden = con === "copiar";
+  $("segCopiar").hidden = con !== "copiar";
+  const segOk = !!$("seguimiento").value.trim() && !enCurso && !(con === "api" && falta);
+  $("enviarSeg").disabled = !segOk;
+  const cs = $("copiarSeg");
+  cs.textContent = "Copiar y abrir " + P.nombre; cs.href = P.web;
+  cs.setAttribute("aria-disabled", segOk ? "false" : "true");
+}
+
+// Fija lo que se envía como primer mensaje y reinicia la conversación
+function iniciarConversacion(){
+  const texto = textoCombinado();
+  const reg = new Map(), cont = {};
+  const r = texto ? calcular(texto, reg, cont) : {cons:null};
+  if (caso.cons && r.cons && r.cons.salida !== caso.cons.salida){ analizar(); return false; }
+  caso.registro = reg; caso.cont = cont;
+  caso.mapa = r.cons ? Object.assign({}, r.cons.mapa) : {};
+  caso.inicialReal = texto;
+  caso.fotosEnviadas = fotosListas().map(f => f.blob);
+  caso.turnos = [{rol:"user", anon: mensajeInicial(r.cons), real: texto, nfotos: caso.fotosEnviadas.length}];
+  caso.verAnon = false;
+  return true;
+}
+// Anonimiza un mensaje de seguimiento con los mismos marcadores de la conversación
+function anonSeguimiento(texto, confirmar){
+  const reales = [caso.inicialReal].concat(caso.turnos.filter((t, i) => i > 0 && t.rol === "user").map(t => t.real), [texto]);
+  const reg = new Map(caso.registro), cont = Object.assign({}, caso.cont);
+  const {cons} = calcular(reales.join(SEP), reg, cont);
+  const partes = cons.salida.split(SEP);
+  if (confirmar){ caso.registro = reg; caso.cont = cont; Object.assign(caso.mapa, cons.mapa); }
+  return {anon: partes[partes.length - 1].trim(), cons};
+}
+
+$("enviar").addEventListener("click", async () => {
+  const con = conexion();
+  if (con === "copiar" || enCurso || $("enviar").disabled) return;
+  if (!iniciarConversacion()){ estado("El texto cambió: revísalo de nuevo y vuelve a marcar la casilla.", "aviso"); return; }
+  pintarHilo(); $("conv").hidden = false;
+  const ok = await pedirRespuesta(estado);
+  if (!ok){ caso.turnos = []; pintarHilo(); }
+  else desplazar($("conv"));
+});
+$("detener").addEventListener("click", () => { if (ctl) ctl.abort(); });
+$("detenerSeg").addEventListener("click", () => { if (ctl) ctl.abort(); });
+
+$("enviarSeg").addEventListener("click", async () => {
+  const t = $("seguimiento").value.trim();
+  if (!t || enCurso || conexion() === "copiar" || !caso.turnos.length) return;
+  const {anon} = anonSeguimiento(t, true);
+  caso.turnos.push({rol:"user", anon, real:t});
+  $("seguimiento").value = ""; $("segPrevia").hidden = true;
+  pintarHilo();
+  const ok = await pedirRespuesta(estadoSeg);
+  if (!ok){ caso.turnos.pop(); $("seguimiento").value = t; pintarHilo(); actualizarEnvio(); }
+});
+
+// Envía la conversación (ya anonimizada) a la IA elegida y agrega su respuesta
+async function pedirRespuesta(est){
+  const con = conexion(), prov = aj.prov;
+  const turnos = caso.turnos.map(t => ({rol:t.rol, texto:t.anon}));
+  const resp = {rol:"assistant", anon:"", pendiente:true};
+  caso.turnos.push(resp); pintarHilo();
+  enCurso = true; ctl = new AbortController();
+  $("detener").hidden = $("detenerSeg").hidden = false; actualizarEnvio();
+  est("Esperando a " + PROV[prov].nombre + "…", "cargando");
+  try {
+    const r = con === "cuenta"
+      ? await viaCuenta(sistemaActual(), turnos, caso.fotosEnviadas, ctl.signal, t => { resp.anon = t; pintarHilo(); })
+      : await viaAPI(prov, sistemaActual(), turnos, caso.fotosEnviadas, ctl.signal);
+    resp.anon = r.texto; resp.pendiente = false;
+    est(r.truncado ? "La respuesta quedó incompleta. Pide algo más acotado o divide el caso." : "", r.truncado ? "aviso" : "");
+    return true;
+  } catch(err){
+    resp.pendiente = false;
+    const cancelado = err && (err.code === "cancelled" || err.name === "AbortError");
+    if (err && err.text) resp.anon = err.text;
+    if (cancelado) est("Envío detenido.", "aviso"); else est(mensajeError(err), "error");
+    if (err && ["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"].includes(err.code)){ sampleFn = null; pintarConexion(); }
+    if (resp.anon){ resp.interrumpida = true; return true; }
+    caso.turnos.pop();
+    return false;
+  } finally {
+    enCurso = false; ctl = null;
+    $("detener").hidden = $("detenerSeg").hidden = true;
+    pintarHilo(); actualizarEnvio();
+  }
+}
+
+// Claude dentro de Claude: usa la cuenta de quien abre la página
+async function viaCuenta(sistema, turnos, fotos, signal, alEscribir){
+  const input = turnos.map((t, i) => ({role: t.rol === "user" ? "user" : "assistant", content: (i === 0 && sistema ? sistema + "\n\n---\n\n" : "") + t.texto}));
+  const opts = {signal, cache:false, onText: ({text}) => { if (!signal.aborted) alEscribir(text); }};
+  if (fotos.length){
+    opts.images = fotos;
+    if (input.length > 1) input[input.length - 1].content += "\n\n(Se adjuntan de nuevo las imágenes del primer mensaje.)";
+  }
+  const r = await sampleFn(input.length === 1 ? input[0].content : input, opts);
+  return {texto: r.text, truncado: !!r.truncated};
+}
+
+function aBase64(blob){
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(String(fr.result).split(",")[1] || "");
+    fr.onerror = () => rej(fr.error);
+    fr.readAsDataURL(blob);
+  });
+}
+// Conexión directa con la clave API del propio médico (versión instalable)
+async function viaAPI(prov, sistema, turnos, fotos, signal){
+  const key = claveDe(prov);
+  if (!key) throw {mensaje: "Falta la clave API de " + PROV[prov].nombre + ". Agrégala en Ajustes."};
+  const modelo = modeloDe(prov);
+  const imgs = [];
+  for (const b of (fotos || [])) imgs.push(await aBase64(b));
+  const rol = t => t.rol === "user" ? "user" : "assistant";
+  let url, init, extraer;
+  if (prov === "claude"){
+    const messages = turnos.map((t, i) => ({role: rol(t), content: i === 0 && imgs.length
+      ? imgs.map(d => ({type:"image", source:{type:"base64", media_type:"image/jpeg", data:d}})).concat([{type:"text", text:t.texto}])
+      : t.texto}));
+    const headers = {"content-type":"application/json", "authorization":"Bearer " + key, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true"};
+    if (aj.workspace) headers["anthropic-workspace-id"] = aj.workspace;
+    const body = {model:modelo, max_tokens:8000, messages};
+    if (sistema) body.system = sistema;
+    url = "https://api.anthropic.com/v1/messages";
+    init = {method:"POST", headers, body:JSON.stringify(body)};
+    extraer = j => ({texto:(j.content || []).filter(c => c.type === "text").map(c => c.text).join("\n").trim(), truncado: j.stop_reason === "max_tokens"});
+  } else if (prov === "chatgpt"){
+    const messages = sistema ? [{role:"system", content:sistema}] : [];
+    turnos.forEach((t, i) => messages.push({role: rol(t), content: i === 0 && imgs.length
+      ? [{type:"text", text:t.texto}].concat(imgs.map(d => ({type:"image_url", image_url:{url:"data:image/jpeg;base64," + d}})))
+      : t.texto}));
+    url = "https://api.openai.com/v1/chat/completions";
+    init = {method:"POST", headers:{"content-type":"application/json", "authorization":"Bearer " + key}, body:JSON.stringify({model:modelo, messages})};
+    extraer = j => {
+      const c = j.choices && j.choices[0], m = c && c.message;
+      let t = m && m.content;
+      if (Array.isArray(t)) t = t.map(x => (x && x.text) || "").join("");
+      return {texto:String(t || "").trim(), truncado: !!(c && c.finish_reason === "length")};
+    };
+  } else {
+    const contents = turnos.map((t, i) => ({role: t.rol === "user" ? "user" : "model", parts: i === 0 && imgs.length
+      ? [{text:t.texto}].concat(imgs.map(d => ({inline_data:{mime_type:"image/jpeg", data:d}})))
+      : [{text:t.texto}]}));
+    const body = {contents};
+    if (sistema) body.system_instruction = {parts:[{text:sistema}]};
+    url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(modelo) + ":generateContent";
+    init = {method:"POST", headers:{"content-type":"application/json", "x-goog-api-key":key}, body:JSON.stringify(body)};
+    extraer = j => {
+      const c = j.candidates && j.candidates[0];
+      const t = c && c.content && (c.content.parts || []).map(p => p.text || "").join("").trim();
+      if (!t && j.promptFeedback && j.promptFeedback.blockReason) throw {mensaje: "Gemini bloqueó la solicitud (" + j.promptFeedback.blockReason + ")."};
+      return {texto:t || "", truncado: !!(c && c.finishReason === "MAX_TOKENS")};
+    };
+  }
+  if (signal) init.signal = signal;
+  let r;
+  try { r = await fetch(url, init); }
+  catch(e){ if (e && e.name === "AbortError") throw e; throw {mensaje: "No se pudo conectar con " + PROV[prov].nombre + ". Revisa tu conexión a internet."}; }
+  let j = null;
+  try { j = await r.json(); } catch(e){}
+  if (!r.ok) throw {mensaje: mensajeApi(prov, r.status, j)};
+  const out = extraer(j || {});
+  if (!out.texto) throw {mensaje: "La IA no devolvió texto. Intenta de nuevo o acorta el caso."};
+  return out;
+}
+function mensajeApi(prov, st, j){
+  const P = PROV[prov];
+  const det = j && j.error ? String(j.error.message || j.error.type || j.error.status || "") : "";
+  if (prov === "claude" && /workspace/i.test(det)) return "Tu clave de Claude pide un ID de workspace: agrégalo en Ajustes, o crea la clave eligiendo un workspace.";
+  if (st === 401 || st === 403 || /api key/i.test(det)) return "La clave API de " + P.nombre + " no es válida o no tiene permisos.";
+  if (st === 429) return "Se alcanzó el límite de uso o de saldo de tu cuenta de API. Espera un momento o revisa la facturación.";
+  if (st === 404) return "El modelo “" + modeloDe(prov) + "” no está disponible para tu clave. Cámbialo en Ajustes.";
+  if (st === 413) return "El envío es demasiado grande: quita alguna imagen o acorta el caso.";
+  if (st >= 500) return P.nombre + " no respondió (error " + st + "). Intenta de nuevo en unos minutos.";
+  return "Error " + st + " de " + P.nombre + (det ? ": " + det : ".");
+}
+const ERR_CUENTA = {
+  not_granted: "No se dio permiso para usar Claude desde esta página. Puedes elegir otra IA con “Copiar y abrir”.",
+  sampling_disabled: "Claude no está disponible para esta cuenta.",
+  rate_limited: "Llegaste al límite de uso de Claude por ahora. Intenta más tarde.",
+  session_expired: "Tu sesión de Claude expiró: vuelve a iniciar sesión.",
+  images_unavailable: "Esta vista no puede enviar imágenes a Claude.",
+  image_rejected: "Claude no aceptó una de las imágenes. Prueba con otra foto.",
+  refused: "Claude no respondió esta solicitud. Reformula la instrucción.",
+  prompt_too_large: "El caso es demasiado largo. Acórtalo.",
+  empty_completion: "La respuesta llegó vacía. Intenta de nuevo."
+};
+function mensajeError(e){
+  if (!e) return "Ocurrió un error inesperado. Intenta de nuevo.";
+  if (e.mensaje) return e.mensaje;
+  if (e.code) return ERR_CUENTA[e.code] || "Hubo un problema al conectar con Claude. Intenta de nuevo en un momento.";
+  return "Ocurrió un error inesperado. Intenta de nuevo.";
+}
+
+/* ===================== copiar y abrir (respaldo) ===================== */
+function trasCopiar(ok, texto, est, extra){
+  const tm = $("textoManual");
+  if (ok){ tm.hidden = true; est("Copiado. " + extra, "ok"); }
+  else { tm.value = texto; tm.hidden = false; est("No se pudo copiar solo: selecciona el texto del recuadro del paso 4 y cópialo.", "aviso"); }
+}
+$("copiarAbrir").addEventListener("click", e => {
+  if (e.currentTarget.getAttribute("aria-disabled") === "true"){ e.preventDefault(); return; }
+  if (!iniciarConversacion()){ e.preventDefault(); estado("El texto cambió: revísalo de nuevo y vuelve a marcar la casilla.", "aviso"); return; }
+  const s = sistemaActual(), texto = (s ? s + "\n\n---\n\n" : "") + caso.turnos[0].anon, nom = PROV[aj.prov].nombre;
+  pintarHilo();
+  copiarTexto(texto).then(ok => trasCopiar(ok, texto, estado, "Pégalo en " + nom + (caso.fotosEnviadas.length ? ", adjunta las imágenes" : "") + " y trae la respuesta al recuadro de abajo."));
+});
+$("agregarResp").addEventListener("click", () => {
+  const t = $("pegada").value.trim(); if (!t) return;
+  if (!caso.turnos.length && !iniciarConversacion()){ estado("El texto cambió: revísalo de nuevo.", "aviso"); return; }
+  const ult = caso.turnos[caso.turnos.length - 1];
+  if (ult && ult.rol === "assistant") caso.turnos.push({rol:"user", anon:"(continúa)", real:"(continúa)"});
+  caso.turnos.push({rol:"assistant", anon:t});
+  $("pegada").value = ""; estado("");
+  pintarHilo(); desplazar($("conv"));
+});
+$("copiarSeg").addEventListener("click", e => {
+  const t = $("seguimiento").value.trim();
+  if (e.currentTarget.getAttribute("aria-disabled") === "true" || !t || !caso.turnos.length){ e.preventDefault(); return; }
+  const ult = caso.turnos[caso.turnos.length - 1];
+  let anon;
+  if (ult.rol === "user" && ult.real === t) anon = ult.anon;
+  else { anon = anonSeguimiento(t, true).anon; caso.turnos.push({rol:"user", anon, real:t}); }
+  pintarHilo();
+  copiarTexto(anon).then(ok => trasCopiar(ok, anon, estadoSeg, "Pégalo en la misma conversación de " + PROV[aj.prov].nombre + " y trae la respuesta."));
+});
+$("agregarSeg").addEventListener("click", () => {
+  const t = $("pegadaSeg").value.trim(); if (!t || !caso.turnos.length) return;
+  caso.turnos.push({rol:"assistant", anon:t});
+  $("pegadaSeg").value = ""; $("seguimiento").value = ""; $("segPrevia").hidden = true; estadoSeg("");
+  pintarHilo(); actualizarEnvio();
+});
+$("guardarFoto").addEventListener("click", async () => {
+  const lista = fotosListas(); if (!lista.length) return;
+  const nombre = i => "imagen-tachada-" + (i + 1) + ".jpg";
+  if (enMarco){
+    if (guardador){
+      for (let i = 0; i < lista.length; i++){
+        try { await guardador.save({filename:nombre(i), data:lista[i].blob}); }
+        catch(e){ if (e && e.code === "declined") return; toast("Mantén presionada la imagen del paso 3 y elige Guardar."); return; }
+      }
+      toast(lista.length === 1 ? "Imagen guardada" : "Imágenes guardadas"); return;
+    }
+    toast("Mantén presionada la imagen del paso 3 y elige Guardar."); return;
+  }
+  try {
+    const files = lista.map((f, i) => new File([f.blob], nombre(i), {type:"image/jpeg"}));
+    if (navigator.canShare && navigator.canShare({files})){ await navigator.share({files}); return; }
+  } catch(e){ if (e && e.name === "AbortError") return; }
+  lista.forEach((f, i) => { const a = document.createElement("a"); a.href = f.url; a.download = nombre(i); document.body.appendChild(a); a.click(); a.remove(); });
+});
+
+/* ===================== paso 5: conversación ===================== */
+let tSeg = null;
+$("seguimiento").addEventListener("input", () => {
+  actualizarEnvio(); clearTimeout(tSeg);
+  tSeg = setTimeout(() => {
+    const t = $("seguimiento").value.trim(), box = $("segPrevia");
+    if (!t || !caso.turnos.length){ box.hidden = true; return; }
+    box.innerHTML = '<span class="tenue">Se enviará: </span>' + marcar(esc(anonSeguimiento(t, false).anon));
+    box.hidden = false;
+  }, 250);
+});
+const RX_TOK = /\[\s*(NOMBRE|RUT|TEL[EÉ]FONO|CORREO|FECHA|DIRECCI[OÓ]N|FICHA|LUGAR|OTRO)[\s_\-]*(\d+)\s*\]/gi;
+function enLinea(s, mapa){
+  s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/__(.+?)__/g, "<strong>$1</strong>");
+  return s.replace(RX_TOK, (m, t, n) => {
+    const k = "[" + Anon.plegar(t).toUpperCase() + "_" + (+n) + "]";
+    if (mapa && Object.prototype.hasOwnProperty.call(mapa, k)) return '<mark class="m-rest">' + esc(mapa[k]) + "</mark>";
+    return '<mark class="m-tok">' + m + "</mark>";
+  });
+}
+const esFila = l => /^\s*\|.*\|\s*$/.test(l);
+const esSep = l => /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/.test(l);
+const celdas = l => l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(c => c.trim());
+function renderMd(src, mapa){
+  const L = esc(src.replace(/\r\n?/g, "\n")).split("\n");
+  const partes = []; let i = 0;
+  while (i < L.length){
+    if (esFila(L[i]) && i + 1 < L.length && esSep(L[i + 1])){
+      let h = '<div class="tabla-wrap"><table><thead><tr>' + celdas(L[i]).map(c => "<th>" + enLinea(c, mapa) + "</th>").join("") + "</tr></thead><tbody>";
+      i += 2;
+      while (i < L.length && esFila(L[i])){ h += "<tr>" + celdas(L[i]).map(c => "<td>" + enLinea(c, mapa) + "</td>").join("") + "</tr>"; i++; }
+      partes.push({b:true, h: h + "</tbody></table></div>"});
+      continue;
+    }
+    const mh = L[i].match(/^\s*#{1,6}\s+(.*)$/);
+    partes.push({b:false, h: mh ? "<strong>" + enLinea(mh[1], mapa) + "</strong>" : enLinea(L[i], mapa)});
+    i++;
+  }
+  let out = "";
+  partes.forEach((p, j) => { if (j > 0 && !p.b && !partes[j - 1].b) out += "\n"; out += p.h; });
+  return out;
+}
+function textoPlano(src){
+  return src.replace(/\r\n?/g, "\n").split("\n")
+    .filter(l => !esSep(l))
+    .map(l => esFila(l) ? celdas(l).join(" | ") : l.replace(/^\s*#{1,6}\s+/, ""))
+    .join("\n").replace(/\*\*(.+?)\*\*/g, "$1").replace(/__(.+?)__/g, "$1");
+}
+function pintarHilo(){
+  $("conv").hidden = !caso.turnos.length;
+  const mapa = caso.verAnon ? null : caso.mapa;
+  $("hilo").innerHTML = caso.turnos.map((t, i) => {
+    if (t.rol === "user"){
+      if (i === 0) return '<details class="turno yo"><summary>Primer mensaje enviado' + (t.nfotos ? " · " + t.nfotos + (t.nfotos === 1 ? " imagen" : " imágenes") : "") +
+        '</summary><div class="out mini">' + marcar(esc(t.anon)) + "</div></details>";
+      return '<div class="turno yo"><div class="burbuja">' + (caso.verAnon ? marcar(esc(t.anon)) : esc(t.real)) + "</div></div>";
+    }
+    if (t.pendiente && !t.anon) return '<div class="turno ia"><p class="pensando">Pensando…</p></div>';
+    return '<div class="turno ia"><div class="resp">' + renderMd(t.anon, mapa) + "</div>" +
+      (t.interrumpida ? '<p class="nota">Respuesta interrumpida.</p>' : "") +
+      (t.pendiente ? "" : '<button class="btn-texto" type="button" data-copiar="' + i + '">Copiar esta respuesta</button>') + "</div>";
+  }).join("");
+  $("verAnon").setAttribute("aria-pressed", caso.verAnon ? "true" : "false");
+  $("verAnon").textContent = caso.verAnon ? "Ver con los datos reales" : "Ver lo que recibió la IA";
+  $("enviar").textContent = caso.turnos.length ? "Enviar de nuevo (conversación nueva)" : "Enviar a " + PROV[aj.prov].nombre;
+}
+$("hilo").addEventListener("click", async e => {
+  const b = e.target.closest("[data-copiar]"); if (!b) return;
+  const t = caso.turnos[+b.dataset.copiar]; if (!t) return;
+  const plano = textoPlano(t.anon);
+  const final = caso.verAnon ? plano : Anon.restaurar(plano, caso.mapa).salida;
+  toast(await copiarTexto(final) ? "Respuesta copiada" : "No se pudo copiar: mantén presionado el texto para copiarlo");
+});
+$("verAnon").addEventListener("click", () => { caso.verAnon = !caso.verAnon; pintarHilo(); });
+
+/* ===================== nuevo caso y borrado automático ===================== */
+let confNuevo = null;
+const TXT_NUEVO = "Nuevo caso · borra todo";
+const hayAlgo = () => !!($("entrada").value.trim() || caso.fotos.length || caso.turnos.length);
+$("nuevo").addEventListener("click", () => {
+  const b = $("nuevo");
+  if (!confNuevo && hayAlgo()){
+    b.textContent = "Toca otra vez para borrar el caso";
+    confNuevo = setTimeout(() => { confNuevo = null; b.textContent = TXT_NUEVO; }, 3500);
+    return;
+  }
+  clearTimeout(confNuevo); confNuevo = null; b.textContent = TXT_NUEVO;
+  nuevoCaso();
+});
+function nuevoCaso(msg){
+  if (ctl) ctl.abort();
+  ["entrada", "ocultar", "pegada", "textoManual", "seguimiento", "pegadaSeg"].forEach(id => { $(id).value = ""; });
+  $("prompt").value = tareaActual().texto;
+  $("textoManual").hidden = true; $("segPrevia").hidden = true; $("adjInfo").textContent = "";
+  caso.fotos.forEach(f => { URL.revokeObjectURL(f.src); if (f.url) URL.revokeObjectURL(f.url); });
+  if (!$("editor").hidden) cerrarEditor();
+  caso = nuevoEstado();
+  pintarFotos(); estado(""); estadoSeg(""); analizar(); pintarHilo(); pintarConexion();
+  if (msg) toast(msg);
+  window.scrollTo(0, 0);
+}
+let ultima = Date.now();
+["pointerdown", "keydown", "input"].forEach(ev => document.addEventListener(ev, () => { ultima = Date.now(); }, {passive:true, capture:true}));
+function revisarInactividad(){
+  if (aj.autoBorrado && !enCurso && hayAlgo() && Date.now() - ultima > 15 * 60 * 1000) nuevoCaso("Caso borrado tras 15 minutos sin uso.");
+}
+setInterval(revisarInactividad, 30000);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") revisarInactividad(); });
+
+/* ===================== pestañas ===================== */
+function ir(v){
+  ["caso", "ajustes", "ayuda"].forEach(x => { $("v-" + x).hidden = x !== v; $("t-" + x).setAttribute("aria-current", x === v ? "page" : "false"); });
+  window.scrollTo(0, 0);
+  if (v === "ajustes") pintarAjustes();
+}
+document.querySelectorAll(".tabbar button").forEach(b => b.addEventListener("click", () => ir(b.dataset.v)));
+$("pill").addEventListener("click", () => ir("ajustes"));
+
+/* ===================== ajustes ===================== */
+let plEdit = null;
+function pintarAjustes(){
+  const p = aj.prov, P = PROV[p];
+  document.querySelectorAll("#segProv button").forEach(b => b.setAttribute("aria-checked", b.dataset.prov === p ? "true" : "false"));
+  document.querySelectorAll('input[name="modo"]').forEach(r => { r.checked = r.value === aj.modo; });
+  $("apiCampos").hidden = enMarco || aj.modo !== "api";
+  $("provNom1").textContent = P.nombre;
+  $("clave").value = claveDe(p); $("clave").placeholder = P.clavePh;
+  $("claveLink").href = P.claveUrl; $("claveLink").textContent = "Crear una clave de " + P.nombre;
+  $("modelo").value = aj.modelos[p] || ""; $("modelo").placeholder = P.modelo;
+  $("modeloNota").textContent = "Si lo dejas vacío se usa " + P.modelo + ". " + P.notaModelo;
+  $("wsCampo").hidden = p !== "claude";
+  $("workspace").value = aj.workspace || "";
+  $("recordar").checked = !!aj.recordar;
+  pintarEstado("estadoProbar", "");
+  $("sistema").value = aj.sistema;
+  pintarPlantillas();
+  document.querySelectorAll("#opts [data-opt]").forEach(el => { el.checked = !!aj.anon[el.dataset.opt]; });
+  $("modoFecha").value = aj.anon.modoFecha || "token";
+  $("nunca").value = aj.nunca || "";
+  $("autoBorrado").checked = !!aj.autoBorrado;
+}
+document.querySelectorAll("#segProv button").forEach(b => b.addEventListener("click", () => {
+  aj.prov = b.dataset.prov; guardar(); pintarAjustes(); pintarConexion(); pintarHilo();
+}));
+document.querySelectorAll('input[name="modo"]').forEach(r => r.addEventListener("change", () => {
+  if (r.checked){ aj.modo = r.value; guardar(); pintarAjustes(); pintarConexion(); }
+}));
+$("clave").addEventListener("input", () => {
+  const v = $("clave").value.trim();
+  if (aj.recordar) aj.claves[aj.prov] = v; else clavesSesion[aj.prov] = v;
+  guardar(); actualizarEnvio();
+});
+$("modelo").addEventListener("input", () => { aj.modelos[aj.prov] = $("modelo").value.trim(); guardar(); actualizarEnvio(); });
+$("workspace").addEventListener("input", () => { aj.workspace = $("workspace").value.trim(); guardar(); });
+$("recordar").addEventListener("change", () => {
+  const on = $("recordar").checked;
+  if (on){ aj.claves = Object.assign({}, aj.claves, clavesSesion); clavesSesion = {}; }
+  else { clavesSesion = Object.assign({}, aj.claves, clavesSesion); aj.claves = {}; }
+  aj.recordar = on; guardar();
+});
+$("probar").addEventListener("click", async () => {
+  const p = aj.prov;
+  if (!claveDe(p)){ pintarEstado("estadoProbar", "Primero pega tu clave.", "error"); return; }
+  pintarEstado("estadoProbar", "Probando…", "cargando"); $("probar").disabled = true;
+  try {
+    await viaAPI(p, "Responde solo con la palabra OK.", [{rol:"user", texto:"Prueba de conexión."}], [], null);
+    pintarEstado("estadoProbar", "Conexión correcta con " + PROV[p].nombre + " (" + modeloDe(p) + ").", "ok");
+  } catch(err){ pintarEstado("estadoProbar", mensajeError(err), "error"); }
+  finally { $("probar").disabled = false; }
+});
+let tSis = null;
+$("sistema").addEventListener("input", () => { clearTimeout(tSis); tSis = setTimeout(() => { aj.sistema = $("sistema").value; guardar(); }, 300); });
+
+function pintarPlantillas(){
+  if (!plEdit || !aj.plantillas.some(p => p.id === plEdit)) plEdit = aj.tarea;
+  if (!aj.plantillas.some(p => p.id === plEdit)) plEdit = aj.plantillas[0].id;
+  $("plSel").innerHTML = aj.plantillas.map(p => '<option value="' + esc(p.id) + '"' + (p.id === plEdit ? " selected" : "") + ">" + esc(p.nombre) + "</option>").join("");
+  const p = aj.plantillas.find(x => x.id === plEdit);
+  $("plNombre").value = p.nombre; $("plTexto").value = p.texto;
+  $("plBorrar").disabled = aj.plantillas.length <= 1;
+}
+$("plSel").addEventListener("change", () => { plEdit = $("plSel").value; pintarPlantillas(); });
+$("plGuardar").addEventListener("click", () => {
+  const p = aj.plantillas.find(x => x.id === plEdit); if (!p) return;
+  const n = $("plNombre").value.trim(), t = $("plTexto").value.trim();
+  if (!n || !t){ toast("La plantilla necesita nombre e instrucción."); return; }
+  p.nombre = n; p.texto = t; guardar(); pintarPlantillas(); pintarTareas(); toast("Plantilla guardada");
+});
+$("plNueva").addEventListener("click", () => {
+  const id = "p" + Date.now().toString(36);
+  aj.plantillas.push({id, nombre:"Nueva plantilla", texto:"Describe aquí qué debe hacer la IA con el caso."});
+  plEdit = id; guardar(); pintarPlantillas(); pintarTareas();
+  $("plNombre").focus(); $("plNombre").select();
+});
+$("plBorrar").addEventListener("click", () => {
+  if (aj.plantillas.length <= 1) return;
+  aj.plantillas = aj.plantillas.filter(x => x.id !== plEdit);
+  if (aj.tarea === plEdit) aj.tarea = aj.plantillas[0].id;
+  plEdit = aj.plantillas[0].id; guardar(); pintarPlantillas(); pintarTareas(); toast("Plantilla eliminada");
+});
+$("plReset").addEventListener("click", () => { $("confReset").hidden = false; });
+$("confResetNo").addEventListener("click", () => { $("confReset").hidden = true; });
+$("confResetSi").addEventListener("click", () => {
+  aj.plantillas = PLANTILLAS_DEF.map(p => Object.assign({}, p)); aj.sistema = SISTEMA_DEF;
+  if (!aj.plantillas.some(p => p.id === aj.tarea)) aj.tarea = "ic";
+  plEdit = null; guardar(); $("confReset").hidden = true;
+  pintarAjustes(); pintarTareas(); toast("Plantillas restauradas");
+});
+document.querySelectorAll("#opts [data-opt]").forEach(el => el.addEventListener("change", () => { aj.anon[el.dataset.opt] = el.checked; guardar(); analizar(); }));
+$("modoFecha").addEventListener("change", () => { aj.anon.modoFecha = $("modoFecha").value; guardar(); analizar(); });
+let tNun = null;
+$("nunca").addEventListener("input", () => { clearTimeout(tNun); tNun = setTimeout(() => { aj.nunca = $("nunca").value; guardar(); analizar(); }, 300); });
+$("autoBorrado").addEventListener("change", () => { aj.autoBorrado = $("autoBorrado").checked; guardar(); });
+$("borrarTodo").addEventListener("click", () => { $("confBorrar").hidden = false; });
+$("confBorrarNo").addEventListener("click", () => { $("confBorrar").hidden = true; });
+$("confBorrarSi").addEventListener("click", () => {
+  try { localStorage.removeItem(LS); } catch(e){}
+  aj = ajustesBase(); clavesSesion = {}; plEdit = null; $("confBorrar").hidden = true;
+  pintarAjustes(); pintarTareas(); pintarConexion(); analizar(); toast("Ajustes y claves borrados");
+});
+
+/* ===================== inicio ===================== */
+if (!enMarco && "serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("./sw.js").catch(() => {});
+pintarTareas(); pintarAjustes(); pintarFotos();
+$("prompt").value = tareaActual().texto;
+if (primeraVez){ cargarEjemplo(); guardar(); } else analizar();
+pintarConexion(); pintarHilo();
+})();
+</script>
+</body>
+</html>
