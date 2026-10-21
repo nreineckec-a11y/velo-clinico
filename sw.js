@@ -1,5 +1,5 @@
 // Guarda la app en el dispositivo para que abra sin conexión. Nunca guarda casos ni respuestas.
-const CACHE = "velo-v1";
+const CACHE = "velo-v2";
 const ARCHIVOS = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
   "./icon-maskable-512.png", "./apple-touch-icon.png", "./pdf.min.js", "./pdf.worker.min.js"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARCHIVOS)).then(() => self.skipWaiting())); });
