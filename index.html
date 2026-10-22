@@ -274,6 +274,8 @@ israel jacinto jeronimo joel jonas leandro leopoldo lisandro marco marcos marian
 cristhian dagoberto dario exequiel ezequiel gaston gerson hans hernaldo isaac jeremias jhon john josue luciano manuel
 mirko patricio rigoberto rodolfo romulo sandro saul simon tobias vladimir washington yerko zacarias aldo alan anibal
 benito bernardo camilo emanuel enzo erick eric ignacio iñaki josemaria nicanor pio renan ricardo
+roman bayron byron brayan maicol jordan dylan axel thiago liam jairo yordan yonathan jeferson jefferson herminio florencio
+abraham adan aaron misael elian gael
 maria ana carmen rosa luisa juana patricia claudia carolina andrea paula daniela camila javiera francisca catalina constanza
 valentina fernanda josefa antonia isidora sofia florencia martina agustina emilia trinidad amanda belen karina katherine
 karen paola pamela marcela macarena alejandra veronica monica lorena ximena jimena cecilia gabriela natalia barbara viviana
@@ -287,6 +289,7 @@ ivette carola denisse josefina emma mia julieta ignacia amparo antonella renata 
 bernardita dominga loreto solange anais anahi aracely betsabe celeste constanza damaris deyanira dina edelmira elvira
 emperatriz ercilia flora francia georgina guadalupe herminia iris jazmin jeannette juanita katalina leonor lucila marcia
 marlene mireya natividad nayadet orfelina pascale pia ruby scarlett silvana tatiana uberlinda valeska wilma xiomara yanina
+yaritza yarela millaray ayelen aylin anahi maite scarlet jocelyn jennifer jenifer yennifer marjorie marisel ninoska
 yesenia zoila
 `);
 const APELLIDOS = set(`
@@ -392,6 +395,37 @@ urologo urologa neurologo neurologa geriatra pediatra psiquiatra ginecologo gine
 cesfam consultorio clinica hospital laboratorio servicio unidad otro otra mismo misma idem ver adjunto adjunta
 completo completa social paterno materno orden folio ficha resultado resultados validado validada informe muestra
 `);
+
+// Siglas clínicas frecuentes en mayúsculas: nunca se toman como parte de un nombre
+const SIGLAS = set(`
+hta dm dm1 dm2 epoc erc iam acv tbc vih sida ira irc irca tep tvp itu imc ecg eeg tac rnm rx eco pcr vhs tsh lh fsh ige igg igm
+ldh got gpt ggt bun inr ttpa ttpk vcm hcm chcm apb hbp ges sapu sar cesfam cosam cecosf fonasa ape psa eda edb uci uti upc
+oms aps hbsag vdrl rpr ana anca ena fan crp tfg vfg rac mau hdl ldl vldl trg col ast alt ck cpk tni bnp nt vmh bpd lpm rpm
+mmhg kg cm mm ml mg ui dl sat fio2 peep ecmo ecog nyha gold cie cie10 dsm mmse moca phq gad audit
+`);
+
+/* ---------- PDF: líneas como se ven, aunque el rótulo y su valor estén a alturas levemente distintas ---------- */
+// items: [{x, y, s, w, h}] en coordenadas del PDF (y hacia arriba). Devuelve el texto de la página.
+function textoItemsPdf(items){
+  const its = (items || []).filter(it => it && it.s)
+    .map(it => ({x: +it.x || 0, y: +it.y || 0, s: String(it.s), w: +it.w || 0, h: Math.max(1, Math.abs(+it.h || 0) || 10)}))
+    .sort((a, b) => b.y - a.y || a.x - b.x);
+  const lineas = [];
+  for (const it of its){
+    const l = lineas[lineas.length - 1];
+    // Mismo renglón si la diferencia de altura es menor que media letra (negrita, subíndices, columnas desalineadas)
+    if (l && Math.abs(l.y - it.y) <= Math.max(1.5, Math.min(l.h, it.h) * 0.45)) l.items.push(it);
+    else lineas.push({y: it.y, h: it.h, items: [it]});
+  }
+  return lineas.map(l => {
+    let t = "", fin = null;
+    for (const it of l.items.sort((a, b) => a.x - b.x)){
+      if (fin !== null){ const gap = it.x - fin; t += gap > 12 ? "   " : (gap > 1.5 && !/\s$/.test(t) && !/^\s/.test(it.s) ? " " : ""); }
+      t += it.s; fin = it.x + it.w;
+    }
+    return t.replace(/\s+$/, "");
+  }).join("\n");
+}
 
 /* ---------- análisis ---------- */
 function analizar(texto, opcIn){
@@ -564,6 +598,8 @@ function analizar(texto, opcIn){
     const esCandidato = t => t.cap && !STOP.has(t.f) && !NO_NOMBRE.has(t.f) && !nunca.has(t.f) && !PARTICULAS.has(t.f) && t.f.length >= 2
       && !esDigito(texto[t.e]) && libre(t.s, t.e) && (t.dict || !(t.allCaps && t.w.length <= 4));
     // Tres o más espacios separan campos distintos (columnas de un informe), no partes de un nombre
+    const cortaMayus = t => t.cap && t.allCaps && t.w.length >= 3 && t.w.length <= 4 && !t.dict && !STOP.has(t.f) && !NO_NOMBRE.has(t.f)
+      && !SIGLAS.has(t.f) && !nunca.has(t.f) && !esDigito(texto[t.e]) && libre(t.s, t.e);
     const gapOk = (a, b) => { const g = texto.slice(a.e, b.s); return /^ {1,2}$/.test(g) || (a.w.length === 1 && /^\. ?$/.test(g)); };
     const entidades = []; // {toks, clave}
 
@@ -575,6 +611,9 @@ function analizar(texto, opcIn){
         const a = T[k], b = T[k+1];
         if (!b || !gapOk(a, b)) break;
         if (esCandidato(b)) { span.push(k+1); k++; continue; }
+        // Palabra corta en mayúsculas entre dos nombres ("ALBERTO VIAL PINTO"): es parte del nombre, no una sigla
+        const c2 = T[k+2];
+        if (cortaMayus(b) && c2 && gapOk(b, c2) && esCandidato(c2) && (a.dict || c2.dict)) { span.push(k+1, k+2); k += 2; continue; }
         if (PARTICULAS.has(b.f)){
           let q = k+1; const parts = [q];
           while (parts.length < 2 && T[q+1] && PARTICULAS.has(T[q+1].f) && gapOk(T[q], T[q+1])) { q++; parts.push(q); }
@@ -618,6 +657,8 @@ function analizar(texto, opcIn){
         const debilesJuntas = nt.length >= 2 && dicts === nt.length && S.length === nt.length;
         if (!(fuertes >= 1 || debilesJuntas || (ctx === "debil" && dicts >= 1))) return;
         let a = 0; while (a < nt.length && !nt[a].dict) a++;
+        // Nombre completo de 3 o más palabras con al menos 2 conocidas: el primer nombre poco común también va
+        if (a === 1 && nt.length >= 3 && dicts >= 2) a = 0;
         let b = nt.length - 1;
         const hayNombre = nt.some(t => t.given);
         let cola = 0, bb = b; while (bb >= a && !nt[bb].dict) { cola++; bb--; }
@@ -1109,7 +1150,7 @@ async function leerDocx(buf, DOMParserImpl){
   return lineas.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-root.Anon = {analizar, construir, restaurar, revisar, pendienteTexto, filasOcr, zonasATapar, codigosEnImagen, leerDocx, plegar, cuentaDigitos, TIPOS, ETIQUETA, OPC_DEF};
+root.Anon = {analizar, construir, restaurar, revisar, pendienteTexto, filasOcr, zonasATapar, codigosEnImagen, textoItemsPdf, leerDocx, plegar, cuentaDigitos, TIPOS, ETIQUETA, OPC_DEF};
 })(typeof window !== "undefined" ? window : globalThis);
 </script>
 <script>
@@ -1737,22 +1778,9 @@ async function textoPdf(pdf){
   const paginas = [];
   for (let n = 1; n <= pdf.numPages; n++){
     const tc = await (await pdf.getPage(n)).getTextContent();
-    const lineas = new Map();
-    for (const it of tc.items){
-      if (!it.str || !it.transform) continue;
-      const y = Math.round(it.transform[5] / 3) * 3;
-      if (!lineas.has(y)) lineas.set(y, []);
-      lineas.get(y).push({x:it.transform[4], s:it.str, w:it.width || 0});
-    }
-    const texto = [...lineas.keys()].sort((a, b) => b - a).map(y => {
-      let l = "", fin = null;
-      for (const it of lineas.get(y).sort((a, b) => a.x - b.x)){
-        if (fin !== null){ const gap = it.x - fin; l += gap > 12 ? "   " : (gap > 1.5 && !/\s$/.test(l) && !/^\s/.test(it.s) ? " " : ""); }
-        l += it.s; fin = it.x + it.w;
-      }
-      return l.replace(/\s+$/, "");
-    }).join("\n");
-    paginas.push(texto);
+    const items = tc.items.filter(it => it.str && it.transform)
+      .map(it => ({x: it.transform[4], y: it.transform[5], s: it.str, w: it.width || 0, h: it.height || Math.abs(it.transform[3]) || 10}));
+    paginas.push(Anon.textoItemsPdf(items));
   }
   return paginas.join("\n\n").trim();
 }

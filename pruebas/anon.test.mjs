@@ -174,3 +174,27 @@ test("un dato que el médico decide mostrar no se avisa", () => {
   assert.equal(Anon.construir(res, off).salida, t);
   assert.equal(Anon.revisar(res, off).length, 0);
 });
+
+/* ---------- PDF de laboratorio: rótulo y valor a alturas levemente distintas (datos ficticios) ---------- */
+test("PDF: el rótulo y su valor quedan en la misma línea", () => {
+  const it = (x, y, s, h = 9) => ({x, y, s, w: s.length * 4.6, h});
+  const items = [
+    it(40, 700, "Nombre"), it(120, 701.8, ": BAYRON ALBERTO VIAL PINTO"), it(330, 700, "Fecha/Hora Solicitud :"), it(440, 700, "28/10/2025 10:01"),
+    it(40, 686, "F.Nacimiento :"), it(120, 686, "02/01/1959"), it(200, 686, "Edad: 66 Años"),
+    it(40, 672, "RUT :"), it(120, 673.2, "11.222.333-4"),
+    it(40, 640, "Leucocitos"), it(200, 640, "25-50"), it(300, 640, "x campo")
+  ];
+  const t = Anon.textoItemsPdf(items);
+  assert.match(t, /^Nombre\s+: BAYRON ALBERTO VIAL PINTO\s{3}Fecha\/Hora Solicitud : 28\/10\/2025 10:01\n/);
+  assert.match(t, /\nRUT :\s+11\.222\.333-4\n/);
+  const s = anon(t);
+  for (const d of ["BAYRON", "ALBERTO", "VIAL", "PINTO", "11.222.333", "02/01/1959", "28/10/2025"]) assert.ok(!s.includes(d), `quedó visible «${d}»:\n${s}`);
+  for (const d of ["Edad: 66 Años", "Leucocitos", "25-50", "10:01"]) assert.ok(s.includes(d), `se ocultó «${d}»:\n${s}`);
+});
+
+test("nombre en mayúsculas sin rótulo, con un nombre y un apellido poco comunes", () => {
+  oculta(": BAYRON ALBERTO VIAL PINTO", "BAYRON");
+  oculta(": BAYRON ALBERTO VIAL PINTO", "VIAL");
+  conserva("Paciente con HTA, DM2 y ERC etapa 3. EPOC GOLD 2 en control.", "HTA, DM2 y ERC etapa 3. EPOC GOLD 2");
+  conserva("Control JUAN: TSH VHS PCR normales", "TSH VHS PCR");
+});
