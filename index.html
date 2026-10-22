@@ -350,7 +350,7 @@ parque metro estacion cesfam cecosf sapu sar consultorio centro instituto fundac
 puerto puente sector comuna region provincia barrio fundo hacienda club teatro museo mall iglesia parroquia capilla
 cementerio aeropuerto terminal laboratorio farmacia ruta camino isla bahia valle canal hogar eleam residencia jardin sala
 `);
-const CTX_FUERTE = /(?:^|[^\p{L}])(?:srs?|sras?|srta|sres|sr\.?\s*\(a\)|don|dona|drs?|dras?|dr\.?\s*\(a\)|doctor|doctora|nombre(?:s)?(?:\s+(?:completo|social))?(?:\s+del?)?(?:\s+(?:paciente|usuario|usuaria|apoderado|apoderada|tutor|tutora|medico|profesional|madre|padre))?|apellidos?(?:\s+y\s+nombres?)?|a\s+nombre\s+de)(?:\s*\((?:a|o|as|os|es)\))?\s*(?:\.{2,}\s*)?[.:\-]?\s*$/u;
+const CTX_FUERTE = /(?:^|[^\p{L}])(?:srs?|sras?|srta|sres|sr\.?\s*\(a\)|don|dona|drs?|dras?|dr\.?\s*\(a\)|doctor|doctora|int|internos?|internas?|eu|enf|tm|tens|klgo|klga|kine|matr?|matrona|nutr|psic?|qf|nombre(?:s)?(?:\s+(?:completo|social))?(?:\s+del?)?(?:\s+(?:paciente|usuario|usuaria|apoderado|apoderada|tutor|tutora|medico|profesional|madre|padre))?|apellidos?(?:\s+y\s+nombres?)?|a\s+nombre\s+de)(?:\s*\((?:a|o|as|os|es)\))?\s*(?:\.{2,}\s*)?[.:\-]?\s*$/u;
 const CTX_DEBIL = /(?:^|[^\p{L}])(paciente|pcte|pac|usuario|usuaria|beneficiario|beneficiaria|titular|madre|padre|hij[oa]|espos[oa]|pareja|conyuge|apoderad[oa]|tutora?|cuidador[a]?|acompanad[oa]\s+(?:por|de)|familiar|herman[oa]|abuel[oa]|niet[oa]|ti[oa]|sobrin[oa]|vecin[oa]|amig[oa]|medic[oa]|enfermer[oa]|matron[a]?|kinesiolog[oa]|psicolog[oa]|nutricionista|tens|fonoaudiolog[oa]|terapeuta|atendid[oa]\s+por|firma|responsable|solicitante|profesional|derivad[oa]\s+por|interconsultor[a]?|colega)(?:\s*\((?:a|o|as|os|es)\))?\s*(?:\.{2,}\s*)?([.:\-])?\s*$/u;
 
 const COMUNAS = [
@@ -380,7 +380,7 @@ const cuentaDigitos = s => (String(s).match(/\d/g) || []).length;
 const ROTULOS = [
   {tipo:"NOMBRE", rx:"nombres?(?:\\s+(?:completo|social))?(?:\\s+del?)?(?:\\s+(?:paciente|usuari[oa]|apoderad[oa]|tutora?|madre|padre|m[eé]dico|profesional))?|apellidos?(?:\\s+(?:paterno|materno))?|paciente|pcte|usuari[oa]|beneficiari[oa]|titular|apoderad[oa]|tutora?|madre|padre|acompa[nñ]ante|cuidador[a]?|contacto|m[eé]dico(?:\\s+(?:tratante|solicitante|derivador|responsable))?|profesional(?:\\s+(?:tratante|solicitante|responsable))?|solicitante|tratante|derivad[oa]\\s+por|atendid[oa]\\s+por|firma"},
   {tipo:"RUT", rx:"ru[tn](?:\\s+(?:del?\\s+)?(?:paciente|usuari[oa]))?|r\\.u\\.[tn]\\.?|c[eé]dula(?:\\s+de\\s+identidad)?|c\\.i\\.|dni|pasaporte"},
-  {tipo:"FICHA", rx:"ficha(?:\\s+cl[ií]nica)?|folio|episodio|historia\\s+cl[ií]nica|(?:n[°º]|n[uú]mero|nro\\.?)\\s*(?:de(?:l|\\s+la)?\\s+)?(?:orden|solicitud|muestra|examen|atenci[oó]n|ficha|folio|episodio|registro|ingreso|admisi[oó]n|cuenta|bono|boleta|documento|caso|paciente|cita|reserva)(?:\\s+de\\s+(?:pago|atenci[oó]n|examen))?|orden\\s+de\\s+(?:pago|atenci[oó]n)|id(?:\\s+(?:del?\\s+)?paciente)?"},
+  {tipo:"FICHA", rx:"ficha(?:\\s+cl[ií]nica)?|folio|episodio|historia\\s+cl[ií]nica|(?:n[°º*]|n[uú]mero|nro\\.?)\\s*(?:de(?:l|\\s+la)?\\s+)?(?:orden|solicitud|muestra|examen|atenci[oó]n|ficha|folio|episodio|registro|ingreso|admisi[oó]n|cuenta|bono|boleta|documento|caso|paciente|cita|reserva)(?:\\s+de\\s+(?:pago|atenci[oó]n|examen))?|orden\\s+de\\s+(?:pago|atenci[oó]n)|id(?:\\s+(?:del?\\s+)?paciente)?"},
   {tipo:"FECHA", rx:"fecha\\s+de\\s+nacimiento|f\\.?\\s*(?:de\\s+)?nac(?:imiento)?\\.?|nacimiento|fecha\\s+nac\\.?"},
   {tipo:"DIRECCION", rx:"domicilio(?:\\s+particular)?|direcci[oó]n(?:\\s+particular)?|calle|villa|poblaci[oó]n"},
   {tipo:"TELEFONO", rx:"tel[eé]fonos?(?:\\s+(?:de\\s+)?contacto)?|fonos?|celular|m[oó]vil|whatsapp"},
@@ -479,6 +479,11 @@ function analizar(texto, opcIn){
     const claveRut = m => m[1].replace(/[^\dkK]/g,"").toUpperCase();
     porRegex(/(?<![\p{L}\p{N}.])(\d{1,2}\.\d{3}\.\d{3}\s?-\s?[\dkK]|\d{7,8}\s?-\s?[\dkK])(?![\p{L}\p{N}])/gud, "RUT", 1, null, claveRut);
     porRegex(/(?:\bRU[TN]|\bR\.U\.[TN]\.?)\s*[:.]?\s*(?:N[°º]\s*)?(\d{1,2}\.?\d{3}\.?\d{3}\s?-?\s?[\dkK]?)(?![\p{N}])/giud, "RUT", 1, null, claveRut);
+    // Con puntos de miles el número ya es un RUN aunque falte el guion o el dígito verificador quede pegado
+    // ("9.882.8484", "12.345.678" o "12.345.678 K", típico de una foto leída en el teléfono)
+    // (no si lleva unidad, como "4.500.000 /mm3", ni si es una cifra redonda sin dígito verificador)
+    porRegex(/(?<![\p{L}\p{N}.,])(\d{1,2}\.\d{3}\.(?:\d{3}(?:\s?[\dkK])?|\d{3}[\dkK]))(?![\p{L}\p{N}]|[.,]\d)/gud, "RUT", 1,
+      m => !RX_UNIDAD.test(texto.slice(m.index + m[0].length)) && !/\.000$/.test(m[1]), claveRut);
   }
 
   // 3. Teléfonos
@@ -490,7 +495,7 @@ function analizar(texto, opcIn){
 
   // 4. N° de ficha / folio / episodio
   if (o.fichas){
-    porRegex(/(?:\bficha(?:\s+cl[ií]nica)?|\bfolio|\bepisodio|\bn[°º]\s*(?:de\s+)?(?:atenci[oó]n|solicitud|orden|interconsulta|ficha|registro|biopsia)|\bhistoria\s+cl[ií]nica|\bHC\b|\bSIC\b|\bID\s*(?:del?\s+)?paciente|\bbiopsia)\s*(?:n[°º.]?|nro\.?|n[uú]mero|#)?\s*[:.]?\s*(?=[A-Z0-9\-\/.]*\d)([A-Z0-9][A-Z0-9\-\/.]{2,}[A-Z0-9])/giud, "FICHA", 1,
+    porRegex(/(?:\bficha(?:\s+cl[ií]nica)?|\bfolio|\bepisodio|\bn[°º*]\s*(?:de\s+)?(?:atenci[oó]n|solicitud|orden|interconsulta|ficha|registro|biopsia)|\bhistoria\s+cl[ií]nica|\bHC\b|\bSIC\b|\bID\s*(?:del?\s+)?paciente|\bbiopsia)\s*(?:n[°º.]?|nro\.?|n[uú]mero|#)?\s*[:.]?\s*(?=[A-Z0-9\-\/.]*\d)([A-Z0-9][A-Z0-9\-\/.]{2,}[A-Z0-9])/giud, "FICHA", 1,
       m => !/^(?:\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}|\d{4}-\d{2}-\d{2})$/.test(m[1]));
   }
 
@@ -528,7 +533,7 @@ function analizar(texto, opcIn){
       return !RX_UNIDAD.test(texto.slice(fin, fin + 14));
     };
     // Con rótulo: "Número Orden de Pago: 121013870.2", "N° de muestra 2026-00012345", "Bono 123456789"
-    const conPrefijo = "(?:n[uú]mero|nro\\.?|n[°º]\\.?|num\\.?|no\\.)\\s*(?:de(?:l|\\s+la)?\\s+)?" +
+    const conPrefijo = "(?:n[uú]mero|nro\\.?|n[°º*]\\.?|num\\.?|no\\.)\\s*(?:de(?:l|\\s+la)?\\s+)?" +
       "(?:orden|solicitud|muestra|ex[aá]men(?:es)?|atenci[oó]n|ingreso|admisi[oó]n|registro|protocolo|paciente|caso|documento|" +
       "identificaci[oó]n|episodio|cuenta|bono|boleta|factura|cita|reserva|pedido|socio|afiliado|beneficiario|p[oó]liza|siniestro|accession|dau)" +
       "(?:\\s+(?:de\\s+)?(?:pago|atenci[oó]n|ex[aá]men(?:es)?|compra|servicio|laboratorio|trabajo|m[eé]dica))?";
@@ -778,11 +783,13 @@ const CABEZA_ROTULO = set(`
 nombre nombres paciente pcte apellido apellidos usuario usuaria rut run ficha folio episodio edad sexo genero fecha hora fn
 prevision procedencia servicio unidad cama sala medico medica solicitante tratante diagnostico examen muestra tipo telefono
 fono fonos celular movil direccion domicilio comuna ciudad region correo email e-mail estado ocupacion nacionalidad peso talla
-imc orden numero nro n° nº id cedula pasaporte apoderado tutor tutora madre padre contacto acompanante cuidador firma informe
+imc orden numero nro n° nº id cedula pasaporte apoderado tutor tutora madre padre contacto acompanante cuidador firma informe registro
 profesional especialidad establecimiento centro destino origen motivo indicacion observaciones obs
 `);
-function revisar(res, deshabilitadas){
-  const off = deshabilitadas || new Set();
+// opc.foto: el texto viene de una foto leída en el teléfono; el valor de un rótulo de nombre sigue hasta el
+// próximo rótulo aunque haya un espacio grande (el lector a veces parte un apellido que no pudo leer entero)
+function revisar(res, deshabilitadas, opc){
+  const off = deshabilitadas || new Set(), foto = !!(opc && opc.foto);
   const texto = res.texto, ft = plegar(texto);
   const cub = new Uint8Array(texto.length);
   for (const d of res.dets) for (let i = d.s; i < d.e; i++) cub[i] = off.has(d.k) ? 2 : 1;
@@ -796,7 +803,8 @@ function revisar(res, deshabilitadas){
       const resto = ft.slice(vs, ve);
       // El valor termina donde empieza otro campo de la misma línea
       // También termina en ". " o "; " (fin de frase), salvo tras una inicial ("J. Pérez")
-      let corte = resto.search(/\t| {3,}|\s\|\s|(?<!(?:^|[\s.,])\p{L})[.;](?=\s)/u);
+      let corte = foto && r.tipo === "NOMBRE" ? resto.search(/\s\|\s|(?<!(?:^|[\s.,])\p{L})[.;](?=\s)|(?:\t| {3,})(?=(?:[^\s:]+ ?){1,3}:)/u)
+        : resto.search(/\t| {3,}|\s\|\s|(?<!(?:^|[\s.,])\p{L})[.;](?=\s)/u);
       const rxDos = /:/g; let mc;
       while ((mc = rxDos.exec(resto))){
         if (corte >= 0 && mc.index > corte) break;
@@ -905,7 +913,7 @@ function zonasATapar(palabras, pendiente, opc){
   const {texto, pals, hMed} = filasOcr(palabras, typeof pendiente === "number" ? pendiente : pendienteTexto(palabras));
   const res = analizar(texto, opc);
   const tramos = res.dets.map(d => ({s: d.s, e: d.e, tipo: d.tipo}))
-    .concat(revisar(res).map(a => ({s: a.s, e: a.e, tipo: a.tipo})));
+    .concat(revisar(res, null, {foto: true}).map(a => ({s: a.s, e: a.e, tipo: a.tipo})));
   // Un recuadro por palabra (sigue bien el texto inclinado); las de un mismo dato comparten grupo y se destapan juntas
   const cajas = [];
   tramos.forEach((t, gid) => {
@@ -914,17 +922,337 @@ function zonasATapar(palabras, pendiente, opc){
       // Si el dato es solo parte de la palabra leída, se tapa esa parte proporcional
       const L = p.e - p.s, a = Math.max(0, t.s - p.s), b = Math.min(L, t.e - p.s), w = p.caja.x1 - p.caja.x0;
       const h = p.caja.y1 - p.caja.y0, mx = Math.min(h * 0.45, 12 + h * 0.2), my = h * 0.22;
-      cajas.push({x0: p.caja.x0 + w * a / L - mx, x1: p.caja.x0 + w * b / L + mx, y0: p.caja.y0 - my, y1: p.caja.y1 + my, tipo: t.tipo, grupo: gid});
+      cajas.push({x0: p.caja.x0 + w * a / L - mx, x1: p.caja.x0 + w * b / L + mx, y0: p.caja.y0 - my, y1: p.caja.y1 + my, tipo: t.tipo, grupo: gid, fi: p.fi});
     }
   });
-  // Manchas grandes que no se pueden leer: códigos de barras, QR, firmas, timbres
-  for (const p of pals){
-    if ((p.conf == null || p.conf < 30) && hMed && p.h > hMed * 2.5){
-      const c = p.caja, m = hMed * 0.3;
-      cajas.push({x0: c.x0 - m, y0: c.y0 - m, x1: c.x1 + m, y1: c.y1 + m, tipo: "CODIGO"});
+  // Dos trozos de nombre en la misma fila con poco espacio entre ellos: lo del medio es parte del nombre que el
+  // lector no pudo leer (letra encimada o borrosa) y también se tapa, junto con el trozo de la izquierda
+  const nombres = cajas.filter(c => c.tipo === "NOMBRE").sort((a, b) => a.fi - b.fi || a.x0 - b.x0);
+  for (let i = 0; i + 1 < nombres.length; i++){
+    const a = nombres[i], b = nombres[i + 1];
+    if (a.fi !== b.fi || a.grupo === b.grupo) continue;
+    const h = Math.max(a.y1 - a.y0, b.y1 - b.y0), gap = b.x0 - a.x1, dy = Math.abs((a.y0 + a.y1) - (b.y0 + b.y1)) / 2;
+    if (gap > 0 && gap <= 4 * h && dy <= 0.3 * h) cajas.push({x0: a.x1 - 1, x1: b.x0 + 1, y0: Math.min(a.y0, b.y0), y1: Math.max(a.y1, b.y1), tipo: "NOMBRE", grupo: a.grupo, fi: a.fi, relleno: true});
+  }
+  for (const c of cajas) delete c.fi;
+  // Los códigos de barras y QR se buscan en los píxeles (codigosEnImagen): una mancha ilegible no basta,
+  // porque en fotos reales también lo son la alfombra, la letra manuscrita o una línea borrosa.
+  return {texto, res, cajas};
+}
+
+/* ---------- fotos: la hoja en la imagen, solo con píxeles (antes de leer) ---------- */
+// Brillo del papel por celdas: el percentil 90 de cada celda (las letras son minoría), sin huecos y suavizado
+function fondoCeldas(g, W, H, s){
+  const cw = Math.ceil(W / s), ch = Math.ceil(H / s), v = new Float32Array(cw * ch), hist = new Uint32Array(256);
+  for (let cy = 0; cy < ch; cy++) for (let cx = 0; cx < cw; cx++){
+    hist.fill(0);
+    const x0 = cx * s, y0 = cy * s, x1 = Math.min(W, x0 + s), y1 = Math.min(H, y0 + s);
+    for (let y = y0; y < y1; y++) for (let i = y * W + x0, f = y * W + x1; i < f; i++) hist[g[i]]++;
+    const obj = (x1 - x0) * (y1 - y0) * 0.9; let acc = 0, b = 255;
+    for (let q = 0; q < 256; q++){ acc += hist[q]; if (acc >= obj){ b = q; break; } }
+    v[cy * cw + cx] = b;
+  }
+  // Una celda tapada de letra toma el brillo de la vecina más clara; luego se promedia para que no queden escalones
+  const dil = new Float32Array(cw * ch), lis = new Float32Array(cw * ch);
+  for (let cy = 0; cy < ch; cy++) for (let cx = 0; cx < cw; cx++){
+    let m = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){
+      const x = cx + dx, y = cy + dy; if (x >= 0 && y >= 0 && x < cw && y < ch && v[y * cw + x] > m) m = v[y * cw + x];
+    }
+    dil[cy * cw + cx] = m;
+  }
+  for (let cy = 0; cy < ch; cy++) for (let cx = 0; cx < cw; cx++){
+    let s2 = 0, n = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){
+      const x = cx + dx, y = cy + dy; if (x >= 0 && y >= 0 && x < cw && y < ch){ s2 += dil[y * cw + x]; n++; }
+    }
+    lis[cy * cw + cx] = s2 / n;
+  }
+  return {cw, ch, s, v: lis, crudo: v};
+}
+// Divide cada píxel por el brillo del papel a su alrededor: sombras y luz desigual desaparecen, el papel queda blanco.
+// Con "contraste", además se oscurecen los grises medios: la letra desteñida queda legible para el lector.
+function aplanarLuz(g, W, H, F, contraste){
+  F = F || fondoCeldas(g, W, H, Math.max(8, Math.round(Math.max(W, H) / 100)));
+  const {cw, ch, s, v} = F, out = new Uint8Array(W * H);
+  const curva = new Uint8Array(256);
+  for (let q = 0; q < 256; q++){ const r = q / 255, t = contraste ? Math.min(1, Math.max(0, (r - 0.3) / 0.62)) : r; curva[q] = Math.round(255 * (contraste ? Math.pow(t, 1.6) : t)); }
+  const ix0 = new Int32Array(W), ix1 = new Int32Array(W), tx = new Float32Array(W);
+  for (let x = 0; x < W; x++){
+    const f = Math.min(cw - 1, Math.max(0, (x + 0.5) / s - 0.5)), a = Math.floor(f);
+    ix0[x] = a; ix1[x] = Math.min(cw - 1, a + 1); tx[x] = f - a;
+  }
+  for (let y = 0; y < H; y++){
+    const f = Math.min(ch - 1, Math.max(0, (y + 0.5) / s - 0.5)), j0 = Math.floor(f), j1 = Math.min(ch - 1, j0 + 1), ty = f - j0;
+    const r0 = j0 * cw, r1 = j1 * cw;
+    for (let x = 0, i = y * W; x < W; x++, i++){
+      const a = ix0[x], b = ix1[x], t = tx[x];
+      const fondo = (v[r0 + a] * (1 - t) + v[r0 + b] * t) * (1 - ty) + (v[r1 + a] * (1 - t) + v[r1 + b] * t) * ty;
+      const val = fondo > 8 ? 255 * g[i] / fondo : 255;
+      out[i] = curva[val > 255 ? 255 : val | 0];
     }
   }
-  return {texto, res, cajas};
+  return out;
+}
+// Mira la foto por celdas: cuánta tinta tienen, hacia dónde corren los renglones y cada cuánto se repiten.
+// Con eso ubica la hoja (renglones regulares; la alfombra o la mesa no los tienen), la altura de los renglones
+// y la curvatura del papel. g: escala de grises W×H. Devuelve {zona, paso, rejilla, celdas}; zona = null si no hay texto.
+function analizarHoja(g, W, H){
+  const F = fondoCeldas(g, W, H, Math.max(8, Math.round(Math.max(W, H) / 100)));
+  const p = aplanarLuz(g, W, H, F);
+  const T = Math.max(40, Math.round(Math.max(W, H) / 20)), salto = T >> 1, mitad = T >> 1;
+  const nx = Math.max(1, Math.floor((W - T) / salto) + 1), ny = Math.max(1, Math.floor((H - T) / salto) + 1);
+  const brillos = Array.from(F.crudo).sort((a, b) => a - b), claro = brillos[Math.floor(brillos.length * 0.95)] || 255;
+  const UMBRAL = 184, OFF = Math.ceil(T * 0.2) + 2, L = T + 2 * OFF, hist = new Float64Array(L);
+  const tx = new Int16Array(T * T), ty = new Int16Array(T * T), r = new Float64Array(Math.floor(T / 2.5) + 2), fases = new Float64Array(12), celdas = [];
+  // Puntaje de una inclinación: cuánto se concentran las letras en renglones (suma de cuadrados del histograma)
+  const proyectar = (n, k) => {
+    hist.fill(0); let s = 0;
+    for (let q = 0; q < n; q++){ const b = (ty[q] - k * tx[q] + OFF + 0.5) | 0; if (b >= 0 && b < L){ s += 2 * hist[b] + 1; hist[b]++; } }
+    return s;
+  };
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++){
+    const x0 = i * salto, y0 = j * salto, cx = x0 + mitad;
+    let n = 0, total = 0, s1 = 0, s2 = 0;
+    // Se miran todas las filas pero una de cada 5 columnas: basta para ver los renglones y es mucho más rápido
+    for (let y = y0; y < y0 + T && y < H; y++) for (let x = x0 + (y % 5), f = Math.min(W, x0 + T), q = y * W + x; x < f; x += 5, q += 5){
+      const v = p[q]; total++; s1 += v; s2 += v * v;
+      if (v < UMBRAL){ tx[n] = x - cx; ty[n] = y - y0; n++; }
+    }
+    const fr = n / Math.max(1, total), media = s1 / Math.max(1, total), desv = Math.sqrt(Math.max(0, s2 / Math.max(1, total) - media * media));
+    const fx = Math.min(F.cw - 1, Math.floor(cx / F.s)), fy = Math.min(F.ch - 1, Math.floor((y0 + mitad) / F.s));
+    // Papel en blanco: casi sin tinta, claro y liso (una alfombra o una tela clara tienen textura)
+    const c = {i, j, x: cx, y: y0 + mitad, tinta: fr, blanca: fr < 0.015 && desv < 9 && F.v[fy * F.cw + fx] >= claro * 0.5, k: null, periodo: 0, ritmo: 0};
+    celdas.push(c);
+    if (fr < 0.015 || fr > 0.35) continue;
+    let mejor = 0, max = -1;
+    for (let k = -0.36; k <= 0.3601; k += 0.04){ const v = proyectar(n, k); if (v > max){ max = v; mejor = k; } }
+    const grueso = mejor;
+    for (let k = grueso - 0.032; k <= grueso + 0.0321; k += 0.008){ const v = proyectar(n, k); if (v > max){ max = v; mejor = k; } }
+    // Ritmo: los renglones se repiten a intervalos regulares (un borde, una sombra o la alfombra no)
+    proyectar(n, mejor);
+    let m = 0; for (let b = 0; b < L; b++) m += hist[b]; m /= L;
+    let v0 = 0; for (let b = 0; b < L; b++) v0 += (hist[b] - m) * (hist[b] - m);
+    if (!v0) continue;
+    const maxLag = r.length - 1; r[0] = 1;
+    for (let lag = 1; lag <= maxLag; lag++){ let s = 0; for (let b = 0; b + lag < L; b++) s += (hist[b] - m) * (hist[b + lag] - m); r[lag] = s / v0; }
+    let lo = 1; while (lo + 1 <= maxLag && r[lo + 1] <= r[lo]) lo++;
+    let periodo = 0, ritmo = 0;
+    for (let lag = lo + 1; lag < maxLag; lag++){
+      if (r[lag] >= r[lag - 1] && r[lag] >= r[lag + 1] && r[lag] - r[lo] > ritmo){ ritmo = r[lag] - r[lo]; periodo = lag; }
+    }
+    c.periodo = periodo; c.ritmo = ritmo;
+    if (ritmo < 0.25 || periodo < 6) continue;
+    // Entre renglón y renglón queda papel limpio: plegando el perfil cada "periodo", un tercio queda casi sin tinta
+    // (en una textura como la de una alfombra la tinta se reparte pareja)
+    fases.fill(0);
+    for (let q = 0; q < n; q++){ let f = (ty[q] - mejor * tx[q]) / periodo; f -= Math.floor(f); fases[(f * 12) | 0]++; }
+    let vacio = n;
+    for (let b = 0; b < 12; b++){ const s = fases[b] + fases[(b + 1) % 12] + fases[(b + 2) % 12] + fases[(b + 3) % 12]; if (s < vacio) vacio = s; }
+    c.valle = vacio / n;
+    // Con la hoja curvada el plegado se emborrona un poco: se acepta si el renglonado es muy marcado
+    if (c.valle <= 0.1 || (c.valle <= 0.25 && ritmo >= 0.45)) c.k = mejor;
+  }
+  // Una celda "con renglones" sin ninguna vecina igual suele ser una casualidad de la textura (alfombra, tela)
+  for (const c of celdas){
+    if (c.k == null) continue;
+    let vecinas = 0;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++){
+      const a = c.i + di, b = c.j + dj;
+      if ((di || dj) && a >= 0 && b >= 0 && a < nx && b < ny && celdas[b * nx + a].k != null) vecinas++;
+    }
+    c.sola = !vecinas;
+  }
+  for (const c of celdas) if (c.sola) c.k = null;
+  // La hoja: el grupo más grande de celdas con renglones, más los grupos unidos a él por papel en blanco,
+  // los que quedan cerca (un encabezado o un pie separados del cuerpo) y los que son claramente texto.
+  const esTexto = q => celdas[q].k != null, esBlanca = q => celdas[q].blanca;
+  const grupo = new Int32Array(nx * ny).fill(-1), grupos = [];
+  for (let q = 0; q < nx * ny; q++){
+    if (!esTexto(q) || grupo[q] >= 0) continue;
+    const g = {n: 0, i0: nx, j0: ny, i1: -1, j1: -1}, pila = [q]; grupo[q] = grupos.length;
+    while (pila.length){
+      const a = pila.pop(), ai = a % nx, aj = (a / nx) | 0; g.n++;
+      g.i0 = Math.min(g.i0, ai); g.i1 = Math.max(g.i1, ai); g.j0 = Math.min(g.j0, aj); g.j1 = Math.max(g.j1, aj);
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++){
+        const bi = ai + di, bj = aj + dj; if (bi < 0 || bj < 0 || bi >= nx || bj >= ny) continue;
+        const b = bj * nx + bi; if (grupo[b] < 0 && esTexto(b)){ grupo[b] = grupos.length; pila.push(b); }
+      }
+    }
+    grupos.push(g);
+  }
+  let zona = null, paso = 0, cajaTexto = null;
+  if (grupos.length){
+    const principal = grupos.reduce((a, b) => b.n > a.n ? b : a);
+    // Papel en blanco o con renglones que se alcanza desde el grupo principal
+    const alcanzable = new Uint8Array(nx * ny), pila = [];
+    for (let q = 0; q < nx * ny; q++) if (grupo[q] >= 0 && grupos[grupo[q]] === principal){ alcanzable[q] = 1; pila.push(q); }
+    while (pila.length){
+      const a = pila.pop(), ai = a % nx, aj = (a / nx) | 0;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++){
+        const bi = ai + di, bj = aj + dj; if (bi < 0 || bj < 0 || bi >= nx || bj >= ny) continue;
+        const b = bj * nx + bi; if (!alcanzable[b] && (esTexto(b) || esBlanca(b))){ alcanzable[b] = 1; pila.push(b); }
+      }
+    }
+    const caja = {i0: principal.i0, j0: principal.j0, i1: principal.i1, j1: principal.j1}, dentro = new Set([principal]);
+    for (let cambio = true; cambio;){
+      cambio = false;
+      for (let q = 0; q < nx * ny; q++){
+        if (grupo[q] < 0) continue;
+        const g = grupos[grupo[q]]; if (dentro.has(g)) continue;
+        const cerca = g.i0 - caja.i1 <= 3 && caja.i0 - g.i1 <= 3 && g.j0 - caja.j1 <= 3 && caja.j0 - g.j1 <= 3;
+        // Un grupo de 3 o más celdas con renglones es texto aunque esté lejos (otra hoja en la misma foto)
+        if (alcanzable[q] || cerca || g.n >= 3){
+          dentro.add(g); cambio = true;
+          caja.i0 = Math.min(caja.i0, g.i0); caja.i1 = Math.max(caja.i1, g.i1); caja.j0 = Math.min(caja.j0, g.j0); caja.j1 = Math.max(caja.j1, g.j1);
+        }
+      }
+    }
+    cajaTexto = Object.assign({}, caja);
+    const usadas = celdas.filter((c, q) => grupo[q] >= 0 && dentro.has(grupos[grupo[q]]));
+    const periodos = usadas.map(c => c.periodo).sort((a, b) => a - b);
+    // El percentil 30 evita tomar el doble del renglón (cuando la celda ve renglones alternos)
+    paso = periodos[Math.floor(periodos.length * 0.3)] || 0;
+    if (usadas.length >= 4){
+      // Toda la hoja se lee (también sus partes sin renglones: un pie de página, un timbre, un logo),
+      // así que la zona abarca además el papel en blanco unido al texto
+      celdas.forEach((c, q) => {
+        if (!alcanzable[q] || !esBlanca(q)) return;
+        caja.i0 = Math.min(caja.i0, c.i); caja.i1 = Math.max(caja.i1, c.i); caja.j0 = Math.min(caja.j0, c.j); caja.j1 = Math.max(caja.j1, c.j);
+      });
+      const m = Math.max(T, 4 * paso);
+      zona = {x0: Math.max(0, Math.round(caja.i0 * salto - m)), y0: Math.max(0, Math.round(caja.j0 * salto - m)),
+        x1: Math.min(W, Math.round(caja.i1 * salto + T + m)), y1: Math.min(H, Math.round(caja.j1 * salto + T + m))};
+    }
+  }
+  // Fondo (alfombra, mesa, ropa): lo que no es hoja y se une con el borde de la foto. Nunca dentro del
+  // rectángulo que abarca el texto (ahí puede haber un título, un timbre o una firma) y con un margen de
+  // dos celdas junto a la hoja para no borrar letras de la orilla del papel.
+  const fondo = new Uint8Array(nx * ny);
+  if (zona && cajaTexto){
+    const noPapel = q => celdas[q].k == null && !celdas[q].blanca, pila = [];
+    for (let i = 0; i < nx; i++) for (const j of [0, ny - 1]){ const q = j * nx + i; if (noPapel(q) && !fondo[q]){ fondo[q] = 1; pila.push(q); } }
+    for (let j = 0; j < ny; j++) for (const i of [0, nx - 1]){ const q = j * nx + i; if (noPapel(q) && !fondo[q]){ fondo[q] = 1; pila.push(q); } }
+    while (pila.length){
+      const a = pila.pop(), ai = a % nx, aj = (a / nx) | 0;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){
+        const bi = ai + di, bj = aj + dj; if (bi < 0 || bj < 0 || bi >= nx || bj >= ny) continue;
+        const b = bj * nx + bi; if (!fondo[b] && noPapel(b)){ fondo[b] = 1; pila.push(b); }
+      }
+    }
+    for (let j = Math.max(0, cajaTexto.j0 - 1); j <= Math.min(ny - 1, cajaTexto.j1 + 1); j++)
+      for (let i = Math.max(0, cajaTexto.i0 - 1); i <= Math.min(nx - 1, cajaTexto.i1 + 1); i++) fondo[j * nx + i] = 0;
+    for (let vuelta = 0; vuelta < 2; vuelta++){
+      const antes = fondo.slice();
+      for (let q = 0; q < nx * ny; q++){
+        if (!antes[q]) continue;
+        const ai = q % nx, aj = (q / nx) | 0;
+        for (let dj = -1; dj <= 1 && fondo[q]; dj++) for (let di = -1; di <= 1; di++){
+          const bi = ai + di, bj = aj + dj;
+          if (bi >= 0 && bj >= 0 && bi < nx && bj < ny && !antes[bj * nx + bi]){ fondo[q] = 0; break; }
+        }
+      }
+    }
+  }
+  return {zona, paso, rejilla: rejillaPendientes(celdas, nx, ny, T, salto), fondo, nx, ny, celdas, T, salto};
+}
+// Pone en blanco lo que es fondo (según analizarHoja) en una imagen de la zona leída a otra escala.
+// aLienzo(x, y) lleva un punto de esa imagen a las coordenadas donde se analizó la hoja.
+function blanquearFondo(g, W, H, hoja, esc, x0, y0){
+  if (!hoja || !hoja.fondo) return g;
+  const {nx, ny, T, salto, fondo} = hoja;
+  const ci = new Int32Array(W);
+  for (let x = 0; x < W; x++) ci[x] = Math.max(0, Math.min(nx - 1, Math.round((x / esc + x0 - T / 2) / salto)));
+  for (let y = 0; y < H; y++){
+    const j = Math.max(0, Math.min(ny - 1, Math.round((y / esc + y0 - T / 2) / salto))), base = j * nx;
+    for (let x = 0, i = y * W; x < W; x++, i++) if (fondo[base + ci[x]]) g[i] = 255;
+  }
+  return g;
+}
+// Inclinación de los renglones en toda la foto: donde no hay texto se completa con las celdas vecinas
+function rejillaPendientes(celdas, nx, ny, T, salto){
+  const k = new Float32Array(nx * ny), ok = new Uint8Array(nx * ny);
+  let hay = 0;
+  for (const c of celdas) if (c.k != null){ k[c.j * nx + c.i] = c.k; ok[c.j * nx + c.i] = 1; hay++; }
+  const R = {nx, ny, x0: T / 2, y0: T / 2, d: salto, k, vacia: !hay};
+  if (!hay) return R;
+  let faltan = nx * ny - hay;
+  while (faltan > 0){
+    const nuevos = [];
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++){
+      if (ok[j * nx + i]) continue;
+      let s = 0, n = 0;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++){
+        const a = i + di, b = j + dj; if (a >= 0 && b >= 0 && a < nx && b < ny && ok[b * nx + a]){ s += k[b * nx + a]; n++; }
+      }
+      if (n) nuevos.push(j * nx + i, s / n);
+    }
+    if (!nuevos.length) break;
+    for (let q = 0; q < nuevos.length; q += 2){ k[nuevos[q]] = nuevos[q + 1]; ok[nuevos[q]] = 1; faltan--; }
+  }
+  // Mediana 3×3 (descarta una celda rara) y promedio 3×3 (curvatura suave)
+  const med = new Float32Array(nx * ny), lis = new Float32Array(nx * ny);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++){
+    const v = [];
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++){ const a = i + di, b = j + dj; if (a >= 0 && b >= 0 && a < nx && b < ny) v.push(k[b * nx + a]); }
+    v.sort((a, b) => a - b); med[j * nx + i] = v[v.length >> 1];
+  }
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++){
+    let s = 0, n = 0;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++){ const a = i + di, b = j + dj; if (a >= 0 && b >= 0 && a < nx && b < ny){ s += med[b * nx + a]; n++; } }
+    lis[j * nx + i] = s / n;
+  }
+  R.k = lis;
+  return R;
+}
+function pendienteEn(R, x, y){
+  if (!R || R.vacia) return 0;
+  const fx = Math.min(R.nx - 1, Math.max(0, (x - R.x0) / R.d)), fy = Math.min(R.ny - 1, Math.max(0, (y - R.y0) / R.d));
+  const i0 = Math.floor(fx), j0 = Math.floor(fy), i1 = Math.min(R.nx - 1, i0 + 1), j1 = Math.min(R.ny - 1, j0 + 1), tx = fx - i0, ty = fy - j0, k = R.k, nx = R.nx;
+  return (k[j0 * nx + i0] * (1 - tx) + k[j0 * nx + i1] * tx) * (1 - ty) + (k[j1 * nx + i0] * (1 - tx) + k[j1 * nx + i1] * tx) * ty;
+}
+// Endereza los renglones de una hoja curvada: cada fila de la imagen nueva sigue un renglón de la original.
+// g: gris W×H (ya aplanado: lo que queda fuera se rellena de blanco); pend(x, y): inclinación en ese punto.
+// La inclinación se toma cada S píxeles y el recorrido se interpola entre medio (rápido aun con millones de píxeles).
+// Devuelve la imagen enderezada y original(x, y'): la altura en g que corresponde a ese punto.
+function enderezar(g, W, H, pend){
+  const S = 8, cw = Math.ceil(W / S) + 1, ch = Math.ceil(H / S) + 1, lim = 0.4;
+  const K = new Float32Array(cw * ch);
+  for (let j = 0; j < ch; j++) for (let i = 0; i < cw; i++){ const v = +pend(i * S, j * S) || 0; K[j * cw + i] = v > lim ? lim : v < -lim ? -lim : v; }
+  // Inclinación en la columna i (múltiplo de S) a la altura y
+  const kc = (i, y) => { const f = y / S, j = f < 0 ? 0 : f > ch - 1 ? ch - 1 : f, j0 = j | 0, j1 = j0 + 1 < ch ? j0 + 1 : j0, t = j - j0; return K[j0 * cw + i] + (K[j1 * cw + i] - K[j0 * cw + i]) * t; };
+  const ir = Math.round(W / 2 / S), xr = ir * S, ys = new Float64Array(cw);
+  // Alturas del renglón que en la columna de referencia está en y0, en cada columna múltiplo de S
+  const recorrer = y0 => {
+    ys[ir] = y0;
+    for (let i = ir; i + 1 < cw; i++){ const a = kc(i, ys[i]), b = kc(i + 1, ys[i] + S * a); ys[i + 1] = ys[i] + S * (a + b) / 2; }
+    for (let i = ir; i - 1 >= 0; i--){ const a = kc(i, ys[i]), b = kc(i - 1, ys[i] - S * a); ys[i - 1] = ys[i] - S * (a + b) / 2; }
+  };
+  let max = 0;
+  for (let y = 0; y <= H; y += Math.max(1, H >> 4)){ recorrer(y); for (let i = 0; i < cw; i++) max = Math.max(max, Math.abs(ys[i] - y)); }
+  const pad = Math.min(Math.ceil(max) + 4, H >> 1), H2 = H + 2 * pad, out = new Uint8Array(W * H2).fill(255);
+  for (let yp = 0; yp < H2; yp++){
+    recorrer(yp - pad);
+    const fila = yp * W;
+    for (let i = 0; i + 1 < cw; i++){
+      const ya = ys[i], d = (ys[i + 1] - ya) / S, xf = Math.min(W, (i + 1) * S);
+      for (let x = i * S, y = ya; x < xf; x++, y += d){
+        if (y >= 0 && y < H - 1){ const y0 = y | 0, t = y - y0, q = y0 * W + x; out[fila + x] = g[q] + (g[q + W] - g[q]) * t; }
+      }
+    }
+  }
+  const original = (x, yp) => {
+    recorrer(yp - pad);
+    const f = Math.max(0, Math.min(cw - 1.001, x / S)), i = f | 0;
+    return ys[i] + (ys[i + 1] - ys[i]) * (f - i);
+  };
+  return {img: out, W, H: H2, original};
+}
+// Recuadro de la imagen enderezada → recuadro que lo contiene en la original
+function cajaOriginal(E, c){
+  const ys = [];
+  for (const x of [c.x0, (c.x0 + c.x1) / 2, c.x1]) ys.push(E.original(x, c.y0), E.original(x, c.y1));
+  return Object.assign({}, c, {y0: Math.min(...ys), y1: Math.max(...ys)});
 }
 
 /* ---------- fotos: códigos de barras y QR (llevan n° de orden, folio o RUT aunque no se lean como texto) ---------- */
@@ -1150,7 +1478,7 @@ async function leerDocx(buf, DOMParserImpl){
   return lineas.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-root.Anon = {analizar, construir, restaurar, revisar, pendienteTexto, filasOcr, zonasATapar, codigosEnImagen, textoItemsPdf, leerDocx, plegar, cuentaDigitos, TIPOS, ETIQUETA, OPC_DEF};
+root.Anon = {analizar, construir, restaurar, revisar, pendienteTexto, filasOcr, zonasATapar, codigosEnImagen, analizarHoja, aplanarLuz, blanquearFondo, pendienteEn, enderezar, cajaOriginal, textoItemsPdf, leerDocx, plegar, cuentaDigitos, TIPOS, ETIQUETA, OPC_DEF};
 })(typeof window !== "undefined" ? window : globalThis);
 </script>
 <script>
@@ -1197,6 +1525,8 @@ if (enMarco && window.claude && typeof window.claude.use === "function"){
 const nuevoEstado = () => ({res:null, cons:null, fotos:[], turnos:[], registro:new Map(), cont:{}, mapa:{}, fotosEnviadas:[],
   off:new Set(), ocultar:[], ignorar:new Set(), avisos:[]});
 let caso = nuevoEstado();
+// Solo para las pruebas automáticas (index.html?prueba): deja ver el estado del caso desde fuera
+if (/[?&]prueba\b/.test(location.search)) window.__velo = {caso: () => caso};
 let enCurso = false, ctl = null, avisoBloqueo = false, otrasAuto = false, confirmarAvisos = false;
 const ed = {idx:-1, respaldo:null, respaldoTapas:null, gesto:null, modo:"recortar"};
 const fotosListas = () => caso.fotos.filter(f => !f.pendiente && f.blob);
@@ -1680,38 +2010,117 @@ function encolarLectura(f){
   f.ocr = "espera"; f.ocrDesde = Date.now();
   ocrCola = ocrCola.then(() => leerFoto(f), () => leerFoto(f));
 }
+// Lee una imagen con el lector; si se cuelga, se descarta y la próxima lectura lo vuelve a cargar
+async function leerImagen(w, imagen){
+  let reloj;
+  const {data} = await Promise.race([w.recognize(imagen, {}, {blocks: true}),
+    new Promise((_, rej) => { reloj = setTimeout(() => { ocrPromesa = null; try { w.terminate(); } catch(e){} rej(new Error("la lectura tardó demasiado")); }, 90000); })])
+    .finally(() => clearTimeout(reloj));
+  const palabras = []; let li = 0;
+  for (const b of data.blocks || []) for (const pa of b.paragraphs || []) for (const l of pa.lines || []){
+    for (const x of l.words || []) palabras.push({texto: x.text, caja: x.bbox, conf: x.confidence, linea: li});
+    li++;
+  }
+  return palabras;
+}
+function grisDe(ctx, W, H){
+  const d = ctx.getImageData(0, 0, W, H).data, g = new Uint8Array(W * H);
+  for (let i = 0, j = 0; j < g.length; i += 4, j++) g[j] = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
+  return g;
+}
+// Altura de renglón (de un renglón al siguiente) con la que mejor lee el lector, y tope de píxeles por memoria y tiempo
+const LECTURA_RENGLON = 34, LECTURA_MAX_PX = 5.5e6;
+// La hoja, tomada de la foto original a la resolución que necesita el lector: con la luz pareja,
+// sin el fondo (alfombra, mesa) y con los renglones enderezados aunque el papel esté curvado
+async function imagenParaLeer(f, hoja, z, mascara){
+  const ancho = z.x1 - z.x0, alto = z.y1 - z.y0;
+  let esc = Math.min(3.2, Math.max(0.7, LECTURA_RENGLON / (hoja.paso || 15)));
+  esc = Math.min(esc, Math.sqrt(LECTURA_MAX_PX / (ancho * alto)));
+  const W = Math.max(1, Math.round(ancho * esc)), H = Math.max(1, Math.round(alto * esc));
+  const k = f.img.naturalWidth / f.w;   // píxeles de la foto original por píxel del lienzo
+  const sx = z.x0 * k, sy = z.y0 * k, sw = Math.min(f.img.naturalWidth - sx, ancho * k), sh = Math.min(f.img.naturalHeight - sy, alto * k);
+  const t = document.createElement("canvas"); t.width = W; t.height = H;
+  const tc = t.getContext("2d", {willReadFrequently: true});
+  tc.imageSmoothingEnabled = true; tc.imageSmoothingQuality = "high";
+  tc.drawImage(f.img, sx, sy, sw, sh, 0, 0, W, H);
+  let g = grisDe(tc, W, H);
+  t.width = t.height = 0;   // libera la memoria del lienzo cuanto antes (teléfonos)
+  g = Anon.aplanarLuz(g, W, H, null, true);
+  if (mascara) Anon.blanquearFondo(g, W, H, hoja, esc, z.x0, z.y0);
+  const E = Anon.enderezar(g, W, H, (x, y) => Anon.pendienteEn(hoja.rejilla, x / esc + z.x0, y / esc + z.y0));
+  g = null;
+  const o = document.createElement("canvas"); o.width = E.W; o.height = E.H;
+  const oc = o.getContext("2d"), id = oc.createImageData(E.W, E.H), px = id.data, im = E.img;
+  for (let i = 0, j = 0; i < im.length; i++, j += 4){ const v = im[i]; px[j] = v; px[j + 1] = v; px[j + 2] = v; px[j + 3] = 255; }
+  oc.putImageData(id, 0, 0);
+  const blob = await new Promise(r => o.toBlob(r, "image/jpeg", 0.95));
+  o.width = o.height = 0;
+  if (!blob) throw new Error("no se pudo preparar la imagen");
+  // De la imagen enderezada a las coordenadas del lienzo
+  const aLienzo = c => { const q = Anon.cajaOriginal(E, c); return Object.assign(q, {x0: q.x0 / esc + z.x0, x1: q.x1 / esc + z.x0, y0: q.y0 / esc + z.y0, y1: q.y1 / esc + z.y0}); };
+  return {blob, aLienzo};
+}
 async function leerFoto(f){
   if (!caso.fotos.includes(f) || f.ocr === "listo") return;
   f.ocr = "leyendo"; f.ocrDesde = Date.now(); avisarLectura(f);
   const c = document.createElement("canvas"); c.width = f.w; c.height = f.h;
-  c.getContext("2d").drawImage(f.img, 0, 0, f.w, f.h);
+  const cc = c.getContext("2d", {willReadFrequently: true});
+  cc.drawImage(f.img, 0, 0, f.w, f.h);
   // Códigos de barras y QR: se buscan en los píxeles, no hace falta el lector de texto
   const codigos = codigosDeFoto(c);
   let cajas = codigos;
+  // Dónde está la hoja, de qué alto son sus renglones y cómo se curvan (solo píxeles, sin leer; se hace una vez)
+  if (f.hoja === undefined){
+    try { f.hoja = Anon.analizarHoja(grisDe(cc, f.w, f.h), f.w, f.h); } catch(e){ f.hoja = null; }
+  }
+  const hoja = f.hoja, completa = {x0: 0, y0: 0, x1: f.w, y1: f.h};
+  // Si la hoja ocupa casi toda la foto, o la imagen es chica (una captura), se lee entera
+  let zonaHoja = hoja && hoja.zona;
+  if (zonaHoja && ((zonaHoja.x1 - zonaHoja.x0) * (zonaHoja.y1 - zonaHoja.y0) >= f.w * f.h * 0.85 || Math.max(f.w, f.h) < 1000)) zonaHoja = completa;
+  // Recorte propuesto: la hoja, sin la mesa o la alfombra de alrededor (se puede cambiar al revisar)
+  if (zonaHoja && f.pendiente && !f.pts && !(ed.gesto && caso.fotos[ed.idx] === f)){
+    f.pts = rectAPts({x:zonaHoja.x0, y:zonaHoja.y0}, {x:zonaHoja.x1, y:zonaHoja.y1}); avisarLectura(f);
+  }
+  // Qué se lee: la hoja o, si el médico amplió el recorte más allá de lo leído, también lo que agregó
+  const pedida = f.zonaPedida || null, region = pedida || zonaHoja || completa;
+  let leida = null;
   try {
     const w = await cargarOcr();
-    const imagen = await new Promise(r => c.toBlob(r, "image/jpeg", 0.92));
-    if (!imagen) throw new Error("no se pudo preparar la imagen");
-    // Si el lector se cuelga, se descarta y la próxima imagen lo vuelve a cargar
-    let reloj;
-    const {data} = await Promise.race([w.recognize(imagen, {}, {blocks: true}),
-      new Promise((_, rej) => { reloj = setTimeout(() => { ocrPromesa = null; try { w.terminate(); } catch(e){} rej(new Error("la lectura tardó demasiado")); }, 90000); })])
-      .finally(() => clearTimeout(reloj));
-    if (!caso.fotos.includes(f)) return;   // la quitaron mientras se leía
-    const palabras = []; let li = 0;
-    for (const b of data.blocks || []) for (const pa of b.paragraphs || []) for (const l of pa.lines || []){
-      for (const x of l.words || []) palabras.push({texto: x.text, caja: x.bbox, conf: x.confidence, linea: li});
-      li++;
+    const opc = {ocultar: caso.ocultar};
+    if (hoja && hoja.zona){
+      try {
+        // El fondo solo se borra en la lectura automática: lo que el médico agregó a mano se lee completo
+        const L = await imagenParaLeer(f, hoja, region, !pedida);
+        const palabras = await leerImagen(w, L.blob);
+        if (!caso.fotos.includes(f)) return;   // la quitaron mientras se leía
+        cajas = Anon.zonasATapar(palabras, 0, opc).cajas.map(L.aLienzo).concat(codigos);
+        leida = region;
+      } catch(err){ if (/tardó/.test(String(err && err.message))) throw err; }
     }
-    cajas = Anon.zonasATapar(palabras, null, {ocultar: caso.ocultar}).cajas.concat(codigos);
-    f.ocr = "listo";
+    if (!leida){
+      // Sin hoja reconocible (o si falló lo anterior): se lee la imagen completa tal cual
+      const imagen = await new Promise(r => c.toBlob(r, "image/jpeg", 0.92));
+      if (!imagen) throw new Error("no se pudo preparar la imagen");
+      const palabras = await leerImagen(await cargarOcr(), imagen);
+      if (!caso.fotos.includes(f)) return;
+      cajas = Anon.zonasATapar(palabras, null, opc).cajas.concat(codigos);
+      leida = completa;
+    }
+    f.ocr = "listo"; f.zonaLeida = leida;
   } catch(err){
     if (!caso.fotos.includes(f)) return;
     f.ocr = "error"; f.ocrError = (err && err.message) || String(err || "");
   }
+  c.width = c.height = 0;
+  // Los recuadros nuevos reemplazan a los automáticos anteriores; lo que el médico ya había destapado sigue destapado
+  const antes = f.tapas.filter(t => t.auto && t.quitada);
+  const igual = (a, b) => { const ix = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), iy = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0); return ix > 0 && iy > 0 && ix * iy >= 0.5 * Math.min((a.x1 - a.x0) * (a.y1 - a.y0), (b.x1 - b.x0) * (b.y1 - b.y0)); };
   f.tapas = f.tapas.filter(t => !t.auto).concat(unirCodigos(cajas).map(k => ({
     x0: Math.max(0, k.x0), y0: Math.max(0, k.y0), x1: Math.min(f.w, k.x1), y1: Math.min(f.h, k.y1), auto: true, tipo: k.tipo, grupo: k.grupo, quitada: false
   })).filter(t => t.x1 - t.x0 > 2 && t.y1 - t.y0 > 2));
+  const destapados = new Set();
+  for (const t of f.tapas) if (t.auto && antes.some(a => igual(a, t))){ t.quitada = true; if (t.grupo != null) destapados.add(t.grupo); }
+  for (const t of f.tapas) if (t.auto && t.grupo != null && destapados.has(t.grupo)) t.quitada = true;
   f.ocrN = contarTapas(f);
   if (f.ocr === "listo"){
     // Si ya la había confirmado sin esperar la lectura, se vuelve a pedir revisión
@@ -1720,6 +2129,24 @@ async function leerFoto(f){
     if (f.pendiente && !f.pts && !(ed.gesto && caso.fotos[ed.idx] === f)) f.pts = rectAPts({x:0, y:0}, {x:f.w, y:f.h});
   }
   avisarLectura(f);
+  // Si mientras se leía el recorte volvió a crecer más allá de lo leído, se lee de nuevo
+  if (f.ocr === "listo" && excedeLectura(f)) releer(f);
+}
+// ¿El recorte elegido incluye partes de la imagen que no se leyeron? (ahí podría haber datos sin tapar)
+function excedeLectura(f){
+  if (!f || !f.pts || !f.zonaLeida) return false;
+  const z = f.zonaLeida, tol = Math.max(12, 0.015 * Math.max(f.w, f.h));
+  const xs = f.pts.map(q => q.x), ys = f.pts.map(q => q.y);
+  return Math.min(...xs) < z.x0 - tol || Math.min(...ys) < z.y0 - tol || Math.max(...xs) > z.x1 + tol || Math.max(...ys) > z.y1 + tol;
+}
+function releer(f){
+  if (!excedeLectura(f) || f.ocr !== "listo") return;
+  const z = f.zonaLeida, xs = f.pts.map(q => q.x), ys = f.pts.map(q => q.y), m = Math.max(12, 0.015 * Math.max(f.w, f.h));
+  f.zonaPedida = {x0: Math.max(0, Math.min(z.x0, Math.min(...xs) - m)), y0: Math.max(0, Math.min(z.y0, Math.min(...ys) - m)),
+    x1: Math.min(f.w, Math.max(z.x1, Math.max(...xs) + m)), y1: Math.min(f.h, Math.max(z.y1, Math.max(...ys) + m))};
+  f.pendiente = true;
+  encolarLectura(f);
+  avisarLectura(f); pintarEnvio();
 }
 function codigosDeFoto(lienzo){
   try {
@@ -1873,7 +2300,7 @@ function quitarFoto(i){
 const lz = $("lienzo"), cx = lz.getContext("2d");
 const lupa = $("lupa"), lx = lupa.getContext("2d");
 const LUPA = 150, ZOOM = 3;   // diámetro de la lupa en pantalla y aumento
-const ESPERA_LECTURA = 20000; // pasado este tiempo se puede confirmar aunque la lectura no termine
+const ESPERA_LECTURA = 30000; // pasado este tiempo se puede confirmar aunque la lectura no termine
 const leyendo = f => (f.ocr === "espera" || f.ocr === "leyendo") && Date.now() - (f.ocrDesde || Date.now()) < ESPERA_LECTURA;
 let relojEditor = null;
 function abrirEditor(i){
@@ -1955,7 +2382,7 @@ function pintarInfoEditor(f, lee){
   const n = contarTapas(f);
   let txt, cargando = false;
   if (ed.modo === "tapar") txt = "Arrastra el dedo sobre lo que quieras tapar. Toca un recuadro para destaparlo o volver a taparlo.";
-  else if (lee){ txt = "Buscando nombres, RUT, fechas y folios para taparlos…"; cargando = true; }
+  else if (lee){ txt = f.zonaPedida ? "Buscando datos también en lo que agregaste al recorte…" : "Buscando nombres, RUT, fechas y folios para taparlos…"; cargando = true; }
   else if (f.ocr === "error" || f.ocr === "espera" || f.ocr === "leyendo")
     txt = (f.ocr === "error" ? "No pude leer el texto de esta imagen en el teléfono" + (n ? " (tapé " + n + (n === 1 ? " código)" : " códigos)") : "") + ". " : "La lectura está tardando. ") +
       (f.pts ? "Usa «Tapar» para cubrir los datos y revisa el recorte." : "Arrastra el dedo sobre la parte que quieres enviar y usa «Tapar» para cubrir los datos.");
@@ -1974,7 +2401,8 @@ $("modoRecortar").addEventListener("click", () => { ed.modo = "recortar"; pintar
 $("modoTapar").addEventListener("click", () => { ed.modo = "tapar"; pintarModo(); redibujar(); });
 $("edToda").addEventListener("click", () => {
   const f = caso.fotos[ed.idx]; if (!f) return;
-  f.pts = rectAPts({x:0, y:0}, {x:f.w, y:f.h}); ed.modo = "recortar"; pintarModo(); redibujar();
+  f.pts = rectAPts({x:0, y:0}, {x:f.w, y:f.h}); ed.modo = "recortar"; pintarModo();
+  releer(f); redibujar();
 });
 function mostrarLupa(e, p){
   const dpr = window.devicePixelRatio || 1, lado = LUPA / ZOOM * escala();
@@ -2012,6 +2440,8 @@ function terminarGesto(cancelar){
       if (t && t.x1 - t.x0 >= minimo && t.y1 - t.y0 >= minimo) f.tapas.push(Object.assign({auto:false, tipo:"MANUAL", quitada:false}, t));
     }
     else if (g.tipo === "nuevo" && !valido(f.pts)) f.pts = g.orig;   // una forma mínima no reemplaza lo marcado
+    // Si el recorte ahora incluye partes que no se leyeron, se buscan datos también ahí
+    if (g.movio && g.tipo !== "tapa") releer(f);
   }
   redibujar();
 }
