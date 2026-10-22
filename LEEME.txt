@@ -12,10 +12,25 @@ Antes de enviar:
 
 Fotos y PDF escaneados:
 - La app lee la imagen en el teléfono y tapa en negro nombres, RUT, fechas, folios y códigos de barras o QR. Tú revisas, destapas o tapas a mano lo que haga falta y recortas. La IA recibe la imagen ya tapada.
-- Funciona con fotos reales: ubica la hoja aunque esté sobre una alfombra o una mesa (y la propone como recorte), empareja la luz y endereza los renglones si el papel está curvado antes de leer.
+- Saca las fotos del documento ORIGINAL. Una imagen que ya trae recuadros negros (por ejemplo, la salida de una versión anterior) se lee peor: el texto pegado a esos recuadros puede quedar sin leer y sin tapar.
+
+Cómo se tapa una foto:
+1. La hoja: ubica los bordes del papel aunque esté en ángulo sobre una alfombra, madera o tela, corrige la perspectiva, empareja la luz y endereza los renglones si el papel está curvado. Lo que queda fuera de la hoja no se lee y sale en blanco; ningún recuadro queda fuera del papel.
+2. La lectura: el lector (Tesseract, español, modelo "best") corre en el dispositivo y lee dos veces de distinta forma (texto suelto y en columna, con contraste suave y fuerte), porque cada forma se salta cosas distintas. La caja de cada palabra se ajusta a su tinta para que el recuadro no se monte sobre las líneas vecinas.
+3. Los campos con rótulo: tras "Nombre del Paciente", "RUN/RUT", "Fecha Nacimiento", "Edad", "Dirección", "Comuna", "Fono/Teléfono", "N° Episodio", "N° Registro", "N° Ficha Clínica", "FI", "Usuario Impresión", "Registrado por", "Médico responsable" y "Dr./Dra./Int." se tapa todo hasta el campo siguiente de la misma fila (o el final de la línea), aunque el lector haya leído solo una parte del valor o ninguna. Si el nombre o la dirección siguen en la línea de abajo, también se tapa.
+4. Sin rótulo: RUT con o sin puntos y guion, teléfonos chilenos, direcciones (calle y número), fechas (también las que el lector rompe), folios alfanuméricos largos (H0000748203), números de 6 o más cifras que no son resultados ni dosis, correos y la edad exacta ("79a 4m 25d": quedan los años, meses y días se tapan).
+5. Entre páginas: lo que se tapó en una página (nombres, apellidos, RUT, dirección, nombres del personal, folios) se busca en todas las demás, aunque el lector yerre una o dos letras. Una página sin encabezado (por ejemplo, un registro de enfermería) queda tapada gracias a las otras.
+6. Si el encabezado se leyó con poca confianza, se tapa entero.
+7. Los recuadros abarcan palabras completas con un margen de un cuarto de su alto (menos si la línea vecina está muy cerca); los de un mismo dato en una línea se juntan. Se pintan sobre los píxeles y la imagen que se envía es nueva, sin EXIF ni GPS.
+8. La comprobación: al confirmar cada imagen, la app vuelve a leer lo que se enviaría (a otra escala y de tres formas). Si aparece un dato o un trozo de él, lo marca en rojo y no deja enviar hasta que lo tapes o lo destapes a propósito. La vista previa es obligatoria y ahí puedes agregar, mover o agrandar recuadros.
 - Si amplías el recorte más allá de la hoja, vuelve a buscar datos en lo que agregaste.
 - En iPhone también puedes tocar el cuadro y elegir "Escanear texto": la cámara pasa el papel a texto y no se envía ninguna imagen.
+- La app es una página web: no tiene acceso a VisionKit (el escáner de documentos de iOS). La detección de la hoja y la lectura las hace ella misma en el dispositivo.
+- Límites: la letra manuscrita casi no se lee (revísala tú); la comprobación puede marcar algo que no es un dato (lo destapas tras mirarlo); y un dato que el lector no ve en ninguna de sus lecturas no se puede tapar solo: por eso la revisión final es tuya.
 
 Esta página no se conecta a ningún servidor: el texto solo sale cuando tú lo copias. El lector de fotos (carpeta ocr/) corre en el dispositivo.
 
-Pruebas del anonimizador (en un computador con Node 20 o superior): node --test pruebas/*.test.mjs
+Pruebas (en un computador con Node 20 o superior):
+- node --test pruebas/*.test.mjs   (anonimizador, hoja, patrones, recuadros, propagación)
+- Para la prueba de punta a punta en el navegador con una epicrisis FICTICIA "fotografiada" (4 páginas en ángulo, con sombras y sobre alfombra, madera y tela): npm install y npx playwright install chromium. Falla si algún dato identificable queda a la vista en lo que se enviaría (por la comprobación, por los píxeles o por una lectura aparte). Sin Playwright se salta.
+- Las fotos ficticias se regeneran con: python3 pruebas/generar_epicrisis.py pruebas/epicrisis   (requiere Pillow, numpy y scipy). Todos los datos son inventados.
