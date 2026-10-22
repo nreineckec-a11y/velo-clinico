@@ -1,0 +1,18 @@
+LECTOR DE TEXTO EN FOTOS (OCR) · corre en el dispositivo
+
+Velo Clínico usa estos archivos para leer las fotos y PDF escaneados en el mismo teléfono
+y así encontrar y tapar nombres, RUT, fechas, folios y códigos antes de enviar la imagen.
+La imagen no se sube a ningún servidor para leerla. Los archivos se descargan la primera
+vez que se adjunta una imagen y quedan guardados para usarlos sin conexión.
+
+Origen (sin cambios salvo lo indicado):
+- tesseract.min.js y worker.min.js: tesseract.js 7.0.0 (npm), licencia Apache-2.0.
+  Parche en worker.min.js: al inicializar idiomas entregados como {code, data} se usa
+  el código del idioma (la versión 7.0.0 usaba por error el contenido del archivo).
+  Se quitaron las referencias a los mapas de código (.map), que no se incluyen.
+- tesseract-core-simd-lstm.wasm.js: tesseract.js-core 7.0.0 (npm), licencia Apache-2.0.
+  Requiere WebAssembly con SIMD (iOS 16.4 o posterior y navegadores actuales).
+- spa.traineddata.js: modelo de español de @tesseract.js-data/spa 1.0.0
+  (4.0.0_best_int, comprimido), licencia Apache-2.0, guardado en base64 como script.
+
+El texto completo de la licencia está en LICENCIA-Apache-2.0.txt.
