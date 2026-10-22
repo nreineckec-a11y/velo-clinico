@@ -1,8 +1,19 @@
 VELO CLÍNICO
 
-Pegas o dictas el caso (o adjuntas foto, PDF o Word), la app oculta nombres, RUT, fechas, teléfonos y direcciones en el mismo teléfono, y la IA responde con los datos reales repuestos.
+Pegas o dictas el caso (o adjuntas foto, PDF o Word), la app oculta nombres, RUT, fechas, teléfonos, direcciones, folios y números de orden en el mismo teléfono, y la IA responde con los datos reales repuestos.
 
 - Dentro de la app de Claude: tocas "Enviar a Claude" y la respuesta aparece ahí mismo.
 - En esta página: copias el texto anonimizado, lo pegas en la IA que quieras y traes la respuesta para ver los datos reales.
 
-Esta página no se conecta a ningún servidor: el texto solo sale cuando tú lo copias.
+Antes de enviar:
+- Si un campo con rótulo ("Paciente:", "RUT:", "Fono:"…) quedó con el valor a la vista, la app lo avisa y lo puedes ocultar con un toque.
+- Tocas un dato marcado para dejarlo visible (o volver a ocultarlo).
+- Seleccionas cualquier texto del cuadro y tocas "Ocultar" para taparlo en todo el caso.
+
+Fotos y PDF escaneados:
+- La app lee la imagen en el teléfono y tapa en negro nombres, RUT, fechas, folios, códigos de barras y firmas. Tú revisas, destapas o tapas a mano lo que haga falta y recortas. La IA recibe la imagen ya tapada.
+- En iPhone también puedes tocar el cuadro y elegir "Escanear texto": la cámara pasa el papel a texto y no se envía ninguna imagen.
+
+Esta página no se conecta a ningún servidor: el texto solo sale cuando tú lo copias. El lector de fotos (carpeta ocr/) corre en el dispositivo.
+
+Pruebas del anonimizador (en un computador con Node 20 o superior): node --test pruebas/*.test.mjs
