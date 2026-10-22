@@ -11,7 +11,9 @@ Antes de enviar:
 - Seleccionas cualquier texto del cuadro y tocas "Ocultar" para taparlo en todo el caso.
 
 Fotos y PDF escaneados:
-- La app lee la imagen en el teléfono y tapa en negro nombres, RUT, fechas, folios, códigos de barras y firmas. Tú revisas, destapas o tapas a mano lo que haga falta y recortas. La IA recibe la imagen ya tapada.
+- La app lee la imagen en el teléfono y tapa en negro nombres, RUT, fechas, folios y códigos de barras o QR. Tú revisas, destapas o tapas a mano lo que haga falta y recortas. La IA recibe la imagen ya tapada.
+- Funciona con fotos reales: ubica la hoja aunque esté sobre una alfombra o una mesa (y la propone como recorte), empareja la luz y endereza los renglones si el papel está curvado antes de leer.
+- Si amplías el recorte más allá de la hoja, vuelve a buscar datos en lo que agregaste.
 - En iPhone también puedes tocar el cuadro y elegir "Escanear texto": la cámara pasa el papel a texto y no se envía ninguna imagen.
 
 Esta página no se conecta a ningún servidor: el texto solo sale cuando tú lo copias. El lector de fotos (carpeta ocr/) corre en el dispositivo.

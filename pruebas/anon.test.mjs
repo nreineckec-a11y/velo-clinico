@@ -198,3 +198,37 @@ test("nombre en mayúsculas sin rótulo, con un nombre y un apellido poco comune
   conserva("Paciente con HTA, DM2 y ERC etapa 3. EPOC GOLD 2 en control.", "HTA, DM2 y ERC etapa 3. EPOC GOLD 2");
   conserva("Control JUAN: TSH VHS PCR normales", "TSH VHS PCR");
 });
+
+/* ---------- texto leído de fotos: lo que el lector del teléfono suele estropear (datos ficticios) ---------- */
+test("RUN con puntos aunque el lector pierda el guion o pegue el dígito verificador", () => {
+  oculta("RUN : 9.882.8484", "9.882");
+  oculta("Paciente 9.882.8484 control", "9.882");
+  oculta("RUN 12.345.678 K", "12.345.678");
+  oculta("cédula 12.345.678", "12.345.678");
+  // Recuentos y montos no son RUN
+  conserva("Eritrocitos 4.500.000 /mm3", "4.500.000");
+  conserva("Recuento 1.200.000", "1.200.000");
+  conserva("Urocultivo >100.000 UFC/ml", "100.000");
+});
+
+test("títulos de profesionales (Int., EU, TM, TENS) anteceden un nombre", () => {
+  oculta("Int. Femanda Huenchumil/ Medicina UNAB.", "Femanda");
+  oculta("Int. Femanda Huenchumil/ Medicina UNAB.", "Huenchumil");
+  oculta("Validado por EU Rocío Quilodrán", "Quilodrán");
+  oculta("TENS Marcelo Ancavil", "Ancavil");
+  conserva("Int. Femanda Huenchumil/ Medicina UNAB.", "Medicina UNAB");
+});
+
+test("N* (así lee el teléfono N°) también es rótulo de folio o registro", () => {
+  oculta("N* Registro : 000771", "000771");
+});
+
+test("en una foto, el nombre rotulado sigue tras un hueco hasta el próximo campo", () => {
+  const t = "Nombre del Paciente   : JUANA ISIDORA PEREI   ROA\nNombre: JUAN PEREZ   N* Registro : 000771249";
+  const res = Anon.analizar(t, {});
+  const foto = Anon.revisar(res, null, {foto: true}).map(a => a.texto);
+  assert.ok(foto.includes("ROA"), "no avisó del trozo de apellido: " + JSON.stringify(foto));
+  assert.ok(!foto.some(x => /Registro/.test(x)), "tomó el rótulo siguiente como nombre: " + JSON.stringify(foto));
+  // En texto escrito, el hueco grande sí separa campos
+  assert.ok(!Anon.revisar(res).map(a => a.texto).includes("ROA"));
+});

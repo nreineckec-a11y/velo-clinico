@@ -43,7 +43,8 @@ for (const [archivo, tapar, dejar] of CASOS){
   test(`los recuadros no abarcan varias líneas: ${archivo}`, () => {
     const ocr = leer(archivo);
     const {cajas} = Anon.zonasATapar(ocr.palabras, null, {});
-    for (const c of cajas.filter(c => c.tipo !== "CODIGO")){
+    // (los rellenos entre dos trozos de un nombre tapan un hueco, no palabras)
+    for (const c of cajas.filter(c => c.tipo !== "CODIGO" && !c.relleno)){
       // Cada recuadro mide a lo más un poco más que la palabra más alta que tapa
       const hMax = Math.max(...ocr.palabras.filter(p => { const q = centro(p.caja); return q.x >= c.x0 && q.x <= c.x1 && q.y >= c.y0 && q.y <= c.y1; }).map(p => p.caja.y1 - p.caja.y0));
       assert.ok(c.y1 - c.y0 <= hMax * 1.7, `recuadro de ${Math.round(c.y1 - c.y0)} px sobre palabras de hasta ${hMax} px`);
@@ -74,10 +75,11 @@ test("un nombre desconocido tras un rótulo se tapa igual", () => {
   assert.ok(!tapada(cajas, palabras[4]));
 });
 
-test("una mancha ilegible grande (firma, timbre, código) se tapa", () => {
+test("una mancha ilegible (alfombra, letra manuscrita, código) no se tapa por sí sola", () => {
+  // Los códigos de barras y QR se buscan en los píxeles; una palabra ilegible no basta para tapar
   const ocr = leer("ocr-informe-rm.json");
   const {cajas} = Anon.zonasATapar(ocr.palabras, null, {});
-  assert.ok(cajas.some(c => c.tipo === "CODIGO"));
+  assert.ok(!cajas.some(c => c.tipo === "CODIGO"));
 });
 
 /* ---------- códigos de barras y QR en píxeles ---------- */
@@ -127,4 +129,18 @@ test("no marca códigos en un electrocardiograma ni en texto", () => {
   }
   textoFalso(L, 20, 380, 2, 100, azar(11));
   assert.equal(Anon.codigosEnImagen(L.g, L.W, L.H).length, 0);
+});
+
+test("el hueco entre dos trozos de un nombre en la misma fila también se tapa", () => {
+  // "PEREIRA ROA" leído como "PEREI" … "ROA" porque otra impresión tapa el medio (nombre ficticio)
+  const h = 30, palabra = (texto, x0) => ({texto, caja: {x0, y0: 100, x1: x0 + texto.length * 18, y1: 100 + h}, conf: 90, linea: 0});
+  const palabras = [palabra("Paciente:", 20), palabra("JUANA", 220), palabra("ISIDORA", 330), palabra("PEREI", 480), palabra("ROA", 660)];
+  const {cajas} = Anon.zonasATapar(palabras, 0, {});
+  const relleno = cajas.find(c => c.relleno);
+  assert.ok(relleno, "no tapó el hueco");
+  // De "PEREI" a "ROA" no queda ningún punto de la fila sin tapar
+  for (let x = 480; x <= 660 + 3 * 18; x += 2) assert.ok(cajas.some(c => c.x0 <= x && x <= c.x1 && c.y0 <= 115 && 115 <= c.y1), "quedó visible x = " + x);
+  // Se destapa junto con el trozo de la izquierda
+  const izq = cajas.find(c => !c.relleno && c.x0 < 480 + 5 * 18 && c.x1 > 480);
+  assert.equal(relleno.grupo, izq.grupo);
 });
