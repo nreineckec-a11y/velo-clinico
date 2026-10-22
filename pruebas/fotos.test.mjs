@@ -136,7 +136,8 @@ test("el hueco entre dos trozos de un nombre en la misma fila también se tapa",
   const h = 30, palabra = (texto, x0) => ({texto, caja: {x0, y0: 100, x1: x0 + texto.length * 18, y1: 100 + h}, conf: 90, linea: 0});
   const palabras = [palabra("Paciente:", 20), palabra("JUANA", 220), palabra("ISIDORA", 330), palabra("PEREI", 480), palabra("ROA", 660)];
   const {cajas} = Anon.zonasATapar(palabras, 0, {});
-  const relleno = cajas.find(c => c.relleno);
+  // (el relleno entre "PEREI" y "ROA"; los campos rotulados también se prolongan con rellenos a sus lados)
+  const relleno = cajas.find(c => c.relleno && c.x0 > 480 + 5 * 18 - 30 && c.x1 < 660 + 30);
   assert.ok(relleno, "no tapó el hueco");
   // De "PEREI" a "ROA" no queda ningún punto de la fila sin tapar
   for (let x = 480; x <= 660 + 3 * 18; x += 2) assert.ok(cajas.some(c => c.x0 <= x && x <= c.x1 && c.y0 <= 115 && 115 <= c.y1), "quedó visible x = " + x);

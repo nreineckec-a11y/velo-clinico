@@ -1,0 +1,12 @@
+{
+  "name": "velo-clinico",
+  "private": true,
+  "description": "Velo Clínico: la app es un solo index.html y no necesita instalar nada para funcionar. Esto es solo para las pruebas.",
+  "scripts": {
+    "test": "node --test pruebas/*.test.mjs",
+    "epicrisis": "python3 pruebas/generar_epicrisis.py pruebas/epicrisis"
+  },
+  "devDependencies": {
+    "playwright": "1.56.0"
+  }
+}
