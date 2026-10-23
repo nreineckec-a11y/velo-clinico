@@ -188,6 +188,7 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
   </header>
 
   <section class="bloque" id="bloqueAuto" aria-label="Modo automático" hidden>
+    <div class="chips" id="tareasAuto" role="group" aria-label="Prompt para los próximos casos"></div>
     <button class="btn grande" id="btnCamara" type="button">Fotografiar examen</button>
     <div class="fila">
       <button class="btn sec" id="btnElegirAuto" type="button">Elegir fotos o PDF</button>
@@ -2827,8 +2828,15 @@ function anonSeguimiento(texto){
 }
 
 /* ===================== caso: tareas, texto y vista previa ===================== */
+// Los prompts, primero los más usados (a igual uso, en su orden de siempre)
+const tareasPorUso = () => TAREAS.map((t, i) => ({t, i, n: (aj.usos && aj.usos[t.id]) || 0})).sort((a, b) => b.n - a.n || a.i - b.i).map(x => x.t);
+// Un uso más de un prompt (al enviar o copiar un caso con él)
+function contarUso(id){
+  if (!id || !TAREAS.some(t => t.id === id)) return;
+  aj.usos = Object.assign({}, aj.usos); aj.usos[id] = (aj.usos[id] || 0) + 1; guardarAjustes();
+}
 function pintarTareas(){
-  $("tareas").innerHTML = TAREAS.map(t => '<button type="button" class="chip" data-t="' + t.id + '" aria-pressed="' + (t.id === tareaSel) + '">' + esc(t.nombre) + "</button>").join("");
+  $("tareas").innerHTML = tareasPorUso().map(t => '<button type="button" class="chip" data-t="' + t.id + '" aria-pressed="' + (t.id === tareaSel) + '">' + esc(t.nombre) + "</button>").join("");
 }
 $("tareas").addEventListener("click", e => {
   const b = e.target.closest("[data-t]"); if (!b) return;
@@ -2954,7 +2962,7 @@ $("enviar").addEventListener("click", async () => {
   if (enCurso || $("enviar").disabled || !directo()) return;
   if (frenoAvisos(estado)) return;
   if (!iniciarConversacion()){ estado(MSG_REVISION(caso.residuos), "error"); return; }
-  pintarHilo();
+  contarUso(tareaSel); pintarHilo();
   const ok = await pedirRespuesta(estado);
   if (!ok){ caso.turnos = []; pintarHilo(); }
   else desplazar($("bloqueResp"));
@@ -3021,7 +3029,7 @@ $("copiarAnon").addEventListener("click", async () => {
   if (fotosPendientes()) return;
   if (frenoAvisos(estado)) return;
   if (!iniciarConversacion()){ estado(MSG_REVISION(caso.residuos), "error"); return; }
-  pintarHilo();
+  contarUso(tareaSel); pintarHilo();
   const ok = await copiarTexto(caso.turnos[0].anon);
   toast(ok ? "Copiado. Pégalo en la IA que prefieras." : "No se pudo copiar: mantén presionado el texto anonimizado de arriba.");
 });
@@ -4072,12 +4080,13 @@ const PROV = {
 };
 const LS_AJ = "velo_ajustes";
 const ajustesBase = () => ({auto: true, prov: enMarco ? "claude-app" : "claude", modelos: {}, claves: {}, recordar: true, tarea: "exam",
-  avisar: true, plazoBorrado: 24, conservarFotos: false, camaraAlIniciar: false});
+  avisar: true, plazoBorrado: 24, conservarFotos: false, camaraAlIniciar: false, usos: {}});
 function leerAjustes(){
   let g = null;
   try { g = JSON.parse(localStorage.getItem(LS_AJ) || "null"); } catch(e){}
   const a = Object.assign(ajustesBase(), g && typeof g === "object" ? g : {});
   a.modelos = Object.assign({}, a.modelos); a.claves = Object.assign({}, a.claves);
+  a.usos = Object.fromEntries(Object.entries(Object.assign({}, a.usos)).filter(([k, v]) => TAREAS.some(t => t.id === k) && v > 0).map(([k, v]) => [k, Math.floor(v)]));
   if (!PROV[a.prov] || (a.prov === "claude-app" && !enMarco)) a.prov = ajustesBase().prov;
   if (a.tarea && !TAREAS.some(t => t.id === a.tarea)) a.tarea = null;
   a.auto = a.auto !== false; a.avisar = a.avisar !== false; a.conservarFotos = a.conservarFotos === true; a.camaraAlIniciar = a.camaraAlIniciar === true;
@@ -4150,8 +4159,18 @@ $("ajBorrar").addEventListener("click", () => {
 $("btnManual").addEventListener("click", () => { aj.auto = false; guardarAjustes(); aplicarModo(); toast("Modo manual. Vuelve al automático en Ajustes."); });
 
 // Modo automático: la pantalla muestra la cámara y los casos; con el modo apagado, la app de siempre
+// La fila de prompts del modo automático: el marcado se usa en los próximos casos (es el «Prompt por defecto» de Ajustes)
+function pintarTareasAuto(){
+  $("tareasAuto").innerHTML = tareasPorUso().map(t => '<button type="button" class="chip" data-t="' + t.id + '" aria-pressed="' + (t.id === aj.tarea) + '">' + esc(t.nombre) + "</button>").join("");
+}
+$("tareasAuto").addEventListener("click", e => {
+  const b = e.target.closest("[data-t]"); if (!b) return;
+  aj.tarea = aj.tarea === b.dataset.t ? null : b.dataset.t;
+  guardarAjustes(); aplicarModo();
+});
 function aplicarModo(){
   document.body.classList.toggle("modo-auto", aj.auto);
+  pintarTareasAuto(); pintarTareas();
   $("bloqueAuto").hidden = !aj.auto;
   $("bloqueCasos").hidden = !aj.auto || !casosAuto.length;
   const P = PROV[aj.prov], falta = !P.sinClave && !claveDe(aj.prov);
@@ -4371,6 +4390,7 @@ function crearCaso(estado, archivos){
 }
 function nuevoCasoAuto(archivos){
   archivos = [...archivos].filter(Boolean); if (!archivos.length) return;
+  contarUso(aj.tarea);
   procesarCaso(crearCaso("procesando", archivos));
 }
 function quitarCaso(c){
@@ -4523,7 +4543,7 @@ $("casos").addEventListener("click", async e => {
   const b = e.target.closest("button"); if (!b) return;
   const c = casoPorId(b.dataset.reintentar || b.dataset.copiarCaso || b.dataset.procesar || b.dataset.borrar); if (!c) return;
   if (b.dataset.reintentar && c.estado === "error"){ c.prov = aj.prov; c.modelo = modeloDe(aj.prov); procesarCaso(c); }
-  else if (b.dataset.procesar && c.estado === "capturando"){ c.estado = "procesando"; actualizar(c); procesarCaso(c); }
+  else if (b.dataset.procesar && c.estado === "capturando"){ contarUso(c.tarea); c.estado = "procesando"; actualizar(c); procesarCaso(c); }
   else if (b.dataset.copiarCaso) toast(await copiarTexto(Anon.restaurar(textoPlano(c.respuesta), c.mapa).salida) ? "Respuesta copiada" : "No se pudo copiar: mantén presionado el texto");
   else if (b.dataset.borrar){
     // Borrar pide un segundo toque
@@ -4591,12 +4611,12 @@ async function capturar(){
 $("btnCamara").addEventListener("click", () => { pedirPermisoAvisos(); abrirCamara(); });
 $("camDisparo").addEventListener("click", capturar);
 $("camCancelar").addEventListener("click", () => { const c = cerrarCamara(); if (c) quitarCaso(c); });
-$("camListo").addEventListener("click", () => { const c = cerrarCamara(); if (c){ c.estado = "procesando"; actualizar(c); procesarCaso(c); } });
+$("camListo").addEventListener("click", () => { const c = cerrarCamara(); if (c){ contarUso(c.tarea); c.estado = "procesando"; actualizar(c); procesarCaso(c); } });
 $("camaraNativa").addEventListener("change", e => {
   const l = [...(e.target.files || [])]; e.target.value = "";
   // (desde la cámara de la app sin permiso: las fotos del sistema se suman a las que ya hubiera)
   const c = $("camara").hidden ? null : cerrarCamara();
-  if (c){ c.archivos = c.archivos.concat(l); c.estado = "procesando"; actualizar(c); procesarCaso(c); }
+  if (c){ c.archivos = c.archivos.concat(l); contarUso(c.tarea); c.estado = "procesando"; actualizar(c); procesarCaso(c); }
   else nuevoCasoAuto(l);
 });
 $("btnElegirAuto").addEventListener("click", () => { pedirPermisoAvisos(); $("adjuntoAuto").click(); });
