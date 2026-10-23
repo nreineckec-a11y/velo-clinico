@@ -1,6 +1,6 @@
 // Guarda la app en el dispositivo para que abra sin conexión. Nunca guarda casos ni respuestas.
 // El lector de fotos (carpeta ocr/) se guarda la primera vez que se usa, no al instalar, porque pesa unos 7 MB.
-const CACHE = "velo-v6";
+const CACHE = "velo-v7";
 const ARCHIVOS = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
   "./icon-maskable-512.png", "./apple-touch-icon.png", "./pdf.min.js", "./pdf.worker.min.js"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARCHIVOS)).then(() => self.skipWaiting())); });
@@ -10,4 +10,9 @@ self.addEventListener("fetch", e => {
   if (r.method !== "GET" || new URL(r.url).origin !== location.origin) return; // las consultas a la IA no pasan por aquí
   e.respondWith(fetch(r).then(res => { const copia = res.clone(); caches.open(CACHE).then(c => c.put(r, copia)); return res; })
     .catch(() => caches.match(r, {ignoreSearch: true}).then(m => m || caches.match("./index.html"))));
+});
+// Al tocar el aviso «Análisis listo», se abre la app (el aviso no lleva datos: los casos se ven dentro)
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({type: "window", includeUncontrolled: true}).then(cs => cs.length ? cs[0].focus() : self.clients.openWindow("./")));
 });

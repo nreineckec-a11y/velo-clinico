@@ -37,7 +37,8 @@ export const RESPUESTA_CLAUDE = {status: 200, json: {content: [{type: "text", te
 // Abre la app con estos ajustes. responder(envio, n) decide qué contesta la "IA" a la n-ésima consulta:
 // {status, json}, {cortar: true} (falla la conexión) o una promesa de eso (para dejarla esperando).
 // En pg.envios queda todo lo que la app envió. window.__foto(url) cambia lo que "ve" la cámara simulada.
-export async function abrir(ajustes, responder){
+// inicio: código que corre en la página antes que la app (por ejemplo, para simular permisos)
+export async function abrir(ajustes, responder, inicio){
   const ctx = await navegador.newContext({viewport: {width: 390, height: 844}});
   const pg = await ctx.newPage();
   pg.errores = []; pg.envios = [];
@@ -59,6 +60,7 @@ export async function abrir(ajustes, responder){
     setInterval(() => { if (img) g.drawImage(img, 0, 0); }, 100);
     navigator.mediaDevices.getUserMedia = async () => { if (!img) await window.__foto("/pruebas/epicrisis/pagina1.jpg"); return c.captureStream(10); };
   });
+  if (inicio) await pg.addInitScript(inicio);
   // Los ajustes se escriben solo la primera vez (al recargar, la app conserva los suyos)
   await pg.addInitScript(a => { if (!sessionStorage.getItem("__aj")){ localStorage.setItem("velo_ajustes", JSON.stringify(a)); sessionStorage.setItem("__aj", "1"); } }, ajustes);
   await pg.goto(base + "/index.html?prueba");

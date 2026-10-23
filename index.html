@@ -320,6 +320,12 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
     </div>
     <label class="lbl" for="ajTarea">Prompt por defecto</label>
     <select id="ajTarea"></select>
+    <label class="check" style="margin-top:10px"><input type="checkbox" id="ajAvisar"><span><b>Avisarme cuando termine cada caso</b><br><span class="nota">Un aviso del teléfono que dice solo «Análisis listo» (o «Un caso requiere revisión»): se ve en la pantalla bloqueada, así que nunca lleva datos del paciente ni clínicos. En iPhone funciona con la app instalada en la pantalla de inicio.</span></span></label>
+    <label class="lbl" for="ajPlazo">Borrar los casos terminados del teléfono</label>
+    <select id="ajPlazo"><option value="1">Después de 1 hora</option><option value="24">Después de 24 horas</option><option value="168">Después de 7 días</option><option value="0">No borrarlos (los borro yo)</option></select>
+    <p class="nota">Se borra todo el caso: lo enviado, la respuesta y los datos reales para mostrarla.</p>
+    <label class="check"><input type="checkbox" id="ajFotos"><span><b>Conservar las fotos originales en este teléfono</b><br><span class="nota">Si no, se borran apenas se leen y anonimizan. Si las conservas, quedan con el caso (sin salir del teléfono) hasta que se borre.</span></span></label>
+    <button class="btn sec" id="ajBorrarCasos" type="button" style="justify-self:start; margin-top:6px">Borrar todos los casos de este teléfono</button>
     <button class="btn-texto quitar" id="ajBorrar" type="button" style="justify-self:start; margin:12px 0 0">Borrar ajustes y claves de este dispositivo</button>
   </div>
 </div>
@@ -3560,7 +3566,7 @@ async function paginaComoImagen(pdf, n){
 }
 async function leerPdf(f){
   const lib = await cargarPdfjs();
-  const pdf = await lib.getDocument({data:new Uint8Array(await f.arrayBuffer()), isEvalSupported:false, useSystemFonts:true}).promise;
+  const pdf = await lib.getDocument({data:new Uint8Array(await f.arrayBuffer()), isEvalSupported:false, useSystemFonts:true, verbosity:0}).promise;
   try {
     const texto = await textoPdf(pdf);
     if (texto.replace(/\s/g, "").length >= 40 * Math.min(pdf.numPages, 3)){
@@ -4054,7 +4060,8 @@ const PROV = {
     aviso: "Usa una clave con facturación activa: en el nivel gratuito, Google puede usar lo que envías para mejorar sus productos y una persona puede revisarlo."}
 };
 const LS_AJ = "velo_ajustes";
-const ajustesBase = () => ({auto: true, prov: enMarco ? "claude-app" : "claude", modelos: {}, claves: {}, recordar: true, tarea: "exam"});
+const ajustesBase = () => ({auto: true, prov: enMarco ? "claude-app" : "claude", modelos: {}, claves: {}, recordar: true, tarea: "exam",
+  avisar: true, plazoBorrado: 24, conservarFotos: false});
 function leerAjustes(){
   let g = null;
   try { g = JSON.parse(localStorage.getItem(LS_AJ) || "null"); } catch(e){}
@@ -4062,7 +4069,8 @@ function leerAjustes(){
   a.modelos = Object.assign({}, a.modelos); a.claves = Object.assign({}, a.claves);
   if (!PROV[a.prov] || (a.prov === "claude-app" && !enMarco)) a.prov = ajustesBase().prov;
   if (a.tarea && !TAREAS.some(t => t.id === a.tarea)) a.tarea = null;
-  a.auto = a.auto !== false;
+  a.auto = a.auto !== false; a.avisar = a.avisar !== false; a.conservarFotos = a.conservarFotos === true;
+  if (![0, 1, 24, 168].includes(a.plazoBorrado)) a.plazoBorrado = 24;
   return a;
 }
 let aj = leerAjustes();
@@ -4089,6 +4097,7 @@ function pintarAjustes(){
     $("ajClaveLink").href = P.claveUrl; $("ajRecordar").checked = aj.recordar;
     $("ajProvNota").hidden = !P.aviso; $("ajProvNota").textContent = P.aviso || "";
   }
+  $("ajAvisar").checked = aj.avisar; $("ajPlazo").value = String(aj.plazoBorrado); $("ajFotos").checked = aj.conservarFotos;
   $("ajTarea").innerHTML = '<option value="">Ninguno</option>' + TAREAS.map(t => '<option value="' + t.id + '"' + (t.id === aj.tarea ? " selected" : "") + ">" + esc(t.nombre) + "</option>").join("");
 }
 function abrirAjustes(){ pintarAjustes(); $("ajustes").hidden = false; document.body.classList.add("modal-abierto"); }
@@ -4111,6 +4120,16 @@ $("ajRecordar").addEventListener("change", () => {
   guardarAjustes();
 });
 $("ajTarea").addEventListener("change", () => { aj.tarea = $("ajTarea").value || null; guardarAjustes(); aplicarModo(); });
+$("ajAvisar").addEventListener("change", () => { aj.avisar = $("ajAvisar").checked; guardarAjustes(); pedirPermisoAvisos(); });
+$("ajPlazo").addEventListener("change", () => { aj.plazoBorrado = +$("ajPlazo").value; guardarAjustes(); limpiarVencidos(); });
+$("ajFotos").addEventListener("change", () => { aj.conservarFotos = $("ajFotos").checked; guardarAjustes(); });
+$("ajBorrarCasos").addEventListener("click", () => {
+  const b = $("ajBorrarCasos");
+  if (!b.dataset.confirmar){ b.dataset.confirmar = "1"; b.textContent = "Toca otra vez para borrar todos los casos"; setTimeout(() => { delete b.dataset.confirmar; b.textContent = "Borrar todos los casos de este teléfono"; }, 3500); return; }
+  delete b.dataset.confirmar; b.textContent = "Borrar todos los casos de este teléfono";
+  for (const c of casosAuto.slice()) if (!activos.has(c.id) && c !== camCaso) quitarCaso(c);
+  toast(casosAuto.length ? "Se borraron los casos terminados (los que están en curso siguen)." : "Se borraron todos los casos de este teléfono.");
+});
 $("ajBorrar").addEventListener("click", () => {
   try { localStorage.removeItem(LS_AJ); } catch(e){}
   for (const k in clavesSesion) delete clavesSesion[k];
@@ -4261,7 +4280,7 @@ async function leerArchivosAuto(archivos, avance){
     const n = (f.name || "").toLowerCase(), tipo = f.type || "";
     if (tipo === "application/pdf" || n.endsWith(".pdf")){
       const lib = await cargarPdfjs();
-      const pdf = await lib.getDocument({data: new Uint8Array(await f.arrayBuffer()), isEvalSupported: false, useSystemFonts: true}).promise;
+      const pdf = await lib.getDocument({data: new Uint8Array(await f.arrayBuffer()), isEvalSupported: false, useSystemFonts: true, verbosity: 0}).promise;
       try {
         const t = await textoPdf(pdf);
         if (t.replace(/\s/g, "").length >= 40 * Math.min(pdf.numPages, 3)) paginas.push(t);
@@ -4315,7 +4334,7 @@ async function bdHacer(modo, fn){
     });
   } catch(e){ return null; }
 }
-const CAMPOS_CASO = ["id", "n", "creado", "estado", "prov", "modelo", "tarea", "archivos", "enviado", "respuesta", "truncado", "mapa", "residuos", "error"];
+const CAMPOS_CASO = ["id", "n", "creado", "terminado", "estado", "prov", "modelo", "tarea", "archivos", "enviado", "respuesta", "truncado", "mapa", "residuos", "error"];
 function guardarCaso(c){ const r = {}; for (const k of CAMPOS_CASO) r[k] = c[k]; return bdHacer("readwrite", st => st.put(r)); }
 const borrarCasoBD = id => bdHacer("readwrite", st => st.delete(id));
 const leerCasosBD = () => bdHacer("readonly", st => st.getAll());
@@ -4335,6 +4354,7 @@ function nuevoCasoAuto(archivos){
 }
 function quitarCaso(c){
   const i = casosAuto.indexOf(c); if (i >= 0) casosAuto.splice(i, 1);
+  (c.urls || []).forEach(u => URL.revokeObjectURL(u)); c.urls = null;
   borrarCasoBD(c.id); aplicarModo(); pintarCasos();
 }
 
@@ -4359,7 +4379,8 @@ async function procesarCaso(c){
       if (!lect.texto.replace(/[-\s]|Página \d+/g, "")) throw {mensaje: "No se pudo leer texto en las fotos. Prueba con más luz y la hoja completa en la foto.", final: true};
       c.paso = "Ocultando datos personales y validando…"; pintarCasos();
       const p = Anon.protegerAuto(lect.texto, {nombres: lect.nombres, ocultar: lect.ocultar, rondas: window.__velo ? window.__velo.rondas : undefined});
-      c.archivos = null;   // las imágenes ya no se usan
+      // Las fotos ya no se usan: se borran del teléfono (salvo que el médico pida conservarlas en Ajustes)
+      if (!aj.conservarFotos) c.archivos = null;
       if (p.ok){ c.mapa = Object.assign({}, p.cons.mapa); c.enviado = mensajeAuto(p.cons.salida, c.tarea); }
       else { c.estado = "revision"; c.residuos = [...p.residuos].map(r => ({tipo: r.tipo, texto: r.texto})); c.paso = ""; }
     }
@@ -4383,6 +4404,7 @@ async function procesarCaso(c){
   } finally {
     activos.delete(c.id); mantenerPantalla();
   }
+  c.terminado = Date.now();
   actualizar(c); avisarCaso(c);
 }
 // Al abrir la app, al volver a ella o al recuperar la conexión: cada caso pendiente sigue donde quedó (si iOS la
@@ -4395,9 +4417,10 @@ async function cargarCola(){
   for (const r of lista || []) if (!casoPorId(r.id)) casosAuto.push(Object.assign({paso: ""}, r));
   casosAuto.sort((a, b) => b.creado - a.creado);
   nCasoAuto = Math.max(nCasoAuto, 0, ...casosAuto.map(c => c.n || 0));
+  limpiarVencidos();
   aplicarModo(); pintarCasos(); reanudar();
 }
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible"){ reanudar(); mantenerPantalla(); } });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible"){ limpiarVencidos(); reanudar(); mantenerPantalla(); } });
 window.addEventListener("online", reanudar);
 // Mientras haya casos en curso la pantalla no se apaga sola: en una página web, iOS detiene todo al bloquear el
 // teléfono (lo que quede a medias sigue al volver)
@@ -4410,11 +4433,38 @@ async function mantenerPantalla(){
     } else if (!activos.size && bloqueoPantalla){ const b = bloqueoPantalla; bloqueoPantalla = null; await b.release(); }
   } catch(e){}
 }
-// Aviso al terminar un caso (en el paso 6: notificación del sistema)
-function avisarCaso(c){
-  if (!["listo", "revision", "error"].includes(c.estado)) return;
-  toast(c.estado === "listo" ? "Análisis listo" : c.estado === "revision" ? "Un caso requiere revisión" : "Un caso no se pudo completar");
+// Aviso al terminar un caso. Es siempre uno de estos textos fijos: el del sistema se ve en la pantalla bloqueada,
+// así que nunca lleva datos del paciente ni clínicos (ni el número del caso ni el prompt)
+const AVISOS = {listo: "Análisis listo", revision: "Un caso requiere revisión", error: "Un caso no se pudo completar"};
+async function avisarCaso(c){
+  const titulo = AVISOS[c.estado]; if (!titulo) return;
+  toast(titulo);
+  // Con la app a la vista basta el mensaje en pantalla; si no, el aviso del sistema
+  if (!aj.avisar || document.visibilityState === "visible" || !("Notification" in window) || Notification.permission !== "granted") return;
+  const op = {tag: "velo-" + c.id, icon: "icon-192.png", badge: "icon-192.png", lang: "es-CL"};
+  try {
+    const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+    if (reg){ await reg.showNotification(titulo, op); return; }
+  } catch(e){}
+  try { new Notification(titulo, op); } catch(e){}
 }
+// El permiso se pide al tocar «Fotografiar» o «Elegir» (el teléfono solo lo permite tras un toque)
+function pedirPermisoAvisos(){
+  try { if (aj.avisar && "Notification" in window && Notification.permission === "default") Notification.requestPermission().catch(() => {}); } catch(e){}
+}
+// Borrado automático de los casos terminados (y de una captura abandonada) pasado el plazo de Ajustes
+const ahora = () => Date.now() + ((window.__velo && window.__velo.adelanto) || 0);
+function limpiarVencidos(){
+  if (!aj.plazoBorrado) return;
+  const limite = ahora() - aj.plazoBorrado * 3600 * 1000;
+  for (const c of casosAuto.slice()){
+    const terminado = ["listo", "revision", "error"].includes(c.estado) && (c.terminado || c.creado) < limite;
+    const abandonado = c.estado === "capturando" && c !== camCaso && c.creado < limite;
+    if ((terminado || abandonado) && !activos.has(c.id)) quitarCaso(c);
+  }
+}
+setInterval(limpiarVencidos, 60 * 1000);
+if (window.__velo) window.__velo.limpiar = limpiarVencidos;
 function pintarCasos(){
   $("bloqueCasos").hidden = !aj.auto || !casosAuto.length;
   const hora = t => new Date(t).toLocaleTimeString("es-CL", {hour: "2-digit", minute: "2-digit"});
@@ -4438,6 +4488,11 @@ function pintarCasos(){
     if (["listo", "revision", "error"].includes(c.estado))
       h += '<div class="acciones">' + (c.estado === "listo" ? boton("copiar-caso", c, "Copiar") : "") + (c.estado === "error" ? boton("reintentar", c, "Reintentar") : "") + borrar(c) + "</div>";
     if (c.enviado) h += '<details data-ver="' + esc(c.id) + '"' + (c.verEnviado ? " open" : "") + '><summary>Ver lo enviado</summary><pre class="out">' + esc(c.enviado) + "</pre></details>";
+    // Fotos originales conservadas (Ajustes): solo en este teléfono; nunca se envían
+    if (c.archivos && c.archivos.length && !["capturando", "procesando"].includes(c.estado)){
+      if (!c.urls) c.urls = c.archivos.filter(a => /^image\//.test(a.type || "")).map(a => URL.createObjectURL(a));
+      if (c.urls.length) h += '<details><summary>Fotos originales (solo en este teléfono)</summary><div class="fotos-previa">' + c.urls.map((u, i) => '<img src="' + esc(u) + '" alt="Página ' + (i + 1) + '">').join("") + "</div></details>";
+    }
     return h + "</article>";
   }).join("");
 }
@@ -4512,7 +4567,7 @@ async function capturar(){
   $("camInfo").textContent = (n === 1 ? "1 página" : n + " páginas") + ". Saca la siguiente o toca «Listo».";
   pintarCam();
 }
-$("btnCamara").addEventListener("click", abrirCamara);
+$("btnCamara").addEventListener("click", () => { pedirPermisoAvisos(); abrirCamara(); });
 $("camDisparo").addEventListener("click", capturar);
 $("camCancelar").addEventListener("click", () => { const c = cerrarCamara(); if (c) quitarCaso(c); });
 $("camListo").addEventListener("click", () => { const c = cerrarCamara(); if (c){ c.estado = "procesando"; actualizar(c); procesarCaso(c); } });
@@ -4523,7 +4578,7 @@ $("camaraNativa").addEventListener("change", e => {
   if (c){ c.archivos = c.archivos.concat(l); c.estado = "procesando"; actualizar(c); procesarCaso(c); }
   else nuevoCasoAuto(l);
 });
-$("btnElegirAuto").addEventListener("click", () => $("adjuntoAuto").click());
+$("btnElegirAuto").addEventListener("click", () => { pedirPermisoAvisos(); $("adjuntoAuto").click(); });
 $("adjuntoAuto").addEventListener("change", e => { const l = [...(e.target.files || [])]; e.target.value = ""; nuevoCasoAuto(l); });
 
 /* ===================== nuevo caso y borrado automático ===================== */
