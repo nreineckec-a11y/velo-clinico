@@ -4206,13 +4206,22 @@ async function viaAPI(prov, texto, signal){
   catch(e){ if (e && e.name === "AbortError") throw e; throw {mensaje: "No se pudo conectar con " + P.corto + ". Revisa tu conexión a internet.", red: true}; }
   let j = null;
   try { j = await r.json(); } catch(e){}
-  if (!r.ok) throw {mensaje: mensajeApi(prov, r.status, j), red: r.status === 429 || r.status >= 500, final: r.status !== 429 && r.status < 500};
+  // (sin saldo no se reintenta: no se arregla esperando)
+  if (!r.ok){ const saldo = sinSaldo(j); throw {mensaje: mensajeApi(prov, r.status, j), red: !saldo && (r.status === 429 || r.status >= 500), final: saldo || (r.status !== 429 && r.status < 500)}; }
   const out = extraer(j || {});
   if (!out.texto) throw {mensaje: "La IA no devolvió texto. Intenta de nuevo.", red: true};
   return out;
 }
+// La cuenta de API no tiene saldo: Anthropic ("Your credit balance is too low…"), OpenAI ("insufficient_quota")
+const sinSaldo = j => !!(j && j.error && (/credit balance|insufficient_quota|billing/i.test(String(j.error.message || "")) || j.error.code === "insufficient_quota"));
+const SIN_SALDO = {
+  claude: "Tu cuenta de API de Claude no tiene saldo. Compra créditos en platform.claude.com → Billing (la suscripción Pro o Max no incluye la API) y toca «Reintentar»: se envía lo mismo, sin volver a fotografiar. O usa tu suscripción abriendo Velo dentro de la app de Claude.",
+  openai: "Tu cuenta de API de OpenAI no tiene saldo. Carga créditos en platform.openai.com → Billing (ChatGPT Plus no incluye la API) y toca «Reintentar».",
+  gemini: "Tu cuenta de API de Google no tiene saldo o facturación activa. Revísala en aistudio.google.com y toca «Reintentar»."
+};
 function mensajeApi(prov, st, j){
   const P = PROV[prov], det = j && j.error ? String(j.error.message || j.error.type || j.error.status || "") : "";
+  if (sinSaldo(j)) return SIN_SALDO[prov];
   if (st === 401 || st === 403 || /api key/i.test(det)) return "La clave API de " + P.corto + " no es válida o no tiene permisos. Revísala en Ajustes.";
   if (st === 429) return "Se alcanzó el límite de uso o de saldo de tu cuenta de " + P.corto + ". Espera un momento o revisa la facturación.";
   if (st === 404) return "El modelo «" + modeloDe(prov) + "» no está disponible para tu clave. Cámbialo en Ajustes.";
