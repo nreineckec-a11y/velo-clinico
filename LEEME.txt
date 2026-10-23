@@ -1,6 +1,6 @@
 VELO CLÍNICO
 
-Pegas o dictas el caso (o adjuntas foto, PDF o Word), la app oculta nombres, RUT, fechas, teléfonos, direcciones, folios y números de orden en el mismo teléfono, y la IA responde con los datos reales repuestos.
+Pegas o dictas el caso (o adjuntas foto, PDF o Word), la app oculta nombres, RUT, fecha de nacimiento, teléfonos, direcciones, folios y números de orden en el mismo teléfono, y la IA responde con los datos reales repuestos.
 
 - Dentro de la app de Claude: tocas "Enviar a Claude" y la respuesta aparece ahí mismo.
 - En esta página: copias el texto anonimizado, lo pegas en la IA que quieras y traes la respuesta para ver los datos reales.
@@ -11,14 +11,14 @@ Antes de enviar:
 - Seleccionas cualquier texto del cuadro y tocas "Ocultar" para taparlo en todo el caso.
 
 Fotos y PDF escaneados:
-- La app lee la imagen en el teléfono y tapa en negro nombres, RUT, fechas, folios y códigos de barras o QR. Tú revisas, destapas o tapas a mano lo que haga falta y recortas. La IA recibe la imagen ya tapada.
+- La app lee la imagen en el teléfono y tapa en negro nombres, RUT, fecha de nacimiento, folios y códigos de barras o QR. Tú revisas, destapas o tapas a mano lo que haga falta y recortas. La IA recibe la imagen ya tapada.
 - Saca las fotos del documento ORIGINAL. Una imagen que ya trae recuadros negros (por ejemplo, la salida de una versión anterior) se lee peor: el texto pegado a esos recuadros puede quedar sin leer y sin tapar.
 
 Cómo se tapa una foto:
 1. La hoja: ubica los bordes del papel aunque esté en ángulo sobre una alfombra, madera o tela, corrige la perspectiva, empareja la luz y endereza los renglones si el papel está curvado. Lo que queda fuera de la hoja no se lee y sale en blanco; ningún recuadro queda fuera del papel.
 2. La lectura: el lector (Tesseract, español, modelo "best") corre en el dispositivo y lee dos veces de distinta forma (texto suelto y en columna, con contraste suave y fuerte), porque cada forma se salta cosas distintas. La caja de cada palabra se ajusta a su tinta para que el recuadro no se monte sobre las líneas vecinas.
 3. Los campos con rótulo: tras "Nombre del Paciente", "RUN/RUT", "Fecha Nacimiento", "Edad", "Dirección", "Comuna", "Fono/Teléfono", "N° Episodio", "N° Registro", "N° Ficha Clínica", "FI", "Usuario Impresión", "Registrado por", "Médico responsable" y "Dr./Dra./Int." se tapa todo hasta el campo siguiente de la misma fila (o el final de la línea), aunque el lector haya leído solo una parte del valor o ninguna. Si el nombre o la dirección siguen en la línea de abajo, también se tapa.
-4. Sin rótulo: RUT con o sin puntos y guion, teléfonos chilenos, direcciones (calle y número), fechas (también las que el lector rompe), folios alfanuméricos largos (H0000748203), números de 6 o más cifras que no son resultados ni dosis, correos y la edad exacta ("79a 4m 25d": quedan los años, meses y días se tapan).
+4. Sin rótulo: RUT con o sin puntos y guion, teléfonos chilenos, direcciones (calle y número), fechas según su clase (ver «Fechas»), folios alfanuméricos largos (H0000748203), números de 6 o más cifras que no son resultados ni dosis, correos y la edad exacta ("79a 4m 25d": quedan los años, meses y días se tapan).
 5. Entre páginas: lo que se tapó en una página (nombres, apellidos, RUT, dirección, nombres del personal, folios) se busca en todas las demás, aunque el lector yerre una o dos letras. Una página sin encabezado (por ejemplo, un registro de enfermería) queda tapada gracias a las otras.
 6. Si el encabezado se leyó con poca confianza, se tapa entero.
 7. Los recuadros abarcan palabras completas con un margen de un cuarto de su alto (menos si la línea vecina está muy cerca); los de un mismo dato en una línea se juntan. Se pintan sobre los píxeles y la imagen que se envía es nueva, sin EXIF ni GPS.
@@ -29,6 +29,13 @@ Cómo se tapa una foto:
 - Límites: la letra manuscrita casi no se lee (revísala tú); la comprobación puede marcar algo que no es un dato (lo destapas tras mirarlo); y un dato que el lector no ve en ninguna de sus lecturas no se puede tapar solo: por eso la revisión final es tuya.
 
 Esta página no se conecta a ningún servidor: el texto solo sale cuando tú lo copias. El lector de fotos (carpeta ocr/) corre en el dispositivo.
+
+Fechas:
+- Fecha de nacimiento ("Fecha de nacimiento", "F. Nac", "FN", "F.N.", "Nacimiento", "nacido el"…): se oculta. En el texto, el rótulo y la fecha pasan a "edad: X años", calculada respecto de la fecha del documento (la más reciente, sin contar próximos controles ni vigencias); en lactantes, en meses. En una foto se tapa la fecha y la edad va escrita junto a las imágenes.
+- Fechas clínicas (toma o muestra, recepción, validación, emisión, informe, resultado, control, ingreso, alta, procedimiento, cirugía, impresión…): quedan a la vista, aunque sean antiguas.
+- Fecha sin rótulo: queda, salvo que sea 10 o más años anterior a la más reciente del documento; entonces se trata como posible nacimiento y se oculta (sin calcular edad). En una foto, una fecha que el lector leyó a medias se tapa salvo que vaya tras un rótulo clínico.
+- Formatos: 12/03/2025, 12-03-25, 12.03.2025, 2025-03-12, "12 de marzo de 2025", "12-mar-2025", "mar-2025", "marzo de 2025", con o sin hora.
+- Límite: una fecha de antecedente antigua sin rótulo ("IAM marzo de 2010") también se oculta.
 
 Pruebas (en un computador con Node 20 o superior):
 - node --test pruebas/*.test.mjs   (anonimizador, hoja, patrones, recuadros, propagación)

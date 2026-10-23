@@ -38,8 +38,9 @@ Pagina1 De 1
 001799876
 PACIENTE: PEREZ SOTO ., MARIA ELENA`;
 
-test("epicrisis: oculta n° de orden, folio, nombres, RUT y fechas", () => {
-  for (const d of ["121013870", "001799876", "PEREZ", "MARIA ELENA", "4.567.890-1", "12/03/1934", "15/10/2026", "Juan Carlos Fuentes"]) oculta(EPICRISIS, d);
+test("epicrisis: oculta n° de orden, folio, nombres, RUT y fecha de nacimiento; deja las fechas del examen", () => {
+  for (const d of ["121013870", "001799876", "PEREZ", "MARIA ELENA", "4.567.890-1", "12/03/1934", "Juan Carlos Fuentes"]) oculta(EPICRISIS, d);
+  for (const d of ["edad: 92 años", "Fecha Examen: 15/10/2026 01:57 PM", "Fecha Informe: 15/10/2026 02:31 PM"]) conserva(EPICRISIS, d);
 });
 
 test("epicrisis: conserva los valores clínicos", () => {
@@ -69,9 +70,9 @@ test("números de orden, muestra, bono y similares con rótulo", () => {
   for (const [t, d] of casos) oculta(t, d);
 });
 
-test("una fecha tras «biopsia» o «episodio» sigue siendo fecha", () => {
-  assert.match(anon("Biopsia 12/05/2026: adenocarcinoma acinar"), /^Biopsia \[FECHA_1\]: adenocarcinoma acinar$/);
-  assert.match(anon("Episodio 2026-10-15 en urgencia"), /\[FECHA_1\]/);
+test("una fecha tras «biopsia» o «episodio» es una fecha (queda a la vista), no un folio", () => {
+  assert.equal(anon("Biopsia 12/05/2026: adenocarcinoma acinar"), "Biopsia 12/05/2026: adenocarcinoma acinar");
+  assert.equal(anon("Episodio 2026-10-15 en urgencia"), "Episodio 2026-10-15 en urgencia");
   oculta("Folio 2026/018877.", "018877");
   oculta("Factura N° 0004521 y Bono FONASA 2026-1188774", "1188774");
 });
@@ -105,8 +106,8 @@ Antecedentes: HTA y DM2. Losartán 50 mg c/12 h, metformina 850 mg c/12 h. Sin a
 Consulta el 15 de marzo de 2026 por nicturia de 3 episodios y chorro débil de 6 meses de evolución.
 APE 8,5 ng/ml (12/02/2026); previo 4,2 ng/ml (10/11/2024). Creatinina 1,1 mg/dl.
 Tacto rectal: próstata aumentada de tamaño, sin nódulos. Lo acompaña su hija Camila Rojas.`;
-  for (const d of ["Juan", "Pérez", "12.345.678-5", "Los Aromos", "8765 4321", "15 de marzo", "12/02/2026", "Camila", "Rojas"]) oculta(t, d);
-  for (const d of ["67 años", "Losartán 50 mg", "metformina 850 mg", "APE 8,5 ng/ml", "4,2 ng/ml", "Creatinina 1,1 mg/dl", "Urología", "3 episodios"]) conserva(t, d);
+  for (const d of ["Juan", "Pérez", "12.345.678-5", "Los Aromos", "8765 4321", "Camila", "Rojas"]) oculta(t, d);
+  for (const d of ["15 de marzo de 2026", "(12/02/2026)", "(10/11/2024)", "67 años", "Losartán 50 mg", "metformina 850 mg", "APE 8,5 ng/ml", "4,2 ng/ml", "Creatinina 1,1 mg/dl", "Urología", "3 episodios"]) conserva(t, d);
 });
 
 test("restaurar repone los datos reales", () => {
@@ -188,8 +189,8 @@ test("PDF: el rótulo y su valor quedan en la misma línea", () => {
   assert.match(t, /^Nombre\s+: BAYRON ALBERTO VIAL PINTO\s{3}Fecha\/Hora Solicitud : 28\/10\/2025 10:01\n/);
   assert.match(t, /\nRUT :\s+11\.222\.333-4\n/);
   const s = anon(t);
-  for (const d of ["BAYRON", "ALBERTO", "VIAL", "PINTO", "11.222.333", "02/01/1959", "28/10/2025"]) assert.ok(!s.includes(d), `quedó visible «${d}»:\n${s}`);
-  for (const d of ["Edad: 66 Años", "Leucocitos", "25-50", "10:01"]) assert.ok(s.includes(d), `se ocultó «${d}»:\n${s}`);
+  for (const d of ["BAYRON", "ALBERTO", "VIAL", "PINTO", "11.222.333", "02/01/1959", "F.Nacimiento"]) assert.ok(!s.includes(d), `quedó visible «${d}»:\n${s}`);
+  for (const d of ["edad: 66 años", "Edad: 66 Años", "Fecha/Hora Solicitud : 28/10/2025 10:01", "Leucocitos", "25-50"]) assert.ok(s.includes(d), `se ocultó «${d}»:\n${s}`);
 });
 
 test("nombre en mayúsculas sin rótulo, con un nombre y un apellido poco comunes", () => {

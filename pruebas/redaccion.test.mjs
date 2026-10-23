@@ -150,17 +150,23 @@ test("un rótulo de identificación tapa todo su valor hasta el campo siguiente 
   assert.ok(cajas.some(c => c.relleno && c.x0 <= 500 && c.x1 >= 600), "no se prolongó el recuadro hasta el campo siguiente");
 });
 
-test("un valor cortado por el lector ('12/11' de '12/10/2026') tras «Fecha …:» se tapa y se prolonga", () => {
-  const ws = [palabra("Fecha", 40, 100), palabra("Creación:", 120, 100), palabra("12/11", 260, 100), palabra("Hora", 40, 140), palabra("Impresión:", 110, 140), palabra("10:22", 260, 140)];
+test("un valor cortado por el lector ('12/11' de '12/10/1956') tras «Fecha Nacimiento:» se tapa y se prolonga", () => {
+  const ws = [palabra("Fecha", 40, 100), palabra("Nacimiento:", 120, 100), palabra("12/11", 280, 100), palabra("Hora", 40, 140), palabra("Impresión:", 110, 140), palabra("10:22", 260, 140)];
   const {cajas} = Anon.zonasATapar(ws, 0, {});
   assert.ok(tapada(cajas, ws[2]), "no se tapó la fecha a medias");
   assert.ok(cajas.some(c => c.relleno && c.x1 > ws[2].caja.x1 + 30), "el recuadro no siguió más allá de lo leído");
   assert.ok(!tapada(cajas, ws[5]), "la hora sola no se tapa");
+  // Tras un rótulo clínico o del documento ("Fecha Creación:"), la fecha (entera o a medias) queda a la vista
+  const ws2 = [palabra("Fecha", 40, 100), palabra("Creación:", 120, 100), palabra("12/11", 260, 100), palabra("Fecha", 40, 140), palabra("Toma:", 120, 140), palabra("12/10/2026", 220, 140)];
+  const c2 = Anon.zonasATapar(ws2, 0, {}).cajas;
+  assert.ok(!tapada(c2, ws2[2]) && !tapada(c2, ws2[5]), JSON.stringify(c2));
 });
 
 test("un rótulo de un dato sin ningún valor leído: se tapa donde debería ir el valor (al comprobar, no)", () => {
+  // (con un rótulo clínico, como «Fecha Creación:», no: esa fecha queda a la vista)
+  assert.ok(!Anon.zonasATapar([palabra("Fecha", 40, 128, 20), palabra("Creación:", 120, 128, 20), palabra("Hora", 40, 156, 20)], 0, {}).cajas.some(c => c.vacio));
   const ws = [palabra("Hora", 40, 100, 20), palabra("Impresión:", 100, 100, 20), palabra("16:47", 260, 100, 20),
-    palabra("Fecha", 40, 128, 20), palabra("Creación:", 120, 128, 20),
+    palabra("Fecha", 40, 128, 20), palabra("Nacimiento:", 120, 128, 20),
     palabra("Subespecialidad", 40, 156, 20), palabra(":", 260, 156, 20)];
   const cajas = [...Anon.zonasATapar(ws, 0, {}).cajas], v = cajas.filter(c => c.vacio);
   assert.equal(v.length, 1, JSON.stringify(cajas));
@@ -183,6 +189,14 @@ test("con el valor ya tapado, el rótulo del campo vecino no pasa por dato (fals
   assert.ok(foto("Médico: Xiomara Ñancupil").includes("NOMBRE:Xiomara Ñancupil"));
   assert.ok(foto("Nombre del médico: Xiomara Ñancupil").includes("NOMBRE:Xiomara Ñancupil"));
   assert.ok(foto("Dirección: Los Alerces 3187").includes("DIRECCION:Los Alerces 3187"));
+});
+
+test("un rótulo largo mal leído («Subespeciahdad») tras un campo vacío no pasa por nombre al comprobar", () => {
+  const campos = t => [...Anon.revisar(Anon.analizar(t, {foto: true}), null, {foto: true})].map(a => a.texto);
+  assert.deepEqual(campos("Registrado por   :   Subespeciahdad"), []);
+  assert.deepEqual(campos("Registrado por   :   Subespecialidad"), []);
+  // Un apellido de verdad sigue contando
+  assert.deepEqual(campos("Registrado por   :   Trecahuel"), ["Trecahuel"]);
 });
 
 test("un espacio grande seguido de un rótulo conocido corta el valor aunque falten los dos puntos", () => {

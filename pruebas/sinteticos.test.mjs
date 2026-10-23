@@ -53,11 +53,11 @@ for (const d of DOCUMENTOS){
     const avisos = [...Anon.revisar(Anon.analizar(d.texto, {}))];
     assert.deepEqual(avisos.map(a => a.rotulo + ": " + a.texto), []);
   });
-  test(`texto · ${d.nombre}: la respuesta de la IA recupera los datos reales`, () => {
+  test(`texto · ${d.nombre}: la respuesta de la IA recupera los datos reales (la fecha de nacimiento queda como edad)`, () => {
     const {salida, mapa} = Anon.construir(Anon.analizar(d.texto, {}));
     const r = Anon.restaurar(salida, mapa);
     assert.equal(r.faltan.length, 0);
-    assert.equal(r.salida, d.texto);
+    assert.equal(r.salida, d.texto.replace(d.nacimiento.rotulo, `edad: ${d.nacimiento.edad} años`));
   });
   test(`PDF · ${d.nombre}: el texto del PDF se anonimiza igual que el pegado`, () => {
     // Cada renglón como lo entrega pdf.js: trozos con su posición (y hacia arriba), separados donde hay 3+ espacios
@@ -74,13 +74,15 @@ for (const d of DOCUMENTOS){
     for (const x of d.identificadores.concat(d.nacimiento.texto)) assert.ok(todoTapado(d.texto, v, x), `quedó a la vista «${x}» en:\n${v}`);
     for (const x of d.clinicos) assert.ok(nadaTapado(d.texto, v, x), `se tapó «${x}» en:\n${v}`);
   });
-  // Comportamiento actual, que cambia en el paso 2 (clasificación de fechas): hoy toda fecha se oculta
-  test(`hoy · ${d.nombre}: las fechas clínicas también se ocultan (texto y foto)`, () => {
+  test(`texto · ${d.nombre}: la fecha de nacimiento (con su rótulo) pasa a «edad: ${d.nacimiento.edad} años»`, () => {
+    const s = anon(d.texto);
+    assert.ok(!s.includes(d.nacimiento.rotulo) && s.includes(`edad: ${d.nacimiento.edad} años`), s);
+  });
+  test(`texto y foto · ${d.nombre}: las fechas clínicas quedan a la vista`, () => {
     const s = anon(d.texto), v = fotoTapada(d.texto);
     for (const f of d.clinicas){
-      const fecha = f.replace(/\s+\d{1,2}:\d{2}$/, "");
-      assert.ok(!s.includes(fecha), `«${fecha}» visible en el texto`);
-      assert.ok(todoTapado(d.texto, v, fecha), `«${fecha}» a la vista en la foto`);
+      assert.ok(s.includes(f), `se ocultó «${f}» en el texto:\n${s}`);
+      assert.ok(nadaTapado(d.texto, v, f), `se tapó «${f}» en la foto:\n${v}`);
     }
   });
 }

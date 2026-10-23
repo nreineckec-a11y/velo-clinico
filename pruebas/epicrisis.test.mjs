@@ -93,6 +93,8 @@ const centro = m => ({x: (m.x0 + m.x1) / 2, y: (m.y0 + m.y1) / 2});
 const cubre = (t, m) => { const c = centro(m); return t.poli ? dentroPoli(c.x, c.y, t.poli) : c.x >= t.x0 && c.x <= t.x1 && c.y >= t.y0 && c.y <= t.y1; };
 const datos = n => verdad.paginas[n].marcas.filter(m => m.tipo === "dato");
 const clinicas = n => verdad.paginas[n].marcas.filter(m => m.tipo === "clinica");
+// Fechas clínicas y del documento (impresión, creación, ingreso, egreso, alta): deben quedar a la vista
+const fechas = n => verdad.paginas[n].marcas.filter(m => m.tipo === "fecha");
 const enHoja = (n, x, y) => { const f = verdad.paginas[n].hoja[Math.floor(y / 10)]; return !!f && f[Math.floor(x / 10)] === "1"; };
 
 // ¿Alguna palabra leída es uno de los datos de la página (aunque el lector haya errado una o dos letras)?
@@ -129,6 +131,8 @@ test("lee las 4 páginas, tapa cada dato y ningún recuadro queda fuera de la ho
     assert.deepEqual(sinTapar, [], `página ${n + 1}: quedaron sin tapar ${JSON.stringify(sinTapar)}`);
     const tapadas = clinicas(n).filter(m => ts.some(t => cubre(t, m))).map(m => m.texto);
     assert.deepEqual(tapadas, [], `página ${n + 1}: se taparon palabras clínicas ${JSON.stringify(tapadas)}`);
+    const fechasTapadas = fechas(n).filter(m => ts.some(t => cubre(t, m))).map(m => m.texto);
+    assert.deepEqual(fechasTapadas, [], `página ${n + 1}: se taparon fechas clínicas ${JSON.stringify(fechasTapadas)}`);
     const fuera = ts.filter(t => { const c = centro(t); return !enHoja(n, c.x, c.y); });
     assert.equal(fuera.length, 0, `página ${n + 1}: ${fuera.length} recuadros fuera de la hoja`);
   }
@@ -145,6 +149,9 @@ test("lo que se envía no deja ningún dato a la vista: comprobación, píxeles 
   await esperarComprobacion(pagina);
   const comp = await pagina.evaluate(() => __velo.caso().fotos.map(f => ({verif: f.verif, fugas: (f.fugas || []).map(t => t.tipo + ": " + t.texto)})));
   comp.forEach((c, i) => assert.equal(c.verif, "ok", `página ${i + 1}: la comprobación encontró ${JSON.stringify(c.fugas)}`));
+  // La fecha de nacimiento va tapada en la imagen: la edad calculada (al 11/11/2025) va escrita junto a las imágenes
+  const previa = await pagina.evaluate(() => document.querySelector("#previa").textContent);
+  assert.ok(previa.includes("Edad según la fecha de nacimiento tapada en las imágenes: 79 años."), previa);
 
   // a) En los píxeles de la imagen enviada, cada dato está bajo negro
   const oscuros = await pagina.evaluate(async marcas => {
@@ -198,10 +205,10 @@ test("lo que se envía no deja ningún dato a la vista: comprobación, píxeles 
 test("si un dato queda a la vista, la comprobación lo marca y no deja enviar", {skip: saltar}, async () => {
   const pg = await abrir();
   await adjuntar(pg, [PAGINAS[0]]);
-  // Se simula que el lector no vio tres datos: se quitan sus recuadros (la fecha de ingreso, el RUN de la evolución y
-  // el apellido de la evolución)
+  // Se simula que el lector no vio tres datos: se quitan sus recuadros (la fecha de nacimiento, el RUN de la evolución
+  // y el apellido de la evolución)
   const marcas = datos(0), elegir = (texto, cual = 0) => marcas.filter(m => m.texto === texto)[cual];
-  const expuestas = [elegir("03/11/2025"), elegir("6482917-3"), marcas.filter(m => m.texto === "TRECAHUEL").sort((a, b) => b.y0 - a.y0)[0]];
+  const expuestas = [elegir("17/06/1946"), elegir("6482917-3"), marcas.filter(m => m.texto === "TRECAHUEL").sort((a, b) => b.y0 - a.y0)[0]];
   for (const m of expuestas) assert.ok(m, "falta una marca en verdad.json");
   const ts = await recuadros(pg, 0);
   const quitar = ts.map((t, i) => expuestas.some(m => cubre(t, m)) ? i : -1).filter(i => i >= 0);

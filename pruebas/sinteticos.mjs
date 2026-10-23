@@ -2,7 +2,8 @@
 // inventados. Los RUT llevan dígito verificador válido (módulo 11) para que se prueben como uno real.
 //
 // Cada documento trae lo que debe quedar oculto (identificadores), lo clínico que debe llegar intacto, la fecha de
-// nacimiento (con la edad que corresponde a la fecha del documento) y las fechas clínicas (toma, informe, alta…).
+// nacimiento (con su rótulo y la edad que corresponde a la fecha del documento) y las fechas clínicas (toma, informe,
+// alta…), que deben llegar a la vista.
 
 // Dígito verificador de un RUT (módulo 11)
 export function dvRut(cuerpo){
@@ -37,7 +38,7 @@ Validado por: TM Paula Fuentes Araya`,
   identificadores: ["ROJAS", "CARMEN GLORIA", "9.876.543-3", "20250314557", "Paula", "Fuentes Araya"],
   clinicos: ["Hemoglobina          12,8     g/dL", "38,9", "VCM                  88,2", "6.800    /mm3", "4.080", "1.950",
     "245.000  /mm3", "(150.000 - 450.000)", "VHS                  22       mm/h", "Edad: 66 años", "Sexo: Femenino"],
-  nacimiento: {texto: "14/07/1958", edad: 66},
+  nacimiento: {texto: "14/07/1958", rotulo: "Fecha de Nacimiento: 14/07/1958", edad: 66},
   clinicas: ["12/03/2025 08:15", "12/03/2025 14:40"]
 };
 
@@ -69,7 +70,7 @@ TSH                     2,1 uUI/mL`,
   clinicos: ["Glucosa                 112 mg/dL", "1,34 mg/dL", "(0,7 - 1,3)", "BUN                     21 mg/dL",
     "Ácido úrico             7,1 mg/dL", "214 mg/dL", "HDL                     38 mg/dL", "139 mg/dL", "186 mg/dL",
     "GOT                     28 U/L", "4,6 mEq/L", "102 mEq/L", "6,9 %", "2,1 uUI/mL"],
-  nacimiento: {texto: "03-11-62", edad: 62},
+  nacimiento: {texto: "03-11-62", rotulo: "F. Nac: 03-11-62", edad: 62},
   clinicas: ["02/06/2025", "03/06/2025"]
 };
 
@@ -95,7 +96,7 @@ Urocultivo: >100.000 UFC/ml E. coli`,
   identificadores: ["Rosa Elena", "Contreras Pino", "7654321-6", "4471208"],
   clinicos: ["Densidad: 1.020", "pH: 6,0", "Nitritos: positivo", "10-15 x campo", "0-2 x campo", "Bacterias: abundantes",
     ">100.000 UFC/ml E. coli", "Leucocitos: 2+"],
-  nacimiento: {texto: "21 de agosto de 1949", edad: 75},
+  nacimiento: {texto: "21 de agosto de 1949", rotulo: "Fecha nacimiento: 21 de agosto de 1949", edad: 75},
   clinicas: ["28 de abril de 2025"]
 };
 
@@ -115,7 +116,7 @@ Resultados anteriores:
 Correo de contacto: lgonzalez.ficticio@correo.cl`,
   identificadores: ["GONZÁLEZ", "LUIS ALBERTO", "6.789.012-4", "88123456", "lgonzalez.ficticio@correo.cl"],
   clinicos: ["APE total            6,4 ng/ml", "(0,0 - 4,0)", "APE libre            0,9 ng/ml", "14 %", "4,8 ng/ml", "3,9 ng/ml", "Edad: 75 años"],
-  nacimiento: {texto: "30/01/1950", edad: 75},
+  nacimiento: {texto: "30/01/1950", rotulo: "F.N.: 30/01/1950", edad: 75},
   clinicas: ["10/02/2025 09:30", "11/02/2025", "10/09/2024", "15/03/2024"]
 };
 
@@ -141,7 +142,7 @@ Médico Radiólogo`,
   identificadores: ["Patricio Ignacio", "Saavedra Lagos", "15.432.198-5", "7710045", "Rodrigo", "Bustamante", "Mónica", "Herrera Vidal"],
   clinicos: ["10,8 cm", "11,2 cm", "6 mm", "Próstata de 48 cc", "Residuo postmiccional 85 ml", "Litiasis renal izquierda no obstructiva de 6 mm",
     "ECOTOMOGRAFÍA RENAL Y VESICAL"],
-  nacimiento: {texto: "09/09/1985", edad: 39},
+  nacimiento: {texto: "09/09/1985", rotulo: "Fecha de nacimiento: 09/09/1985", edad: 39},
   clinicas: ["05 de mayo de 2025"]
 };
 
@@ -168,7 +169,7 @@ Médico tratante: Dra. Carolina Pizarro Olivares`,
   identificadores: ["Juan Carlos", "Muñoz Riquelme", "13.579.246-2", "3302291", "Los Alerces 3187", "8765 4321", "Carolina", "Pizarro Olivares"],
   clinicos: ["900 ml", "ceftriaxona 1 g EV c/24 h por 5 días", "Crea ingreso 1,8 mg/dL", "al alta 1,1 mg/dL", "RTU de próstata",
     "tamsulosina 0,4 mg VO 0-0-1", "HTA, DM2", "Servicio: Urología", "E. coli multisensible"],
-  nacimiento: {texto: "17/05/1956", edad: 68},
+  nacimiento: {texto: "17/05/1956", rotulo: "Fecha de nacimiento: 17/05/1956", edad: 68},
   clinicas: ["03/03/2025", "09/03/2025", "06/03/2025", "20/03/2025"]
 };
 

@@ -28,7 +28,9 @@ P = dict(
 )
 # Palabras que identifican y por eso deben quedar tapadas
 IDENT = set("HUMBERTO ELADIO TRECAHUEL ORELLANA Trecahuel Rodrigo Esteban Quiroga Viveros Javiera Toledo ALERCES 3187".split()) | {
-    P["run"], P["run_sin"], P["nac"], P["registro"], P["episodio"], P["f_imp"], P["f_ing"], P["f_egr"], P["fi1"], P["fi2"], "4m", "25d"}
+    P["run"], P["run_sin"], P["nac"], P["registro"], P["episodio"], P["fi1"], P["fi2"], "4m", "25d"}
+# Fechas clínicas y del documento (impresión, creación, ingreso, egreso, alta): deben seguir a la vista
+FECHAS = {P["f_imp"], P["f_ing"], P["f_egr"]}
 # Palabras clínicas (y otras que no son datos, como el día de la semana al comienzo de una nota) que deben seguir a la vista
 CLINICAS = ["Neumonía", "Ceftriaxona", "Furosemida", "Insuficiencia", "Hiponatremia", "Hombre", "FONASA", "Hemoglobina",
             "Creatinina", "Diagnóstico", "Antecedentes", "Urgencia", "Martes", "Paracetamol", "deambula", "Glasgow"]
@@ -52,6 +54,8 @@ class Hoja:
                 limpia = w.strip(":,.;()/")
                 if limpia in IDENT or w in IDENT:
                     self.marcas.append((limpia if limpia in IDENT else w, "dato", [x0, bb[1], x1, bb[3]]))
+                elif limpia in FECHAS:
+                    self.marcas.append((limpia, "fecha", [x0, bb[1], x1, bb[3]]))
                 elif limpia in CLINICAS:
                     self.marcas.append((limpia, "clinica", [x0, bb[1], x1, bb[3]]))
                 pos = i + len(w)
