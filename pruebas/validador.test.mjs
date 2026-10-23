@@ -91,3 +91,27 @@ test("los sintéticos pasan el validador sin tener que volver a ocultar nada", (
     assert.deepEqual([...p.agregados], [], d.nombre);
   }
 });
+
+/* ---------- modo automático: texto leído de fotos, sin revisión del médico ---------- */
+test("protegerAuto: un campo rotulado con su valor a la vista se oculta solo (como «Ocultar todos»)", () => {
+  const p = Anon.protegerAuto("Nombre: ZQWX KLMNO   Sexo: Masculino\nHemoglobina 13,5 g/dL", {});
+  assert.equal(p.ok, true);
+  assert.ok(!/ZQWX|KLMNO/.test(p.cons.salida) && p.cons.salida.includes("Sexo: Masculino") && p.cons.salida.includes("Hemoglobina 13,5 g/dL"), p.cons.salida);
+});
+
+test("protegerAuto: un nombre mal leído («PERE2», «Sepulbeda») se oculta si se parece a uno detectado", () => {
+  const p = Anon.protegerAuto("Paciente: PEREZ SOTO, MARIA\nControl: Sra. PERE2 refiere dolor. Visto por Sepulbeda.\nNombre: Juan Sepulveda", {});
+  assert.equal(p.ok, true);
+  assert.ok(!/PERE2|Sepulbeda|Sepulveda|PEREZ/.test(p.cons.salida), p.cons.salida);
+  // en minúscula o en palabras corrientes no se busca por parecido
+  assert.deepEqual(residuos("refiere dolor y pereza", ["perez"]), []);
+});
+
+test("protegerAuto: los sintéticos llegan con lo clínico y las fechas clínicas, sin identificadores", () => {
+  for (const d of DOCUMENTOS){
+    const s = Anon.protegerAuto(d.texto, {}).cons.salida;
+    for (const x of d.identificadores.concat(d.nacimiento.texto)) assert.ok(!s.includes(x), d.nombre + ": quedó «" + x + "»\n" + s);
+    for (const x of d.clinicos.concat(d.clinicas)) assert.ok(s.includes(x), d.nombre + ": se perdió «" + x + "»\n" + s);
+    assert.ok(s.includes("edad: " + d.nacimiento.edad + " años"), d.nombre);
+  }
+});

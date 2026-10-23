@@ -1,5 +1,17 @@
 VELO CLÍNICO
 
+MODO AUTOMÁTICO (activado por omisión; se apaga en Ajustes)
+- Tocas «Fotografiar examen», sacas una o varias páginas del mismo caso y tocas «Listo». También puedes elegir fotos, PDF o Word.
+- Sin tocar nada más: la app lee las páginas en el teléfono, oculta los datos personales, pasa el validador final y envía SOLO EL TEXTO anonimizado (ninguna imagen) con el prompt por defecto a la IA elegida. La respuesta aparece en «Casos» con los datos reales repuestos.
+- Cada caso guarda lo que se envió, tal cual («Ver lo enviado»), para revisarlo después.
+- La única excepción: si el validador encuentra un dato que no puede ocultar, el caso queda en «Requiere revisión» y no se envía.
+- Como nadie revisa antes de enviar, todo campo rotulado que quede con su valor a la vista (por ejemplo «Nombre:» con un apellido poco común) se oculta solo, y un nombre que el lector leyó con una o dos letras distintas («PERE2») también.
+- Mientras un caso se procesa puedes fotografiar el siguiente.
+- Ajustes: proveedor (Claude con tu cuenta dentro de la app de Claude, o Claude, ChatGPT o Gemini con tu clave API), modelo (por omisión claude-opus-5-5) y prompt por defecto (por omisión, Transcriptor de exámenes). La clave queda solo en el teléfono (puedes no recordarla) y la consulta va directo del teléfono al proveedor.
+- El texto leído en el teléfono puede traer errores (decimales, unidades, tablas): la IA recibe ese aviso. Revisa «Ver lo enviado» cuando un valor no te cuadre.
+- Dentro de la app de Claude la cámara puede no estar disponible: usa «Usar la cámara del sistema» o «Elegir fotos o PDF».
+
+MODO MANUAL
 Pegas o dictas el caso (o adjuntas foto, PDF o Word), la app oculta nombres, RUT, fecha de nacimiento, teléfonos, direcciones, folios y números de orden en el mismo teléfono, y la IA responde con los datos reales repuestos.
 
 - Dentro de la app de Claude: tocas "Enviar a Claude" y la respuesta aparece ahí mismo.
@@ -28,7 +40,7 @@ Cómo se tapa una foto:
 - La app es una página web: no tiene acceso a VisionKit (el escáner de documentos de iOS). La detección de la hoja y la lectura las hace ella misma en el dispositivo.
 - Límites: la letra manuscrita casi no se lee (revísala tú); la comprobación puede marcar algo que no es un dato (lo destapas tras mirarlo); y un dato que el lector no ve en ninguna de sus lecturas no se puede tapar solo: por eso la revisión final es tuya.
 
-Esta página no se conecta a ningún servidor: el texto solo sale cuando tú lo copias. El lector de fotos (carpeta ocr/) corre en el dispositivo.
+La página solo se conecta a la IA que elijas en Ajustes (api.anthropic.com, api.openai.com o generativelanguage.googleapis.com), y solo con el texto ya anonimizado. En el modo manual, el texto sale cuando lo copias o tocas «Enviar a Claude». El lector de fotos (carpeta ocr/) corre en el dispositivo.
 
 Fechas:
 - Fecha de nacimiento ("Fecha de nacimiento", "F. Nac", "FN", "F.N.", "Nacimiento", "nacido el"…): se oculta. En el texto, el rótulo y la fecha pasan a "edad: X años", calculada respecto de la fecha del documento (la más reciente, sin contar próximos controles ni vigencias); en lactantes, en meses. En una foto se tapa la fecha y la edad va escrita junto a las imágenes.

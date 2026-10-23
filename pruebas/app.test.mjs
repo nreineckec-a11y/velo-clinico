@@ -37,6 +37,8 @@ async function abrir(antes){
   const pg = await ctx.newPage();
   pg.errores = [];
   pg.on("pageerror", e => pg.errores.push(String(e)));
+  // (estas pruebas son del modo manual)
+  await pg.addInitScript(() => localStorage.setItem("velo_ajustes", JSON.stringify({auto: false})));
   await pg.goto(base + "/index.html?prueba");
   if (antes) await pg.evaluate(antes);
   return pg;

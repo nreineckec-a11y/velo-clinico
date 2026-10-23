@@ -57,6 +57,8 @@ async function abrir(){
   const pg = await ctx.newPage();
   const errores = [];
   pg.on("pageerror", e => errores.push(String(e)));
+  // (estas pruebas son del modo manual: revisar y tapar fotos)
+  await pg.addInitScript(() => localStorage.setItem("velo_ajustes", JSON.stringify({auto: false})));
   await pg.goto(base + "/index.html?prueba");
   pg.errores = errores;
   return pg;

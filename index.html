@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<!-- Esta versión no se conecta a ningún servidor: el texto solo sale cuando tú lo copias -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'">
+<!-- Solo se conecta a la IA que elijas en Ajustes (Claude, OpenAI o Gemini), y solo con el texto ya anonimizado -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon-192.png">
@@ -146,6 +146,30 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
 .lienzo-wrap{flex:1; min-height:0; display:flex; align-items:flex-start; justify-content:center; padding:8px; overflow:hidden}
 #lienzo{display:block; touch-action:pinch-zoom; cursor:crosshair; border-radius:6px; box-shadow:0 0 0 1px var(--line); max-width:none}
 .lupa{position:fixed; width:150px; height:150px; border-radius:50%; border:3px solid #fff; box-shadow:0 0 0 2px var(--accent), 0 8px 22px rgba(0,0,0,.35); pointer-events:none; z-index:25; background:#000}
+/* modo automático: cámara, casos y ajustes */
+.modo-auto .solo-manual, body:not(.modo-auto) .solo-auto{display:none !important}
+.top-fila{display:flex; align-items:center; justify-content:space-between; gap:8px}
+.casos{display:grid; gap:12px}
+.caso-auto{border:1px solid var(--line); border-radius:12px; padding:12px; display:grid; gap:8px; background:var(--bg); min-width:0}
+.caso-cab{display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center}
+.insignia{font:600 13px/1 var(--f-body); padding:5px 9px; border-radius:999px; background:var(--accent-soft); color:var(--ink)}
+.e-listo{background:var(--accent); color:var(--accent-ink)}
+.e-revision,.e-error{background:var(--warn-bg); color:var(--err-ink); box-shadow:0 0 0 1px var(--warn-line) inset}
+.caso-auto pre.out{margin:0}
+.cam-wrap{flex:1; min-height:0; display:flex; align-items:center; justify-content:center; background:#000}
+.cam-wrap video{max-width:100%; max-height:100%; display:block}
+.cam-pie{display:flex; align-items:center; gap:12px; padding-block:12px; background:var(--surface); border-top:1px solid var(--line);
+  padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
+.cam-miniaturas{flex:1; min-width:0; display:flex; gap:6px; overflow-x:auto}
+.cam-miniaturas img{height:56px; border-radius:6px; border:1px solid var(--line); flex:none}
+.cam-disparo{flex:none; width:72px; height:72px; border-radius:50%; border:5px solid var(--accent); background:#fff; cursor:pointer}
+.cam-disparo:disabled{opacity:.4}
+.ajustes-cuerpo{flex:1; overflow:auto; display:grid; gap:10px; align-content:start; width:100%; max-width:680px; margin:0 auto; padding:16px}
+.ajustes-cuerpo input[type=text],.ajustes-cuerpo input[type=password],.ajustes-cuerpo select{width:100%; font:16px/1.3 var(--f-body); padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--ink)}
+.lbl{font-weight:600; font-size:15px; margin-top:6px}
+.ajustes-cuerpo a{color:var(--accent)}
+.check{display:flex; gap:10px; align-items:flex-start; font-size:15px}
+.check input{margin-top:4px; width:20px; height:20px; flex:none}
 .toast{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(24px + env(safe-area-inset-bottom,0px)); background:var(--ink); color:var(--bg); padding:10px 16px; border-radius:999px; font-size:14px; z-index:30; width:max-content; max-width:calc(100% - 32px); text-align:center}
 </style>
 </head>
@@ -153,16 +177,35 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
 
 <main class="app">
   <header class="top">
+    <div class="top-fila">
     <div class="marca">
       <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2.5 4.5 7v8.2c0 7.2 4.9 12.4 11.5 14.3 6.6-1.9 11.5-7.1 11.5-14.3V7z" fill="var(--accent)"/><rect x="9" y="12" width="14" height="4.2" rx="1" fill="var(--accent-ink)"/><rect x="9" y="18.6" width="9" height="2.2" rx="1.1" fill="var(--accent-ink)" opacity=".7"/></svg>
       <span>Velo Clínico</span>
     </div>
+    <button class="btn sec chico" id="btnAjustes" type="button">Ajustes</button>
+    </div>
     <p class="sello">Nombres, RUT y fecha de nacimiento se ocultan en tu teléfono antes de enviar. Las fechas de los exámenes quedan.</p>
   </header>
 
-  <p class="aviso-caja solo-indep">Para que Claude responda aquí mismo, abre Velo Clínico desde la app de Claude. Desde esta página puedes copiar el texto anonimizado y pegarlo en la IA que quieras.</p>
+  <section class="bloque" id="bloqueAuto" aria-label="Modo automático" hidden>
+    <button class="btn grande" id="btnCamara" type="button">Fotografiar examen</button>
+    <div class="fila">
+      <button class="btn sec" id="btnElegirAuto" type="button">Elegir fotos o PDF</button>
+      <button class="btn-texto" id="btnManual" type="button">Usar el modo manual</button>
+    </div>
+    <input type="file" id="adjuntoAuto" accept="image/*,.pdf,application/pdf,.docx,.txt" multiple hidden>
+    <input type="file" id="camaraNativa" accept="image/*" capture="environment" multiple hidden>
+    <p class="nota" id="autoInfo"></p>
+  </section>
 
-  <section class="bloque" aria-label="Caso">
+  <section class="bloque" id="bloqueCasos" aria-labelledby="hCasos" hidden>
+    <h2 id="hCasos">Casos</h2>
+    <div class="casos" id="casos" aria-live="polite"></div>
+  </section>
+
+  <p class="aviso-caja solo-indep solo-manual">Para que Claude responda aquí mismo, abre Velo Clínico desde la app de Claude. Desde esta página puedes copiar el texto anonimizado y pegarlo en la IA que quieras.</p>
+
+  <section class="bloque solo-manual" aria-label="Caso">
     <div class="chips" id="tareas" role="group" aria-label="Tarea, opcional"></div>
     <textarea id="entrada" placeholder="Pega o dicta el caso y lo que necesitas.&#10;&#10;Ej.: «Hazme una interconsulta a urología. Paciente Juan Pérez, RUT 12.345.678-5, 67 años…»"></textarea>
     <div class="fila">
@@ -177,7 +220,7 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
     <p class="nota" id="consejoFoto" hidden>La app busca en el teléfono nombres, RUT, fecha de nacimiento y folios en cada imagen y los tapa en negro (las fechas de los exámenes quedan). Revísala antes de enviar: toca «Revisar».</p>
   </section>
 
-  <section class="bloque" id="bloqueEnvio" aria-label="Enviar" hidden>
+  <section class="bloque solo-manual" id="bloqueEnvio" aria-label="Enviar" hidden>
     <p class="resumen" id="resumen"></p>
     <div class="avisos" id="avisos" role="region" aria-label="Datos que podrían quedar visibles" hidden></div>
     <div class="out" id="previa"></div>
@@ -197,7 +240,7 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
     </details>
   </section>
 
-  <section class="bloque" id="bloqueResp" aria-labelledby="hResp" aria-live="polite" hidden>
+  <section class="bloque solo-manual" id="bloqueResp" aria-labelledby="hResp" aria-live="polite" hidden>
     <h2 id="hResp">Respuesta</h2>
     <div class="hilo" id="hilo"></div>
     <div class="seguir">
@@ -214,8 +257,9 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
     </div>
   </section>
 
-  <button class="btn sec" id="nuevo" type="button">Empezar otro caso</button>
-  <p class="pie">La IA puede equivocarse: verifica antes de usar. Los casos no se guardan y se borran solos tras 15 minutos sin uso.</p>
+  <button class="btn sec solo-manual" id="nuevo" type="button">Empezar otro caso</button>
+  <p class="pie solo-manual">La IA puede equivocarse: verifica antes de usar. Los casos no se guardan y se borran solos tras 15 minutos sin uso.</p>
+  <p class="pie solo-auto">La IA puede equivocarse: verifica antes de usar, sobre todo los valores leídos de fotos (decimales, unidades, tablas).</p>
 </main>
 
 <div class="modal" id="editor" role="dialog" aria-modal="true" aria-labelledby="edTitulo" hidden>
@@ -236,6 +280,48 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
   <p class="modal-info" id="edInfo" role="status" aria-live="polite">Arrastra el dedo sobre la parte que quieres enviar. Mientras lo mueves, una lupa te muestra el detalle.</p>
   <canvas id="lupa" class="lupa" hidden aria-hidden="true"></canvas>
   <div class="lienzo-wrap" id="lienzoWrap"><canvas id="lienzo" aria-label="Imagen: marca la parte que quieres enviar"></canvas></div>
+</div>
+
+<div class="modal" id="camara" role="dialog" aria-modal="true" aria-labelledby="camTitulo" hidden>
+  <div class="modal-bar">
+    <strong id="camTitulo" style="font-family:var(--f-display); font-size:18px">Fotografiar examen</strong>
+    <span class="sep"></span>
+    <button class="btn sec chico" id="camCancelar" type="button">Cancelar</button>
+    <button class="btn chico" id="camListo" type="button" disabled>Listo</button>
+  </div>
+  <p class="modal-info" id="camInfo" role="status" aria-live="polite">Abriendo la cámara…</p>
+  <div class="cam-wrap"><video id="camVideo" playsinline muted autoplay></video></div>
+  <div class="cam-pie">
+    <div class="cam-miniaturas" id="camMini"></div>
+    <label class="btn sec chico" for="camaraNativa" id="camSistema" hidden>Usar la cámara del sistema</label>
+    <button class="cam-disparo" id="camDisparo" type="button" aria-label="Capturar página" disabled></button>
+  </div>
+</div>
+
+<div class="modal" id="ajustes" role="dialog" aria-modal="true" aria-labelledby="ajTitulo" hidden>
+  <div class="modal-bar">
+    <strong id="ajTitulo" style="font-family:var(--f-display); font-size:18px">Ajustes</strong>
+    <span class="sep"></span>
+    <button class="btn chico" id="ajCerrar" type="button">Listo</button>
+  </div>
+  <div class="ajustes-cuerpo">
+    <label class="check"><input type="checkbox" id="ajAuto"><span><b>Modo automático</b><br><span class="nota">Foto → lectura en el teléfono → datos personales ocultos → validación → envío → resultado, sin confirmaciones. Solo sale el texto anonimizado: ninguna imagen. Si el validador encuentra un dato que no puede ocultar, el caso queda en «Requiere revisión» y no se envía.</span></span></label>
+    <label class="lbl" for="ajProv">Proveedor</label>
+    <select id="ajProv"></select>
+    <label class="lbl" for="ajModelo">Modelo</label>
+    <input id="ajModelo" type="text" autocomplete="off" spellcheck="false" autocapitalize="off">
+    <p class="nota" id="ajModeloNota"></p>
+    <div id="ajClaveBloque" style="display:grid; gap:10px">
+      <label class="lbl" for="ajClave">Clave API</label>
+      <input id="ajClave" type="password" autocomplete="off" spellcheck="false" autocapitalize="off">
+      <p class="nota"><a id="ajClaveLink" href="#" target="_blank" rel="noopener noreferrer">Crear una clave</a>. La clave queda solo en este dispositivo y se usa solo para hablar con ese proveedor.</p>
+      <label class="check"><input type="checkbox" id="ajRecordar"><span>Recordar la clave en este dispositivo</span></label>
+      <p class="aviso-caja" id="ajProvNota" hidden></p>
+    </div>
+    <label class="lbl" for="ajTarea">Prompt por defecto</label>
+    <select id="ajTarea"></select>
+    <button class="btn-texto quitar" id="ajBorrar" type="button" style="justify-self:start; margin:12px 0 0">Borrar ajustes y claves de este dispositivo</button>
+  </div>
 </div>
 
 <script id="motor">
@@ -1142,7 +1228,31 @@ function validar(salida, opc){
     const rx = new RegExp("(?<![\\p{L}])" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![\\p{L}])", "gu");
     cada(rx, ft, m => { if (!DEBILES.has(w) || esMayus(t[m.index])) poner("NOMBRE", m.index, m.index + m[0].length); });
   }
+  // En texto leído de fotos, también con una o dos letras distintas ("PERE2", "Sepulbeda"), si va con mayúscula
+  if (opc && opc.aproximado){
+    const largos = [...new Set(opc.nombres || [])].filter(w => w && w.length >= 5);
+    cada(/(?<![\p{L}])\p{Lu}[\p{L}\p{N}'’]{4,}(?![\p{L}])/gu, t, m => {
+      // (las cifras que el lector pone por letras: 2→z, 0→o, 5→s, 8→b…)
+      const f = plegar(m[0]).replace(/\d/g, d => "olzeasgtbg"[d]).replace(/[^\p{L}]/gu, "");
+      if (f.length < 5 || palabraComun(f) || LAB.has(f) || NOMBRES.has(f) || APELLIDOS.has(f) && !largos.includes(f)) return;
+      const tol = tolerancia(f.length);
+      if (largos.some(w => Math.abs(w.length - f.length) <= tol && distancia(f, w, tol) <= tol)) poner("NOMBRE", m.index, m.index + m[0].length);
+    });
+  }
   return out.sort((a, b) => a.s - b.s);
+}
+// Modo automático (texto leído de fotos, sin que el médico revise): todo campo rotulado que quedó con su valor a la
+// vista (revisar, con las reglas de fotos) se oculta, como si tocara «Ocultar todos»; después, el validador
+// (proteger). opc: las de proteger. Devuelve lo de proteger y los avisos que se ocultaron.
+function protegerAuto(texto, opc){
+  const o = Object.assign({}, opc || {}, {foto: true, aproximado: true});
+  let p = proteger(texto, o);
+  const avisos = revisar(p.res, o.off, {foto: true});
+  if (avisos.length){
+    const ocultar = (o.ocultar || []).concat(avisos.map(a => ({texto: a.texto, tipo: a.tipo})));
+    p = proteger(texto, Object.assign({}, o, {ocultar}));
+  }
+  return Object.assign(p, {avisos});
 }
 // Palabras de los nombres detectados (sin los que el médico dejó visibles a propósito)
 function nombresDe(res, deshabilitadas){
@@ -1165,7 +1275,7 @@ function proteger(texto, opc){
     const res = analizar(texto, Object.assign({}, o, {ocultar}));
     if (o.fijar) o.fijar(res);
     const cons = construir(res, off);
-    const residuos = validar(cons.salida, {nombres: nombresDe(res, off).concat(o.nombres || [])});
+    const residuos = validar(cons.salida, {nombres: nombresDe(res, off).concat(o.nombres || []), aproximado: o.aproximado});
     if (!residuos.length || ronda >= rondas) return {res, cons, residuos, agregados, ok: !residuos.length};
     for (const r of residuos){
       if (ocultar.some(x => plegar(x.texto) === plegar(r.texto))) continue;
@@ -2504,7 +2614,7 @@ async function leerDocx(buf, DOMParserImpl){
   return lineas.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-root.Anon = {analizar, construir, restaurar, revisar, validar, proteger, nombresDe, dvRut, pendienteTexto, filasOcr, zonasATapar, margenesCajas, codigosEnImagen, analizarHoja, detectarHoja, contornoHoja, blanquearFuera, curvaContraste, homografia, aplicarH, tamanoCuad, rectificar, lecturaDeHoja, contornoCaja, ajustarAltoPalabras, unirLecturas, reducir, entidadesDe, coincidencias, distancia, fusionarCajas, dentroCuad, agrandarCuad, aplanarLuz, blanquearFondo, pendienteEn, enderezar, cajaOriginal, textoItemsPdf, leerDocx, plegar, cuentaDigitos, TIPOS, ETIQUETA, OPC_DEF};
+root.Anon = {analizar, construir, restaurar, revisar, validar, proteger, protegerAuto, nombresDe, dvRut, pendienteTexto, filasOcr, zonasATapar, margenesCajas, codigosEnImagen, analizarHoja, detectarHoja, contornoHoja, blanquearFuera, curvaContraste, homografia, aplicarH, tamanoCuad, rectificar, lecturaDeHoja, contornoCaja, ajustarAltoPalabras, unirLecturas, reducir, entidadesDe, coincidencias, distancia, fusionarCajas, dentroCuad, agrandarCuad, aplanarLuz, blanquearFondo, pendienteEn, enderezar, cajaOriginal, textoItemsPdf, leerDocx, plegar, cuentaDigitos, TIPOS, ETIQUETA, OPC_DEF};
 })(typeof window !== "undefined" ? window : globalThis);
 </script>
 <script>
@@ -2541,7 +2651,7 @@ if (enMarco && window.claude && typeof window.claude.use === "function"){
     if (!s) return;
     sampleFn = s;
     try { const l = await s.limits(); sampleImg = !!(l && l.images); if (sampleImg && l.images.maxCount) sampleMax = l.images.maxCount; } catch(e){}
-    pintarEnvio(); pintarSeg();
+    pintarEnvio(); pintarSeg(); if (typeof aplicarModo === "function") aplicarModo();
   }).catch(() => {});
   window.claude.use("downloads").then(d => { guardador = d || null; }).catch(() => {});
 }
@@ -3173,21 +3283,31 @@ async function imagenParaLeer(fuente, q, paso, mascara, lectura){
 }
 // Varias lecturas con modos distintos del lector (11: texto suelto; 4: columna; 6: bloque) sobre la imagen de
 // contraste suave o, si el modo lleva "+", la de contraste fuerte: cada combinación se salta cosas distintas
-async function leerVarias(w, blob, blob2, modos){
+// (lecturas: si se pasa un objeto, ahí quedan las palabras de cada modo por separado)
+async function leerVarias(w, blob, blob2, modos, lecturas){
   let out = null;
   for (const m of modos || ["11", "4+"]){
     const ws = await leerImagen(w, m.endsWith("+") ? (blob2 || blob) : blob, m.replace("+", ""));
+    if (lecturas) lecturas[m] = ws;
     out = out ? Anon.unirLecturas(out, ws) : ws;
   }
   return out || [];
+}
+// El texto de una sola lectura, en renglones (para enviarlo: la unión de lecturas repite las palabras dudosas)
+// (lectura.texto: el modo del lector para ese texto; si no se leyó ya con ese modo, se lee una vez más)
+async function textoDeUnaLectura(w, lecturas, modo, blob, blob2, pendiente){
+  const ws = lecturas[modo] || await leerImagen(w, modo.endsWith("+") ? (blob2 || blob) : blob, modo.replace("+", ""));
+  const bien = ws.filter(p => p.conf == null || p.conf >= 30);
+  return Anon.filasOcr(bien, pendiente == null ? Anon.pendienteTexto(bien) : pendiente).texto;
 }
 // Lee una imagen: si hay hoja, la lee enderezada; si no, tal cual. Devuelve palabras y recuadros en coordenadas del lienzo.
 async function leerHoja(fuente, lienzo, q, paso, opc, mascara, lectura){
   const w = await cargarOcr();
   if (q){
     try {
-      const L = await imagenParaLeer(fuente, q, paso, mascara, lectura);
-      let palabras = Anon.ajustarAltoPalabras(await leerVarias(w, L.blob, L.blob2, lectura && lectura.modos), L.gris, L.W, L.H, L.paso);
+      const L = await imagenParaLeer(fuente, q, paso, mascara, lectura), lecturas = {};
+      let palabras = Anon.ajustarAltoPalabras(await leerVarias(w, L.blob, L.blob2, lectura && lectura.modos, lecturas), L.gris, L.W, L.H, L.paso);
+      const texto = lectura && lectura.texto ? await textoDeUnaLectura(w, lecturas, lectura.texto, L.blob, L.blob2, 0) : null;
       // "Palabras" de poca confianza fuera del papel: la textura de la alfombra o de la mesa junto a la orilla.
       // No son texto: no se tapan ni cuentan para decidir si el encabezado se leyó mal.
       if (mascara !== false && fuente.casco) palabras = palabras.filter(p => {
@@ -3210,19 +3330,20 @@ async function leerHoja(fuente, lienzo, q, paso, opc, mascara, lectura){
         const m = margenes[i];
         const poli = Anon.contornoCaja({x0: p.caja.x0 - m.izq, x1: p.caja.x1 + m.der, y0: p.caja.y0 - m.arriba, y1: p.caja.y1 + m.abajo}, L.aPunto);
         return {texto: p.texto, conf: p.conf, caja: L.aLienzo(p.caja), poli};
-      }), analisis: zt.res};
+      }), analisis: zt.res, texto};
     } catch(err){ if (/tardó/.test(String(err && err.message))) throw err; }
   }
   // Sin hoja reconocible (o si falló lo anterior): se lee la imagen completa tal cual
   const imagen = await new Promise(r => lienzo.toBlob(r, "image/jpeg", 0.92));
   if (!imagen) throw new Error("no se pudo preparar la imagen");
-  const palabras = await leerVarias(await cargarOcr(), imagen, null, lectura && lectura.modos);
+  const lecturas = {}, palabras = await leerVarias(await cargarOcr(), imagen, null, lectura && lectura.modos, lecturas);
   const zt = Anon.zonasATapar(palabras, null, opc);
+  const texto = lectura && lectura.texto ? await textoDeUnaLectura(await cargarOcr(), lecturas, lectura.texto, imagen, null, null) : null;
   const hs = palabras.map(p => p.caja.y1 - p.caja.y0).sort((a, b) => a - b), margenes = Anon.margenesCajas(palabras, hs[hs.length >> 1] || 20);
   return {cajas: Anon.fusionarCajas(zt.cajas), palabras: palabras.map((p, i) => {
     const m = margenes[i], c = p.caja, x0 = c.x0 - m.izq, x1 = c.x1 + m.der, y0 = c.y0 - m.arriba, y1 = c.y1 + m.abajo;
     return Object.assign({}, p, {poli: [{x: x0, y: y0}, {x: x1, y: y0}, {x: x1, y: y1}, {x: x0, y: y1}]});
-  }), analisis: zt.res, completa: true};
+  }), analisis: zt.res, completa: true, texto};
 }
 // ¿El punto cae dentro del recuadro? (siguiendo su contorno si lo tiene)
 const cubrePunto = (t, x, y) => t.poli ? dentroPoligono({x, y}, t.poli) : (x >= t.x0 && x <= t.x1 && y >= t.y0 && y <= t.y1);
@@ -3920,6 +4041,359 @@ async function verificarFoto(f){
   return ocrCola;
 }
 
+/* ===================== ajustes (solo en este dispositivo) ===================== */
+// Proveedores: Claude con la cuenta del médico (solo dentro de la app de Claude) o con una clave API propia
+const PROV = {
+  "claude-app": {nombre: "Claude (con tu cuenta, dentro de la app de Claude)", corto: "Claude", sinClave: true},
+  claude: {nombre: "Claude (clave API)", corto: "Claude", modelo: "claude-opus-5-5", clavePh: "sk-ant-…",
+    claveUrl: "https://platform.claude.com/settings/keys", nota: "Más rápido y económico: claude-sonnet-5-5."},
+  openai: {nombre: "ChatGPT (clave API de OpenAI)", corto: "ChatGPT", modelo: "gpt-6-sol", clavePh: "sk-…",
+    claveUrl: "https://platform.openai.com/api-keys", nota: "Más económico: gpt-6-luna. Si tu clave no tiene ese modelo, escribe aquí el que uses."},
+  gemini: {nombre: "Gemini (clave API de Google)", corto: "Gemini", modelo: "gemini-3.8-flash", clavePh: "AIza…",
+    claveUrl: "https://aistudio.google.com/apikey", nota: "Más capaz: gemini-4-argon.",
+    aviso: "Usa una clave con facturación activa: en el nivel gratuito, Google puede usar lo que envías para mejorar sus productos y una persona puede revisarlo."}
+};
+const LS_AJ = "velo_ajustes";
+const ajustesBase = () => ({auto: true, prov: enMarco ? "claude-app" : "claude", modelos: {}, claves: {}, recordar: true, tarea: "exam"});
+function leerAjustes(){
+  let g = null;
+  try { g = JSON.parse(localStorage.getItem(LS_AJ) || "null"); } catch(e){}
+  const a = Object.assign(ajustesBase(), g && typeof g === "object" ? g : {});
+  a.modelos = Object.assign({}, a.modelos); a.claves = Object.assign({}, a.claves);
+  if (!PROV[a.prov] || (a.prov === "claude-app" && !enMarco)) a.prov = ajustesBase().prov;
+  if (a.tarea && !TAREAS.some(t => t.id === a.tarea)) a.tarea = null;
+  a.auto = a.auto !== false;
+  return a;
+}
+let aj = leerAjustes();
+const clavesSesion = {};
+function guardarAjustes(){
+  try { localStorage.setItem(LS_AJ, JSON.stringify(Object.assign({}, aj, {claves: aj.recordar ? aj.claves : {}}))); } catch(e){}
+}
+const claveDe = p => String((aj.recordar ? aj.claves[p] : clavesSesion[p]) || "").trim();
+const modeloDe = p => PROV[p].sinClave ? "" : (String(aj.modelos[p] || "").trim() || PROV[p].modelo);
+const nombreTarea = id => { const t = TAREAS.find(x => x.id === id); return t ? t.nombre : "ninguno"; };
+
+function pintarAjustes(){
+  const p = aj.prov, P = PROV[p];
+  $("ajAuto").checked = aj.auto;
+  $("ajProv").innerHTML = Object.keys(PROV).filter(k => k !== "claude-app" || enMarco)
+    .map(k => '<option value="' + k + '"' + (k === p ? " selected" : "") + ">" + esc(PROV[k].nombre) + "</option>").join("");
+  $("ajModelo").disabled = !!P.sinClave;
+  $("ajModelo").value = P.sinClave ? "" : (aj.modelos[p] || "");
+  $("ajModelo").placeholder = P.sinClave ? "El que use la app de Claude" : P.modelo;
+  $("ajModeloNota").textContent = P.sinClave ? "Dentro de la app de Claude se usa tu cuenta: no necesitas clave." : "Si lo dejas vacío se usa " + P.modelo + ". " + P.nota;
+  $("ajClaveBloque").hidden = !!P.sinClave;
+  if (!P.sinClave){
+    $("ajClave").value = claveDe(p); $("ajClave").placeholder = P.clavePh;
+    $("ajClaveLink").href = P.claveUrl; $("ajRecordar").checked = aj.recordar;
+    $("ajProvNota").hidden = !P.aviso; $("ajProvNota").textContent = P.aviso || "";
+  }
+  $("ajTarea").innerHTML = '<option value="">Ninguno</option>' + TAREAS.map(t => '<option value="' + t.id + '"' + (t.id === aj.tarea ? " selected" : "") + ">" + esc(t.nombre) + "</option>").join("");
+}
+function abrirAjustes(){ pintarAjustes(); $("ajustes").hidden = false; document.body.classList.add("modal-abierto"); }
+function cerrarAjustes(){ $("ajustes").hidden = true; document.body.classList.remove("modal-abierto"); aplicarModo(); }
+$("btnAjustes").addEventListener("click", abrirAjustes);
+$("ajCerrar").addEventListener("click", cerrarAjustes);
+$("ajAuto").addEventListener("change", () => { aj.auto = $("ajAuto").checked; guardarAjustes(); aplicarModo(); });
+$("ajProv").addEventListener("change", () => { aj.prov = $("ajProv").value; guardarAjustes(); pintarAjustes(); aplicarModo(); });
+$("ajModelo").addEventListener("input", () => { aj.modelos[aj.prov] = $("ajModelo").value.trim(); guardarAjustes(); aplicarModo(); });
+$("ajClave").addEventListener("input", () => {
+  const v = $("ajClave").value.trim();
+  if (aj.recordar) aj.claves[aj.prov] = v; else clavesSesion[aj.prov] = v;
+  guardarAjustes(); aplicarModo();
+});
+$("ajRecordar").addEventListener("change", () => {
+  aj.recordar = $("ajRecordar").checked;
+  // Las claves pasan de un lugar al otro: recordadas en el dispositivo o solo mientras la app está abierta
+  if (aj.recordar){ Object.assign(aj.claves, clavesSesion); for (const k in clavesSesion) delete clavesSesion[k]; }
+  else { Object.assign(clavesSesion, aj.claves); aj.claves = {}; }
+  guardarAjustes();
+});
+$("ajTarea").addEventListener("change", () => { aj.tarea = $("ajTarea").value || null; guardarAjustes(); aplicarModo(); });
+$("ajBorrar").addEventListener("click", () => {
+  try { localStorage.removeItem(LS_AJ); } catch(e){}
+  for (const k in clavesSesion) delete clavesSesion[k];
+  aj = ajustesBase(); pintarAjustes(); aplicarModo(); toast("Se borraron los ajustes y las claves de este dispositivo.");
+});
+$("btnManual").addEventListener("click", () => { aj.auto = false; guardarAjustes(); aplicarModo(); toast("Modo manual. Vuelve al automático en Ajustes."); });
+
+// Modo automático: la pantalla muestra la cámara y los casos; con el modo apagado, la app de siempre
+function aplicarModo(){
+  document.body.classList.toggle("modo-auto", aj.auto);
+  $("bloqueAuto").hidden = !aj.auto;
+  $("bloqueCasos").hidden = !aj.auto || !casosAuto.length;
+  const P = PROV[aj.prov], falta = !P.sinClave && !claveDe(aj.prov);
+  $("autoInfo").textContent = "Se envía solo el texto anonimizado a " + P.corto + (P.sinClave ? "" : " (" + modeloDe(aj.prov) + ")") +
+    " · Prompt: " + nombreTarea(aj.tarea) + "." + (falta ? " Falta la clave API: agrégala en Ajustes." : "") +
+    (aj.prov === "claude-app" && !sampleFn ? " Claude con tu cuenta solo funciona dentro de la app de Claude." : "");
+  $("autoInfo").className = "nota" + (falta ? " estado aviso" : "");
+}
+
+/* ===================== envío a la IA elegida ===================== */
+// Con la clave API del propio médico: la consulta va directo del teléfono al proveedor, sin servidores intermedios
+async function viaAPI(prov, texto, signal){
+  const key = claveDe(prov), P = PROV[prov];
+  if (!key) throw {mensaje: "Falta la clave API de " + P.corto + ". Agrégala en Ajustes y toca «Reintentar».", final: true};
+  const modelo = modeloDe(prov);
+  let url, init, extraer;
+  if (prov === "claude"){
+    const headers = {"content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true"};
+    const body = {model: modelo, max_tokens: 16000, messages: [{role: "user", content: texto}]};
+    // En los modelos actuales, esfuerzo alto (en Opus 5.5 el valor por omisión es medio)
+    if (/^claude-(?:opus|sonnet|fable|haiku)-5/.test(modelo)) body.output_config = {effort: "high"};
+    // Si un filtro de seguridad declina la consulta, el mismo servidor la responde con otro modelo
+    if (/^claude-(?:fable-5-1|opus-5-5|opus-5|sonnet-5-5)$/.test(modelo)){ headers["anthropic-beta"] = "server-side-fallback-2026-07-01"; body.fallbacks = "default"; }
+    url = "https://api.anthropic.com/v1/messages";
+    init = {method: "POST", headers, body: JSON.stringify(body)};
+    extraer = j => {
+      if (j.stop_reason === "refusal") throw {mensaje: "Claude no respondió esta solicitud (filtro de seguridad). Prueba con otro prompt o proveedor.", final: true};
+      return {texto: (j.content || []).filter(c => c.type === "text").map(c => c.text).join("\n").trim(), truncado: j.stop_reason === "max_tokens"};
+    };
+  } else if (prov === "openai"){
+    url = "https://api.openai.com/v1/chat/completions";
+    init = {method: "POST", headers: {"content-type": "application/json", "authorization": "Bearer " + key}, body: JSON.stringify({model: modelo, messages: [{role: "user", content: texto}]})};
+    extraer = j => {
+      const c = j.choices && j.choices[0], m = c && c.message;
+      let t = m && m.content;
+      if (Array.isArray(t)) t = t.map(x => (x && x.text) || "").join("");
+      return {texto: String(t || "").trim(), truncado: !!(c && c.finish_reason === "length")};
+    };
+  } else {
+    url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(modelo) + ":generateContent";
+    init = {method: "POST", headers: {"content-type": "application/json", "x-goog-api-key": key}, body: JSON.stringify({contents: [{role: "user", parts: [{text: texto}]}]})};
+    extraer = j => {
+      const c = j.candidates && j.candidates[0];
+      const t = c && c.content && (c.content.parts || []).map(p => p.text || "").join("").trim();
+      if (!t && j.promptFeedback && j.promptFeedback.blockReason) throw {mensaje: "Gemini bloqueó la solicitud (" + j.promptFeedback.blockReason + ").", final: true};
+      return {texto: t || "", truncado: !!(c && c.finishReason === "MAX_TOKENS")};
+    };
+  }
+  if (signal) init.signal = signal;
+  let r;
+  try { r = await fetch(url, init); }
+  catch(e){ if (e && e.name === "AbortError") throw e; throw {mensaje: "No se pudo conectar con " + P.corto + ". Revisa tu conexión a internet.", red: true}; }
+  let j = null;
+  try { j = await r.json(); } catch(e){}
+  if (!r.ok) throw {mensaje: mensajeApi(prov, r.status, j), red: r.status === 429 || r.status >= 500, final: r.status !== 429 && r.status < 500};
+  const out = extraer(j || {});
+  if (!out.texto) throw {mensaje: "La IA no devolvió texto. Intenta de nuevo.", red: true};
+  return out;
+}
+function mensajeApi(prov, st, j){
+  const P = PROV[prov], det = j && j.error ? String(j.error.message || j.error.type || j.error.status || "") : "";
+  if (st === 401 || st === 403 || /api key/i.test(det)) return "La clave API de " + P.corto + " no es válida o no tiene permisos. Revísala en Ajustes.";
+  if (st === 429) return "Se alcanzó el límite de uso o de saldo de tu cuenta de " + P.corto + ". Espera un momento o revisa la facturación.";
+  if (st === 404) return "El modelo «" + modeloDe(prov) + "» no está disponible para tu clave. Cámbialo en Ajustes.";
+  if (st === 413) return "El caso es demasiado largo para enviarlo de una vez.";
+  if (st >= 500) return P.corto + " no respondió (error " + st + "). Intenta de nuevo en unos minutos.";
+  return "Error " + st + " de " + P.corto + (det ? ": " + det : ".");
+}
+// Un solo mensaje con el caso; devuelve {texto, truncado}
+async function enviarIA(prov, texto, signal){
+  if (prov !== "claude-app") return viaAPI(prov, texto, signal);
+  if (!sampleFn) throw {mensaje: "Claude con tu cuenta solo funciona dentro de la app de Claude. Ábrela ahí o elige otro proveedor en Ajustes.", final: true};
+  try { return await viaCuenta([{rol: "user", texto}], [], signal || new AbortController().signal, () => {}); }
+  catch(err){ throw {mensaje: mensajeError(err), red: err && ["rate_limited"].includes(err.code), final: !(err && err.code === "rate_limited")}; }
+}
+
+/* ===================== modo automático: foto → texto → anonimizado → validado → enviado ===================== */
+const NOTA_AUTO = `NOTA DE LA APP (no es una instrucción clínica): el texto del médico se leyó en su teléfono desde fotos o PDF (lectura automática: puede traer errores de lectura, sobre todo en decimales, unidades y tablas; si un valor no es coherente, dilo en vez de corregirlo en silencio) y se anonimizó en el dispositivo antes de enviártelo. No se adjuntan imágenes. Los marcadores entre corchetes, como [NOMBRE_1], [RUT_1] o [FECHA_2], reemplazan datos personales: cuando necesites esos datos, escribe el marcador exactamente igual; no los adivines ni los trates como datos faltantes. La fecha de nacimiento se reemplazó por la edad («edad: X años»); las demás fechas (toma de muestra, informe, ingreso, alta, controles) son las reales. En esta app no puedes crear archivos ni ver los archivos del proyecto: si las instrucciones piden un .docx o una plantilla, entrega todo el contenido como texto listo para copiar, respetando la estructura indicada.`;
+function mensajeAuto(salida, tareaId){
+  const t = TAREAS.find(x => x.id === tareaId);
+  return NOTA_AUTO +
+    "\n\n=== PREFERENCIAS GENERALES DEL MÉDICO ===\n" + P.preferencias.trim() +
+    (t ? "\n\n=== INSTRUCCIONES DEL PROYECTO «" + t.nombre.toUpperCase() + "» ===\n" + P[t.id].trim() : "") +
+    "\n\n=== TEXTO DEL MÉDICO ===\n" + salida;
+}
+const casosAuto = [];
+let nCasoAuto = 0;
+const ESTADO_CASO = {capturando: "Capturando", procesando: "Procesando", enviado: "Enviado", listo: "Listo", revision: "Requiere revisión", error: "Error"};
+
+// Lee una foto en el teléfono (en la misma fila de espera que las demás lecturas). Devuelve el texto de una
+// lectura limpia, para enviar, y el análisis de la lectura doble (nombres, RUT y folios que se buscarán en ese texto)
+function leerFotoAuto(blob){
+  const p = ocrCola.then(() => leerFotoTexto(blob));
+  ocrCola = p.catch(() => {});
+  return p;
+}
+async function leerFotoTexto(blob){
+  const {im, u} = await cargarImagenBlob(blob);
+  const c = document.createElement("canvas");
+  try {
+    const k = Math.min(1, MAXL / Math.max(im.naturalWidth, im.naturalHeight));
+    const w = Math.max(1, Math.round(im.naturalWidth * k)), h = Math.max(1, Math.round(im.naturalHeight * k));
+    c.width = w; c.height = h;
+    const cc = c.getContext("2d", {willReadFrequently: true}); cc.drawImage(im, 0, 0, w, h);
+    // La hoja en la foto (bordes, perspectiva, renglones), igual que al tapar una foto en el modo manual
+    let hoja = null, cuad = null;
+    try {
+      const gris = grisDe(cc, w, h);
+      hoja = Anon.analizarHoja(gris, w, h);
+      if (hoja.zona && Math.max(w, h) >= 1000){
+        const z = hoja.zona;
+        cuad = Anon.detectarHoja(gris, w, h, hoja) || cuadDe(z.x0, z.y0, z.x1, z.y1);
+        const t = Anon.tamanoCuad(cuad);
+        if (t.ancho * t.alto >= w * h * 0.92){ cuad = null; hoja.contorno = hoja.casco = null; }
+      }
+    } catch(e){ hoja = null; cuad = null; }
+    const q = cuad || (hoja && hoja.zona ? cuadDe(0, 0, w, h) : null);
+    const L = await leerHoja({img: im, w, h, casco: hoja && hoja.casco, blanco: hoja && hoja.contorno}, c, q, hoja && hoja.paso, {}, true, {texto: (window.__velo && window.__velo.modoTexto) || MODO_TEXTO});
+    return {texto: L.texto || "", analisis: L.analisis};
+  } finally { c.width = c.height = 0; URL.revokeObjectURL(u); }
+}
+// Modo del lector para el texto que se envía (6: un bloque de texto; en las pruebas conserva mejor las fechas y cada
+// rótulo junto a su valor que el modo de texto suelto o el de una columna)
+const MODO_TEXTO = "6";
+// Fotos, PDF o Word de un caso → texto por página, más lo que la lectura doble encontró para ocultar
+async function leerArchivosAuto(archivos, avance){
+  const paginas = [], analisis = [];
+  const deFoto = async b => { avance(paginas.length + 1); const r = await leerFotoAuto(b); paginas.push(r.texto); if (r.analisis) analisis.push(r.analisis); };
+  for (const f of archivos){
+    const n = (f.name || "").toLowerCase(), tipo = f.type || "";
+    if (tipo === "application/pdf" || n.endsWith(".pdf")){
+      const lib = await cargarPdfjs();
+      const pdf = await lib.getDocument({data: new Uint8Array(await f.arrayBuffer()), isEvalSupported: false, useSystemFonts: true}).promise;
+      try {
+        const t = await textoPdf(pdf);
+        if (t.replace(/\s/g, "").length >= 40 * Math.min(pdf.numPages, 3)) paginas.push(t);
+        else for (let p = 1; p <= Math.min(pdf.numPages, MAX_FOTOS); p++){ const b = await paginaComoImagen(pdf, p); if (b) await deFoto(b); }
+      } finally { try { pdf.destroy(); } catch(e){} }
+    }
+    else if (n.endsWith(".docx")) paginas.push(await Anon.leerDocx(await f.arrayBuffer()));
+    else if (tipo.startsWith("text/") || /\.(txt|md|csv)$/.test(n)) paginas.push(await f.text());
+    else await deFoto(f);
+  }
+  // Lo que la lectura doble reconoció (nombres, RUT, folios, direcciones…), para ocultarlo también en el texto
+  const ocultar = [], nombres = new Set();
+  for (const an of analisis){
+    for (const d of an.dets.concat(an.campos || [])){
+      if (d.repl || d.tipo === "FECHA" || d.tipo === "EDAD") continue;
+      const t = (d.texto || an.texto.slice(d.s, d.e)).trim();
+      if (t.length >= 3) ocultar.push({texto: t, tipo: d.tipo, tarde: d.tipo === "NOMBRE"});
+    }
+    for (const e of Anon.entidadesDe(an)) if (e.tipo === "NOMBRE") nombres.add(e.token);
+  }
+  const texto = paginas.map((t, i) => (paginas.length > 1 ? "--- Página " + (i + 1) + " ---\n" : "") + String(t || "").trim()).join("\n\n");
+  return {texto, ocultar, nombres: [...nombres]};
+}
+function nuevoCasoAuto(archivos){
+  archivos = [...archivos].filter(Boolean); if (!archivos.length) return;
+  const c = {id: Date.now() + "-" + (++nCasoAuto), n: nCasoAuto, creado: Date.now(), estado: "procesando", archivos,
+    prov: aj.prov, modelo: modeloDe(aj.prov), tarea: aj.tarea, paso: "", enviado: "", respuesta: "", mapa: {}, residuos: [], error: ""};
+  casosAuto.unshift(c);
+  aplicarModo(); pintarCasos();
+  procesarCaso(c);
+}
+// Todo el flujo sin tocar la pantalla. Lo único que lo detiene es el validador ("Requiere revisión")
+async function procesarCaso(c){
+  try {
+    if (!c.enviado){
+      c.estado = "procesando"; c.error = "";
+      const n = c.archivos.length;
+      const lect = await leerArchivosAuto(c.archivos, i => { c.paso = "Leyendo " + (n > 1 ? "la página " + Math.min(i, n) + " de " + n : "la página") + " en el teléfono…"; pintarCasos(); });
+      if (!lect.texto.replace(/[-\s]|Página \d+/g, "")) throw {mensaje: "No se pudo leer texto en las fotos. Prueba con más luz y la hoja completa en la foto.", final: true};
+      c.paso = "Ocultando datos personales y validando…"; pintarCasos();
+      const p = Anon.protegerAuto(lect.texto, {nombres: lect.nombres, ocultar: lect.ocultar, rondas: window.__velo ? window.__velo.rondas : undefined});
+      c.archivos = null;   // las imágenes ya no se usan
+      if (!p.ok){ c.estado = "revision"; c.residuos = [...p.residuos].map(r => ({tipo: r.tipo, texto: r.texto})); c.paso = ""; pintarCasos(); avisarCaso(c); return; }
+      c.mapa = Object.assign({}, p.cons.mapa);
+      c.enviado = mensajeAuto(p.cons.salida, c.tarea);
+    }
+    c.estado = "enviado"; c.error = ""; c.paso = "Esperando la respuesta de " + PROV[c.prov].corto + "…"; pintarCasos();
+    const r = await enviarIA(c.prov, c.enviado);
+    c.respuesta = r.texto; c.truncado = !!r.truncado; c.estado = "listo"; c.paso = "";
+  } catch(err){
+    c.estado = "error"; c.paso = "";
+    c.error = (err && err.mensaje) || (err && err.message ? "Error: " + err.message : "Ocurrió un error inesperado.");
+  }
+  pintarCasos(); avisarCaso(c);
+}
+// Aviso al terminar un caso (en el paso 6: notificación del sistema)
+function avisarCaso(c){
+  toast(c.estado === "listo" ? "Análisis listo" : c.estado === "revision" ? "Un caso requiere revisión" : "Un caso no se pudo completar");
+}
+function pintarCasos(){
+  $("bloqueCasos").hidden = !aj.auto || !casosAuto.length;
+  const hora = t => new Date(t).toLocaleTimeString("es-CL", {hour: "2-digit", minute: "2-digit"});
+  $("casos").innerHTML = casosAuto.map(c => {
+    let h = '<article class="caso-auto" data-caso="' + esc(c.id) + '"><div class="caso-cab"><strong>Caso ' + c.n + '</strong>' +
+      '<span class="insignia e-' + c.estado + '">' + ESTADO_CASO[c.estado] + "</span>" +
+      '<span class="nota">' + hora(c.creado) + " · " + esc(nombreTarea(c.tarea)) + " · " + esc(PROV[c.prov].corto) + "</span></div>";
+    if (c.paso) h += '<p class="estado cargando">' + esc(c.paso) + "</p>";
+    if (c.estado === "revision") h += '<p class="estado error">' + esc(MSG_REVISION_AUTO(c.residuos)) + "</p>";
+    if (c.estado === "error") h += '<p class="estado error">' + esc(c.error) + '</p><div class="fila"><button class="btn sec chico" type="button" data-reintentar="' + esc(c.id) + '">Reintentar</button></div>';
+    if (c.estado === "listo"){
+      h += '<div class="resp">' + renderMd(c.respuesta, c.mapa) + "</div>" + (c.truncado ? '<p class="nota">La respuesta quedó incompleta.</p>' : "") +
+        '<div class="fila"><button class="btn sec chico" type="button" data-copiar-caso="' + esc(c.id) + '">Copiar</button></div>';
+    }
+    if (c.enviado) h += '<details data-ver="' + esc(c.id) + '"' + (c.verEnviado ? " open" : "") + '><summary>Ver lo enviado</summary><pre class="out">' + esc(c.enviado) + "</pre></details>";
+    return h + "</article>";
+  }).join("");
+}
+const MSG_REVISION_AUTO = rs => "Requiere revisión: quedó a la vista " + textoResiduos(rs) + " y no se pudo ocultar. No se envió. Revisa el documento en el modo manual.";
+const casoPorId = id => casosAuto.find(c => c.id === id);
+$("casos").addEventListener("click", async e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.reintentar){ const c = casoPorId(b.dataset.reintentar); if (c && c.estado === "error"){ if (!c.enviado && !c.archivos){ toast("Las fotos de este caso ya no están: sácalas de nuevo."); return; } c.prov = aj.prov; c.modelo = modeloDe(aj.prov); procesarCaso(c); } }
+  else if (b.dataset.copiarCaso){ const c = casoPorId(b.dataset.copiarCaso); if (c) toast(await copiarTexto(Anon.restaurar(textoPlano(c.respuesta), c.mapa).salida) ? "Respuesta copiada" : "No se pudo copiar: mantén presionado el texto"); }
+});
+// (los detalles abiertos siguen abiertos al repintar)
+$("casos").addEventListener("toggle", e => { const d = e.target; if (d.dataset && d.dataset.ver){ const c = casoPorId(d.dataset.ver); if (c) c.verEnviado = d.open; } }, true);
+
+/* ---------- la cámara: varias páginas de un mismo caso y luego «Listo» ---------- */
+let camStream = null, camPaginas = [];
+function pintarCam(){
+  $("camMini").innerHTML = camPaginas.map((p, i) => '<img src="' + esc(p.url) + '" alt="Página ' + (i + 1) + '">').join("");
+  $("camListo").disabled = !camPaginas.length;
+  $("camListo").textContent = camPaginas.length ? "Listo (" + camPaginas.length + ")" : "Listo";
+  $("camDisparo").disabled = !camStream || camPaginas.length >= MAX_FOTOS;
+}
+async function abrirCamara(){
+  camPaginas = []; $("camSistema").hidden = true;
+  $("camara").hidden = false; document.body.classList.add("modal-abierto");
+  $("camInfo").textContent = "Abriendo la cámara…"; pintarCam();
+  try {
+    if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) throw new Error("sin cámara");
+    camStream = await navigator.mediaDevices.getUserMedia({audio: false, video: {facingMode: {ideal: "environment"}, width: {ideal: 3264}, height: {ideal: 2448}}});
+    if ($("camara").hidden){ detenerCamara(); return; }
+    $("camVideo").srcObject = camStream;
+    try { await $("camVideo").play(); } catch(e){}
+    $("camInfo").textContent = "Encuadra la hoja completa, con buena luz, y toca el botón. Puedes sacar varias páginas del mismo caso; al terminar, «Listo».";
+  } catch(e){
+    camStream = null;
+    // Sin permiso de cámara aquí (por ejemplo, dentro de otra app): la cámara del sistema, una foto por vez
+    $("camInfo").textContent = "No se pudo abrir la cámara en la app. Usa la cámara del sistema o «Elegir fotos o PDF».";
+    $("camSistema").hidden = false;
+  }
+  pintarCam();
+}
+function detenerCamara(){
+  if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  $("camVideo").srcObject = null;
+}
+function cerrarCamara(){
+  detenerCamara(); camPaginas.forEach(p => URL.revokeObjectURL(p.url)); camPaginas = [];
+  $("camara").hidden = true; document.body.classList.remove("modal-abierto");
+}
+async function capturar(){
+  const v = $("camVideo"); if (!camStream || !v.videoWidth || camPaginas.length >= MAX_FOTOS) return;
+  const c = document.createElement("canvas"); c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext("2d").drawImage(v, 0, 0);
+  const b = await new Promise(r => c.toBlob(r, "image/jpeg", 0.92)); c.width = c.height = 0;
+  if (!b) return;
+  camPaginas.push({blob: b, url: URL.createObjectURL(b)});
+  $("camInfo").textContent = camPaginas.length === 1 ? "1 página. Saca la siguiente o toca «Listo»." : camPaginas.length + " páginas. Saca la siguiente o toca «Listo».";
+  pintarCam();
+}
+$("btnCamara").addEventListener("click", abrirCamara);
+$("camDisparo").addEventListener("click", capturar);
+$("camCancelar").addEventListener("click", cerrarCamara);
+$("camListo").addEventListener("click", () => { const bs = camPaginas.map(p => p.blob); cerrarCamara(); nuevoCasoAuto(bs); });
+$("camaraNativa").addEventListener("change", e => { const l = [...(e.target.files || [])]; e.target.value = ""; if (!$("camara").hidden) cerrarCamara(); nuevoCasoAuto(l); });
+$("btnElegirAuto").addEventListener("click", () => $("adjuntoAuto").click());
+$("adjuntoAuto").addEventListener("change", e => { const l = [...(e.target.files || [])]; e.target.value = ""; nuevoCasoAuto(l); });
+
 /* ===================== nuevo caso y borrado automático ===================== */
 let confNuevo = null;
 const TXT_NUEVO = "Empezar otro caso";
@@ -3953,7 +4427,7 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 
 /* ===================== inicio ===================== */
 if (!enMarco && "serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("./sw.js").catch(() => {});
-pintarTareas(); pintarFotos(); analizar(); pintarHilo(); pintarSeg();
+pintarTareas(); pintarFotos(); analizar(); pintarHilo(); pintarSeg(); aplicarModo(); pintarCasos();
 })();
 </script>
 </body>
