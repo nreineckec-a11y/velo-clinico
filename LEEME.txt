@@ -18,6 +18,7 @@ MODO AUTOMÁTICO (activado por omisión; se apaga en Ajustes)
 - Sin registros: la app no escribe nada en la consola ni tiene analítica; la única conexión es la consulta (ya anonimizada) a la IA elegida. Las fotos originales y el texto sin anonimizar nunca salen del teléfono.
 - Ajustes: proveedor (Claude con tu cuenta dentro de la app de Claude, o Claude, ChatGPT o Gemini con tu clave API), modelo (por omisión claude-opus-5-5) y prompt por defecto (por omisión, Transcriptor de exámenes). La clave queda solo en el teléfono (puedes no recordarla) y la consulta va directo del teléfono al proveedor.
 - El texto leído en el teléfono puede traer errores (decimales, unidades, tablas): la IA recibe ese aviso. Revisa «Ver lo enviado» cuando un valor no te cuadre.
+- Acceso rápido en iPhone: en Ajustes, «Abrir la cámara al iniciar la app»; así, al tocar el ícono de Velo en la pantalla de inicio la cámara queda lista. La dirección de la app terminada en «?camara» hace lo mismo. (Una app web no puede tener App Intents, botón de acción ni extensión para compartir: son exclusivos de las apps nativas. Un Atajo que abre la dirección la abre en Safari, que no comparte los ajustes ni los casos con la app instalada.)
 - Dentro de la app de Claude la cámara puede no estar disponible: usa «Usar la cámara del sistema» o «Elegir fotos o PDF».
 
 MODO MANUAL

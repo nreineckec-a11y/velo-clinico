@@ -154,3 +154,24 @@ test("con el modo automático apagado, la app manual de siempre (sin cámara ni 
   assert.deepEqual(pg.errores, []);
   await pg.context().close();
 });
+
+/* ---------- acceso rápido (iPhone) ---------- */
+test("«?camara» o «Abrir la cámara al iniciar»: la app abre directo en la cámara del modo automático", {skip: saltar}, async () => {
+  for (const [ajustes, url] of [[Object.assign({}, AJ_CLAUDE, {auto: false}), "?camara"], [Object.assign({}, AJ_CLAUDE, {camaraAlIniciar: true}), ""]]){
+    const pg = await abrir(ajustes);
+    if (url) await pg.goto(pg.url().replace(/\?.*$/, "") + "?prueba&camara");
+    await pg.waitForFunction(() => !document.querySelector("#camara").hidden && !document.querySelector("#camDisparo").disabled);
+    await pg.click("#camDisparo");
+    await pg.waitForFunction(() => document.querySelectorAll("#camMini img").length === 1);
+    await pg.click("#camListo");
+    await esperarCaso(pg);
+    assert.equal(await estadoCaso(pg), "Listo");
+    assert.equal(await pg.evaluate(() => JSON.parse(localStorage.getItem("velo_ajustes")).auto), true);
+    await pg.context().close();
+  }
+  // Sin la opción, la app abre en su pantalla de siempre
+  const pg = await abrir(AJ_CLAUDE);
+  await pg.waitForTimeout(500);
+  assert.equal(await pg.isVisible("#camara"), false);
+  await pg.context().close();
+});

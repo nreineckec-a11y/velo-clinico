@@ -306,6 +306,7 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
   </div>
   <div class="ajustes-cuerpo">
     <label class="check"><input type="checkbox" id="ajAuto"><span><b>Modo automático</b><br><span class="nota">Foto → lectura en el teléfono → datos personales ocultos → validación → envío → resultado, sin confirmaciones. Solo sale el texto anonimizado: ninguna imagen. Si el validador encuentra un dato que no puede ocultar, el caso queda en «Requiere revisión» y no se envía.</span></span></label>
+    <label class="check"><input type="checkbox" id="ajCamaraInicio"><span><b>Abrir la cámara al iniciar la app</b><br><span class="nota">Al tocar el ícono de Velo en la pantalla de inicio, la cámara queda lista para fotografiar (al volver a la app desde otra, no). También abre la cámara la dirección de la app terminada en «?camara».</span></span></label>
     <label class="lbl" for="ajProv">Proveedor</label>
     <select id="ajProv"></select>
     <label class="lbl" for="ajModelo">Modelo</label>
@@ -4061,7 +4062,7 @@ const PROV = {
 };
 const LS_AJ = "velo_ajustes";
 const ajustesBase = () => ({auto: true, prov: enMarco ? "claude-app" : "claude", modelos: {}, claves: {}, recordar: true, tarea: "exam",
-  avisar: true, plazoBorrado: 24, conservarFotos: false});
+  avisar: true, plazoBorrado: 24, conservarFotos: false, camaraAlIniciar: false});
 function leerAjustes(){
   let g = null;
   try { g = JSON.parse(localStorage.getItem(LS_AJ) || "null"); } catch(e){}
@@ -4069,7 +4070,7 @@ function leerAjustes(){
   a.modelos = Object.assign({}, a.modelos); a.claves = Object.assign({}, a.claves);
   if (!PROV[a.prov] || (a.prov === "claude-app" && !enMarco)) a.prov = ajustesBase().prov;
   if (a.tarea && !TAREAS.some(t => t.id === a.tarea)) a.tarea = null;
-  a.auto = a.auto !== false; a.avisar = a.avisar !== false; a.conservarFotos = a.conservarFotos === true;
+  a.auto = a.auto !== false; a.avisar = a.avisar !== false; a.conservarFotos = a.conservarFotos === true; a.camaraAlIniciar = a.camaraAlIniciar === true;
   if (![0, 1, 24, 168].includes(a.plazoBorrado)) a.plazoBorrado = 24;
   return a;
 }
@@ -4084,7 +4085,7 @@ const nombreTarea = id => { const t = TAREAS.find(x => x.id === id); return t ? 
 
 function pintarAjustes(){
   const p = aj.prov, P = PROV[p];
-  $("ajAuto").checked = aj.auto;
+  $("ajAuto").checked = aj.auto; $("ajCamaraInicio").checked = aj.camaraAlIniciar;
   $("ajProv").innerHTML = Object.keys(PROV).filter(k => k !== "claude-app" || enMarco)
     .map(k => '<option value="' + k + '"' + (k === p ? " selected" : "") + ">" + esc(PROV[k].nombre) + "</option>").join("");
   $("ajModelo").disabled = !!P.sinClave;
@@ -4120,6 +4121,7 @@ $("ajRecordar").addEventListener("change", () => {
   guardarAjustes();
 });
 $("ajTarea").addEventListener("change", () => { aj.tarea = $("ajTarea").value || null; guardarAjustes(); aplicarModo(); });
+$("ajCamaraInicio").addEventListener("change", () => { aj.camaraAlIniciar = $("ajCamaraInicio").checked; guardarAjustes(); });
 $("ajAvisar").addEventListener("change", () => { aj.avisar = $("ajAvisar").checked; guardarAjustes(); pedirPermisoAvisos(); });
 $("ajPlazo").addEventListener("change", () => { aj.plazoBorrado = +$("ajPlazo").value; guardarAjustes(); limpiarVencidos(); });
 $("ajFotos").addEventListener("change", () => { aj.conservarFotos = $("ajFotos").checked; guardarAjustes(); });
@@ -4615,6 +4617,10 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 /* ===================== inicio ===================== */
 if (!enMarco && "serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("./sw.js").catch(() => {});
 pintarTareas(); pintarFotos(); analizar(); pintarHilo(); pintarSeg(); aplicarModo(); pintarCasos(); cargarCola();
+// Acceso rápido: al iniciar la app (no al volver a ella), directo a la cámara del modo automático, si se pidió en Ajustes
+// o con «?camara» en la dirección
+if (/[?&]camara\b/.test(location.search) && !aj.auto){ aj.auto = true; guardarAjustes(); aplicarModo(); }
+if (aj.auto && (aj.camaraAlIniciar || /[?&]camara\b/.test(location.search))) abrirCamara();
 })();
 </script>
 </body>
