@@ -1,45 +1,12 @@
 // Pruebas de la app en un navegador (sin fotos): el validador final antes de copiar o enviar.
 // Requiere Playwright y Chromium (npm install); sin ellos se saltan. Todos los datos son ficticios.
-import {test, before, after} from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
-import http from "node:http";
-import fs from "node:fs";
-import path from "node:path";
-import {fileURLToPath} from "node:url";
+import {saltar, abrir as abrirApp} from "./navegador.mjs";
 
-const RAIZ = fileURLToPath(new URL("..", import.meta.url));
-let chromium = null, navegador = null, motivo = "";
-try { ({chromium} = await import("playwright")); } catch { motivo = "falta Playwright (npm install)"; }
-if (chromium){ try { navegador = await chromium.launch(); } catch { motivo = "no se pudo abrir Chromium"; } }
-const saltar = navegador ? false : motivo;
-
-const TIPOS = {".html": "text/html; charset=utf-8", ".js": "text/javascript", ".json": "application/json", ".png": "image/png", ".webmanifest": "application/manifest+json"};
-let servidor = null, base = "";
-before(async () => {
-  if (!navegador) return;
-  servidor = http.createServer((req, res) => {
-    const ruta = decodeURIComponent(new URL(req.url, "http://x").pathname);
-    const archivo = path.join(RAIZ, ruta === "/" ? "index.html" : ruta);
-    if (!archivo.startsWith(RAIZ) || !fs.existsSync(archivo) || fs.statSync(archivo).isDirectory()){ res.writeHead(404); res.end(); return; }
-    res.writeHead(200, {"Content-Type": TIPOS[path.extname(archivo)] || "application/octet-stream"});
-    fs.createReadStream(archivo).pipe(res);
-  });
-  await new Promise(r => servidor.listen(0, "127.0.0.1", r));
-  base = "http://127.0.0.1:" + servidor.address().port;
-});
-after(async () => {
-  if (navegador) await navegador.close();
-  if (servidor) await new Promise(r => servidor.close(r));
-});
-
+// (estas pruebas son del modo manual)
 async function abrir(antes){
-  const ctx = await navegador.newContext({viewport: {width: 390, height: 844}});
-  const pg = await ctx.newPage();
-  pg.errores = [];
-  pg.on("pageerror", e => pg.errores.push(String(e)));
-  // (estas pruebas son del modo manual)
-  await pg.addInitScript(() => localStorage.setItem("velo_ajustes", JSON.stringify({auto: false})));
-  await pg.goto(base + "/index.html?prueba");
+  const pg = await abrirApp({auto: false});
   if (antes) await pg.evaluate(antes);
   return pg;
 }

@@ -4189,12 +4189,20 @@ function mensajeApi(prov, st, j){
   if (st >= 500) return P.corto + " no respondió (error " + st + "). Intenta de nuevo en unos minutos.";
   return "Error " + st + " de " + P.corto + (det ? ": " + det : ".");
 }
-// Un solo mensaje con el caso; devuelve {texto, truncado}
-async function enviarIA(prov, texto, signal){
+// Un solo mensaje con el caso; devuelve {texto, truncado}. Si no hay respuesta en 10 minutos (una conexión que iOS
+// dejó colgada al bloquear el teléfono), cuenta como error de red y se reintenta
+const ESPERA_RESPUESTA = 10 * 60 * 1000;
+async function enviarIA(prov, texto){
+  const ctl = new AbortController(), reloj = setTimeout(() => ctl.abort(), (window.__velo && window.__velo.esperaRespuesta) || ESPERA_RESPUESTA);
+  try { return await enviarUna(prov, texto, ctl.signal); }
+  catch(err){ if (err && err.name === "AbortError") throw {mensaje: PROV[prov].corto + " no respondió a tiempo.", red: true}; throw err; }
+  finally { clearTimeout(reloj); }
+}
+async function enviarUna(prov, texto, signal){
   if (prov !== "claude-app") return viaAPI(prov, texto, signal);
   if (!sampleFn) throw {mensaje: "Claude con tu cuenta solo funciona dentro de la app de Claude. Ábrela ahí o elige otro proveedor en Ajustes.", final: true};
-  try { return await viaCuenta([{rol: "user", texto}], [], signal || new AbortController().signal, () => {}); }
-  catch(err){ throw {mensaje: mensajeError(err), red: err && ["rate_limited"].includes(err.code), final: !(err && err.code === "rate_limited")}; }
+  try { return await viaCuenta([{rol: "user", texto}], [], signal, () => {}); }
+  catch(err){ if (err && err.code === "cancelled") throw Object.assign(new Error("tiempo"), {name: "AbortError"}); throw {mensaje: mensajeError(err), red: err && ["rate_limited"].includes(err.code), final: !(err && err.code === "rate_limited")}; }
 }
 
 /* ===================== modo automático: foto → texto → anonimizado → validado → enviado ===================== */
@@ -4277,18 +4285,74 @@ async function leerArchivosAuto(archivos, avance){
   const texto = paginas.map((t, i) => (paginas.length > 1 ? "--- Página " + (i + 1) + " ---\n" : "") + String(t || "").trim()).join("\n\n");
   return {texto, ocultar, nombres: [...nombres]};
 }
-function nuevoCasoAuto(archivos){
-  archivos = [...archivos].filter(Boolean); if (!archivos.length) return;
-  const c = {id: Date.now() + "-" + (++nCasoAuto), n: nCasoAuto, creado: Date.now(), estado: "procesando", archivos,
+/* ---------- la cola de casos, guardada en el dispositivo (IndexedDB) ---------- */
+// Si iOS cierra la app (al bloquear el teléfono o al pasar a otra), cada caso sigue donde quedó al volver a abrirla.
+// Se guarda lo justo para eso: las fotos solo hasta que se leen y anonimizan; después, lo que se envía (ya
+// anonimizado), la respuesta y los marcadores para mostrarla con los datos reales. Nada de esto sale del teléfono.
+const BD = {nombre: "velo", almacen: "casos"};
+let bdPromesa = null;
+function abrirBD(){
+  if (!bdPromesa){
+    bdPromesa = new Promise((ok, mal) => {
+      if (!window.indexedDB){ mal(new Error("sin almacenamiento")); return; }
+      const rq = indexedDB.open(BD.nombre, 1);
+      rq.onupgradeneeded = () => { if (!rq.result.objectStoreNames.contains(BD.almacen)) rq.result.createObjectStore(BD.almacen, {keyPath: "id"}); };
+      rq.onsuccess = () => ok(rq.result);
+      rq.onerror = () => mal(rq.error);
+    });
+    bdPromesa.catch(() => { bdPromesa = null; });
+  }
+  return bdPromesa;
+}
+// (sin almacenamiento, por ejemplo en navegación privada, la cola vive solo en memoria)
+async function bdHacer(modo, fn){
+  try {
+    const db = await abrirBD();
+    return await new Promise((ok, mal) => {
+      const tx = db.transaction(BD.almacen, modo), r = fn(tx.objectStore(BD.almacen));
+      tx.oncomplete = () => ok(r ? r.result : undefined);
+      tx.onerror = tx.onabort = () => mal(tx.error);
+    });
+  } catch(e){ return null; }
+}
+const CAMPOS_CASO = ["id", "n", "creado", "estado", "prov", "modelo", "tarea", "archivos", "enviado", "respuesta", "truncado", "mapa", "residuos", "error"];
+function guardarCaso(c){ const r = {}; for (const k of CAMPOS_CASO) r[k] = c[k]; return bdHacer("readwrite", st => st.put(r)); }
+const borrarCasoBD = id => bdHacer("readwrite", st => st.delete(id));
+const leerCasosBD = () => bdHacer("readonly", st => st.getAll());
+// Cada cambio de un caso se muestra y se guarda
+function actualizar(c){ pintarCasos(); if (casosAuto.includes(c)) guardarCaso(c); }
+
+function crearCaso(estado, archivos){
+  const c = {id: Date.now() + "-" + (++nCasoAuto), n: nCasoAuto, creado: Date.now(), estado, archivos,
     prov: aj.prov, modelo: modeloDe(aj.prov), tarea: aj.tarea, paso: "", enviado: "", respuesta: "", mapa: {}, residuos: [], error: ""};
   casosAuto.unshift(c);
-  aplicarModo(); pintarCasos();
-  procesarCaso(c);
+  aplicarModo(); actualizar(c);
+  return c;
 }
-// Todo el flujo sin tocar la pantalla. Lo único que lo detiene es el validador ("Requiere revisión")
+function nuevoCasoAuto(archivos){
+  archivos = [...archivos].filter(Boolean); if (!archivos.length) return;
+  procesarCaso(crearCaso("procesando", archivos));
+}
+function quitarCaso(c){
+  const i = casosAuto.indexOf(c); if (i >= 0) casosAuto.splice(i, 1);
+  borrarCasoBD(c.id); aplicarModo(); pintarCasos();
+}
+
+/* ---------- procesar un caso: todo el flujo sin tocar la pantalla ---------- */
+const activos = new Set();   // casos que se están procesando ahora
+const REINTENTOS = 3;
+// Espera antes de cada reintento: 2, 4 y 8 s
+const esperaReintento = i => ((window.__velo && window.__velo.esperaBase) || 2000) * 2 ** i;
+const dormir = ms => new Promise(r => setTimeout(r, ms));
+// Lo único que lo detiene es el validador ("Requiere revisión"). Un error de red, de límite de uso o del servidor se
+// reintenta hasta 3 veces; después (o con un error que no se arregla reintentando, como una clave inválida) queda en
+// "Error" con la opción de reintentar.
 async function procesarCaso(c){
+  if (activos.has(c.id) || !["procesando", "enviado", "error"].includes(c.estado)) return;
+  activos.add(c.id); mantenerPantalla();
   try {
     if (!c.enviado){
+      if (!c.archivos || !c.archivos.length) throw {mensaje: "Las fotos de este caso ya no están: sácalas de nuevo.", final: true};
       c.estado = "procesando"; c.error = "";
       const n = c.archivos.length;
       const lect = await leerArchivosAuto(c.archivos, i => { c.paso = "Leyendo " + (n > 1 ? "la página " + Math.min(i, n) + " de " + n : "la página") + " en el teléfono…"; pintarCasos(); });
@@ -4296,37 +4360,83 @@ async function procesarCaso(c){
       c.paso = "Ocultando datos personales y validando…"; pintarCasos();
       const p = Anon.protegerAuto(lect.texto, {nombres: lect.nombres, ocultar: lect.ocultar, rondas: window.__velo ? window.__velo.rondas : undefined});
       c.archivos = null;   // las imágenes ya no se usan
-      if (!p.ok){ c.estado = "revision"; c.residuos = [...p.residuos].map(r => ({tipo: r.tipo, texto: r.texto})); c.paso = ""; pintarCasos(); avisarCaso(c); return; }
-      c.mapa = Object.assign({}, p.cons.mapa);
-      c.enviado = mensajeAuto(p.cons.salida, c.tarea);
+      if (p.ok){ c.mapa = Object.assign({}, p.cons.mapa); c.enviado = mensajeAuto(p.cons.salida, c.tarea); }
+      else { c.estado = "revision"; c.residuos = [...p.residuos].map(r => ({tipo: r.tipo, texto: r.texto})); c.paso = ""; }
     }
-    c.estado = "enviado"; c.error = ""; c.paso = "Esperando la respuesta de " + PROV[c.prov].corto + "…"; pintarCasos();
-    const r = await enviarIA(c.prov, c.enviado);
-    c.respuesta = r.texto; c.truncado = !!r.truncado; c.estado = "listo"; c.paso = "";
+    if (c.estado !== "revision") c.estado = "enviado", c.error = "";
+    for (let i = 0; c.estado === "enviado"; i++){
+      c.paso = "Esperando la respuesta de " + PROV[c.prov].corto + "…" + (i ? " (reintento " + i + " de " + REINTENTOS + ")" : ""); actualizar(c);
+      try {
+        const r = await enviarIA(c.prov, c.enviado);
+        c.respuesta = r.texto; c.truncado = !!r.truncado; c.estado = "listo"; c.paso = "";
+        break;
+      } catch(err){
+        if (!err || !err.red || i >= REINTENTOS) throw err;
+        const ms = esperaReintento(i);
+        c.paso = (err.mensaje || "Sin respuesta.") + " Reintento " + (i + 1) + " de " + REINTENTOS + " en " + Math.round(ms / 1000) + " s…"; actualizar(c);
+        await dormir(ms);
+      }
+    }
   } catch(err){
     c.estado = "error"; c.paso = "";
     c.error = (err && err.mensaje) || (err && err.message ? "Error: " + err.message : "Ocurrió un error inesperado.");
+  } finally {
+    activos.delete(c.id); mantenerPantalla();
   }
-  pintarCasos(); avisarCaso(c);
+  actualizar(c); avisarCaso(c);
+}
+// Al abrir la app, al volver a ella o al recuperar la conexión: cada caso pendiente sigue donde quedó (si iOS la
+// cerró mientras leía, se lee de nuevo desde las fotos guardadas; si esperaba la respuesta, se envía de nuevo lo mismo)
+function reanudar(){
+  for (const c of casosAuto) if ((c.estado === "procesando" || c.estado === "enviado") && !activos.has(c.id)) procesarCaso(c);
+}
+async function cargarCola(){
+  const lista = await leerCasosBD();
+  for (const r of lista || []) if (!casoPorId(r.id)) casosAuto.push(Object.assign({paso: ""}, r));
+  casosAuto.sort((a, b) => b.creado - a.creado);
+  nCasoAuto = Math.max(nCasoAuto, 0, ...casosAuto.map(c => c.n || 0));
+  aplicarModo(); pintarCasos(); reanudar();
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible"){ reanudar(); mantenerPantalla(); } });
+window.addEventListener("online", reanudar);
+// Mientras haya casos en curso la pantalla no se apaga sola: en una página web, iOS detiene todo al bloquear el
+// teléfono (lo que quede a medias sigue al volver)
+let bloqueoPantalla = null;
+async function mantenerPantalla(){
+  try {
+    if (activos.size && !bloqueoPantalla && navigator.wakeLock && document.visibilityState === "visible"){
+      bloqueoPantalla = await navigator.wakeLock.request("screen");
+      bloqueoPantalla.addEventListener("release", () => { bloqueoPantalla = null; });
+    } else if (!activos.size && bloqueoPantalla){ const b = bloqueoPantalla; bloqueoPantalla = null; await b.release(); }
+  } catch(e){}
 }
 // Aviso al terminar un caso (en el paso 6: notificación del sistema)
 function avisarCaso(c){
+  if (!["listo", "revision", "error"].includes(c.estado)) return;
   toast(c.estado === "listo" ? "Análisis listo" : c.estado === "revision" ? "Un caso requiere revisión" : "Un caso no se pudo completar");
 }
 function pintarCasos(){
   $("bloqueCasos").hidden = !aj.auto || !casosAuto.length;
   const hora = t => new Date(t).toLocaleTimeString("es-CL", {hour: "2-digit", minute: "2-digit"});
+  const boton = (dato, c, texto) => '<button class="btn sec chico" type="button" data-' + dato + '="' + esc(c.id) + '">' + texto + "</button>";
+  const borrar = c => '<button class="btn-texto quitar" type="button" data-borrar="' + esc(c.id) + '">' + (c.confirmarBorrar ? "Toca otra vez para borrar" : "Borrar") + "</button>";
   $("casos").innerHTML = casosAuto.map(c => {
     let h = '<article class="caso-auto" data-caso="' + esc(c.id) + '"><div class="caso-cab"><strong>Caso ' + c.n + '</strong>' +
       '<span class="insignia e-' + c.estado + '">' + ESTADO_CASO[c.estado] + "</span>" +
-      '<span class="nota">' + hora(c.creado) + " · " + esc(nombreTarea(c.tarea)) + " · " + esc(PROV[c.prov].corto) + "</span></div>";
+      '<span class="nota">' + hora(c.creado) + " · " + esc(nombreTarea(c.tarea)) + " · " + esc(PROV[c.prov] ? PROV[c.prov].corto : c.prov) + "</span></div>";
     if (c.paso) h += '<p class="estado cargando">' + esc(c.paso) + "</p>";
-    if (c.estado === "revision") h += '<p class="estado error">' + esc(MSG_REVISION_AUTO(c.residuos)) + "</p>";
-    if (c.estado === "error") h += '<p class="estado error">' + esc(c.error) + '</p><div class="fila"><button class="btn sec chico" type="button" data-reintentar="' + esc(c.id) + '">Reintentar</button></div>';
-    if (c.estado === "listo"){
-      h += '<div class="resp">' + renderMd(c.respuesta, c.mapa) + "</div>" + (c.truncado ? '<p class="nota">La respuesta quedó incompleta.</p>' : "") +
-        '<div class="fila"><button class="btn sec chico" type="button" data-copiar-caso="' + esc(c.id) + '">Copiar</button></div>';
+    if (c.estado === "capturando"){
+      const n = (c.archivos || []).length, enCamara = camCaso === c;
+      h += '<p class="nota">' + (n === 1 ? "1 página capturada" : n + " páginas capturadas") + (enCamara ? "." : ": la captura se interrumpió.") + "</p>";
+      if (!enCamara) h += '<div class="acciones">' + (n ? boton("procesar", c, "Procesar " + (n === 1 ? "la página" : "las " + n + " páginas")) : "") + borrar(c) + "</div>";
     }
+    if (c.estado === "revision") h += '<p class="estado error">' + esc(MSG_REVISION_AUTO(c.residuos)) + "</p>";
+    if (c.estado === "error") h += '<p class="estado error">' + esc(c.error) + "</p>";
+    if (c.estado === "listo"){
+      h += '<div class="resp">' + renderMd(c.respuesta, c.mapa) + "</div>" + (c.truncado ? '<p class="nota">La respuesta quedó incompleta.</p>' : "");
+    }
+    if (["listo", "revision", "error"].includes(c.estado))
+      h += '<div class="acciones">' + (c.estado === "listo" ? boton("copiar-caso", c, "Copiar") : "") + (c.estado === "error" ? boton("reintentar", c, "Reintentar") : "") + borrar(c) + "</div>";
     if (c.enviado) h += '<details data-ver="' + esc(c.id) + '"' + (c.verEnviado ? " open" : "") + '><summary>Ver lo enviado</summary><pre class="out">' + esc(c.enviado) + "</pre></details>";
     return h + "</article>";
   }).join("");
@@ -4335,22 +4445,32 @@ const MSG_REVISION_AUTO = rs => "Requiere revisión: quedó a la vista " + texto
 const casoPorId = id => casosAuto.find(c => c.id === id);
 $("casos").addEventListener("click", async e => {
   const b = e.target.closest("button"); if (!b) return;
-  if (b.dataset.reintentar){ const c = casoPorId(b.dataset.reintentar); if (c && c.estado === "error"){ if (!c.enviado && !c.archivos){ toast("Las fotos de este caso ya no están: sácalas de nuevo."); return; } c.prov = aj.prov; c.modelo = modeloDe(aj.prov); procesarCaso(c); } }
-  else if (b.dataset.copiarCaso){ const c = casoPorId(b.dataset.copiarCaso); if (c) toast(await copiarTexto(Anon.restaurar(textoPlano(c.respuesta), c.mapa).salida) ? "Respuesta copiada" : "No se pudo copiar: mantén presionado el texto"); }
+  const c = casoPorId(b.dataset.reintentar || b.dataset.copiarCaso || b.dataset.procesar || b.dataset.borrar); if (!c) return;
+  if (b.dataset.reintentar && c.estado === "error"){ c.prov = aj.prov; c.modelo = modeloDe(aj.prov); procesarCaso(c); }
+  else if (b.dataset.procesar && c.estado === "capturando"){ c.estado = "procesando"; actualizar(c); procesarCaso(c); }
+  else if (b.dataset.copiarCaso) toast(await copiarTexto(Anon.restaurar(textoPlano(c.respuesta), c.mapa).salida) ? "Respuesta copiada" : "No se pudo copiar: mantén presionado el texto");
+  else if (b.dataset.borrar){
+    // Borrar pide un segundo toque
+    if (!c.confirmarBorrar){ c.confirmarBorrar = true; pintarCasos(); setTimeout(() => { c.confirmarBorrar = false; pintarCasos(); }, 3500); return; }
+    quitarCaso(c);
+  }
 });
 // (los detalles abiertos siguen abiertos al repintar)
 $("casos").addEventListener("toggle", e => { const d = e.target; if (d.dataset && d.dataset.ver){ const c = casoPorId(d.dataset.ver); if (c) c.verEnviado = d.open; } }, true);
 
 /* ---------- la cámara: varias páginas de un mismo caso y luego «Listo» ---------- */
-let camStream = null, camPaginas = [];
+// Las páginas se guardan a medida que se sacan (caso "capturando"): si la app se cierra a mitad, no se pierden
+let camStream = null, camCaso = null, camUrls = [];
+const camPaginas = () => (camCaso && camCaso.archivos) || [];
 function pintarCam(){
-  $("camMini").innerHTML = camPaginas.map((p, i) => '<img src="' + esc(p.url) + '" alt="Página ' + (i + 1) + '">').join("");
-  $("camListo").disabled = !camPaginas.length;
-  $("camListo").textContent = camPaginas.length ? "Listo (" + camPaginas.length + ")" : "Listo";
-  $("camDisparo").disabled = !camStream || camPaginas.length >= MAX_FOTOS;
+  $("camMini").innerHTML = camUrls.map((u, i) => '<img src="' + esc(u) + '" alt="Página ' + (i + 1) + '">').join("");
+  const n = camPaginas().length;
+  $("camListo").disabled = !n;
+  $("camListo").textContent = n ? "Listo (" + n + ")" : "Listo";
+  $("camDisparo").disabled = !camStream || n >= MAX_FOTOS;
 }
 async function abrirCamara(){
-  camPaginas = []; $("camSistema").hidden = true;
+  camCaso = null; camUrls = []; $("camSistema").hidden = true;
   $("camara").hidden = false; document.body.classList.add("modal-abierto");
   $("camInfo").textContent = "Abriendo la cámara…"; pintarCam();
   try {
@@ -4372,25 +4492,37 @@ function detenerCamara(){
   if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
   $("camVideo").srcObject = null;
 }
+// Cierra la cámara; devuelve el caso que se estaba capturando (si había)
 function cerrarCamara(){
-  detenerCamara(); camPaginas.forEach(p => URL.revokeObjectURL(p.url)); camPaginas = [];
+  detenerCamara(); camUrls.forEach(u => URL.revokeObjectURL(u)); camUrls = [];
   $("camara").hidden = true; document.body.classList.remove("modal-abierto");
+  const c = camCaso; camCaso = null; pintarCasos();
+  return c;
 }
 async function capturar(){
-  const v = $("camVideo"); if (!camStream || !v.videoWidth || camPaginas.length >= MAX_FOTOS) return;
-  const c = document.createElement("canvas"); c.width = v.videoWidth; c.height = v.videoHeight;
-  c.getContext("2d").drawImage(v, 0, 0);
-  const b = await new Promise(r => c.toBlob(r, "image/jpeg", 0.92)); c.width = c.height = 0;
+  const v = $("camVideo"); if (!camStream || !v.videoWidth || camPaginas().length >= MAX_FOTOS) return;
+  const cv = document.createElement("canvas"); cv.width = v.videoWidth; cv.height = v.videoHeight;
+  cv.getContext("2d").drawImage(v, 0, 0);
+  const b = await new Promise(r => cv.toBlob(r, "image/jpeg", 0.92)); cv.width = cv.height = 0;
   if (!b) return;
-  camPaginas.push({blob: b, url: URL.createObjectURL(b)});
-  $("camInfo").textContent = camPaginas.length === 1 ? "1 página. Saca la siguiente o toca «Listo»." : camPaginas.length + " páginas. Saca la siguiente o toca «Listo».";
+  if (!camCaso) camCaso = crearCaso("capturando", []);
+  camCaso.archivos.push(b); camUrls.push(URL.createObjectURL(b));
+  actualizar(camCaso);
+  const n = camPaginas().length;
+  $("camInfo").textContent = (n === 1 ? "1 página" : n + " páginas") + ". Saca la siguiente o toca «Listo».";
   pintarCam();
 }
 $("btnCamara").addEventListener("click", abrirCamara);
 $("camDisparo").addEventListener("click", capturar);
-$("camCancelar").addEventListener("click", cerrarCamara);
-$("camListo").addEventListener("click", () => { const bs = camPaginas.map(p => p.blob); cerrarCamara(); nuevoCasoAuto(bs); });
-$("camaraNativa").addEventListener("change", e => { const l = [...(e.target.files || [])]; e.target.value = ""; if (!$("camara").hidden) cerrarCamara(); nuevoCasoAuto(l); });
+$("camCancelar").addEventListener("click", () => { const c = cerrarCamara(); if (c) quitarCaso(c); });
+$("camListo").addEventListener("click", () => { const c = cerrarCamara(); if (c){ c.estado = "procesando"; actualizar(c); procesarCaso(c); } });
+$("camaraNativa").addEventListener("change", e => {
+  const l = [...(e.target.files || [])]; e.target.value = "";
+  // (desde la cámara de la app sin permiso: las fotos del sistema se suman a las que ya hubiera)
+  const c = $("camara").hidden ? null : cerrarCamara();
+  if (c){ c.archivos = c.archivos.concat(l); c.estado = "procesando"; actualizar(c); procesarCaso(c); }
+  else nuevoCasoAuto(l);
+});
 $("btnElegirAuto").addEventListener("click", () => $("adjuntoAuto").click());
 $("adjuntoAuto").addEventListener("change", e => { const l = [...(e.target.files || [])]; e.target.value = ""; nuevoCasoAuto(l); });
 
@@ -4427,7 +4559,7 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 
 /* ===================== inicio ===================== */
 if (!enMarco && "serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("./sw.js").catch(() => {});
-pintarTareas(); pintarFotos(); analizar(); pintarHilo(); pintarSeg(); aplicarModo(); pintarCasos();
+pintarTareas(); pintarFotos(); analizar(); pintarHilo(); pintarSeg(); aplicarModo(); pintarCasos(); cargarCola();
 })();
 </script>
 </body>

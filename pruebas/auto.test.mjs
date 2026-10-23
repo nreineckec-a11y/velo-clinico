@@ -1,72 +1,15 @@
 // Modo automático en un navegador: cámara (simulada con las fotos de la epicrisis FICTICIA) → lectura en el
 // teléfono → anonimizado → validador → envío (la API del proveedor se intercepta: nada sale a internet) → resultado.
 // Requiere Playwright y Chromium (npm install); sin ellos se saltan. Todos los datos son ficticios.
-import {test, before, after} from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
-import http from "node:http";
 import fs from "node:fs";
-import path from "node:path";
-import {fileURLToPath} from "node:url";
 import {cargarMotor} from "./cargar-motor.mjs";
+import {saltar, abrir, AJ_CLAUDE} from "./navegador.mjs";
 
 const Anon = cargarMotor();
-const RAIZ = fileURLToPath(new URL("..", import.meta.url));
 const verdad = JSON.parse(fs.readFileSync(new URL("./epicrisis/verdad.json", import.meta.url), "utf8"));
 const ESPERA = 6 * 60 * 1000;
-let chromium = null, navegador = null, motivo = "";
-try { ({chromium} = await import("playwright")); } catch { motivo = "falta Playwright (npm install)"; }
-if (chromium){ try { navegador = await chromium.launch(); } catch { motivo = "no se pudo abrir Chromium"; } }
-const saltar = navegador ? false : motivo;
-
-const TIPOS = {".html": "text/html; charset=utf-8", ".js": "text/javascript", ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg",
-  ".webmanifest": "application/manifest+json", ".wasm": "application/wasm", ".txt": "text/plain; charset=utf-8"};
-let servidor = null, base = "";
-before(async () => {
-  if (!navegador) return;
-  servidor = http.createServer((req, res) => {
-    const ruta = decodeURIComponent(new URL(req.url, "http://x").pathname);
-    const archivo = path.join(RAIZ, ruta === "/" ? "index.html" : ruta);
-    if (!archivo.startsWith(RAIZ) || !fs.existsSync(archivo) || fs.statSync(archivo).isDirectory()){ res.writeHead(404); res.end(); return; }
-    res.writeHead(200, {"Content-Type": TIPOS[path.extname(archivo)] || "application/octet-stream"});
-    fs.createReadStream(archivo).pipe(res);
-  });
-  await new Promise(r => servidor.listen(0, "127.0.0.1", r));
-  base = "http://127.0.0.1:" + servidor.address().port;
-});
-after(async () => {
-  if (navegador) await navegador.close();
-  if (servidor) await new Promise(r => servidor.close(r));
-});
-
-/* ---------- ayudas ---------- */
-const CORS = {"access-control-allow-origin": "*", "access-control-allow-headers": "*"};
-// Abre la app con ajustes guardados y una "IA" que responde lo que diga responder(cuerpo, intento)
-async function abrir(ajustes, responder){
-  const ctx = await navegador.newContext({viewport: {width: 390, height: 844}});
-  const pg = await ctx.newPage();
-  pg.errores = []; pg.envios = [];
-  pg.on("pageerror", e => pg.errores.push(String(e)));
-  // Todo lo que vaya a internet se intercepta; se guarda lo que la app envía
-  await ctx.route(u => !u.href.startsWith(base), async rt => {
-    const rq = rt.request();
-    if (rq.method() === "OPTIONS"){ await rt.fulfill({status: 204, headers: CORS}); return; }
-    const envio = {url: rq.url(), headers: rq.headers(), cuerpo: JSON.parse(rq.postData() || "null")};
-    pg.envios.push(envio);
-    const r = responder ? responder(envio, pg.envios.length) : {status: 200, json: {content: [{type: "text", text: "Resumen de [NOMBRE_1]: neumonía."}], stop_reason: "end_turn"}};
-    await rt.fulfill({status: r.status, contentType: "application/json", headers: CORS, body: JSON.stringify(r.json)});
-  });
-  // Cámara simulada: un lienzo con la foto que se elija (window.__foto(url)), como si el teléfono apuntara a la hoja
-  await pg.addInitScript(() => {
-    const c = document.createElement("canvas"), g = c.getContext("2d"); let img = null;
-    window.__foto = url => new Promise(ok => { const im = new Image(); im.onload = () => { img = im; c.width = im.naturalWidth; c.height = im.naturalHeight; g.drawImage(im, 0, 0); ok(); }; im.src = url; });
-    setInterval(() => { if (img) g.drawImage(img, 0, 0); }, 100);
-    navigator.mediaDevices.getUserMedia = async () => { if (!img) await window.__foto("/pruebas/epicrisis/pagina1.jpg"); return c.captureStream(10); };
-  });
-  await pg.addInitScript(a => localStorage.setItem("velo_ajustes", JSON.stringify(a)), ajustes);
-  await pg.goto(base + "/index.html?prueba");
-  return pg;
-}
-const AJ_CLAUDE = {auto: true, prov: "claude", claves: {claude: "sk-ant-prueba"}, recordar: true, tarea: "exam"};
 const estadoCaso = pg => pg.evaluate(() => { const e = document.querySelector(".caso-auto .insignia"); return e ? e.textContent : ""; });
 const esperarCaso = pg => pg.waitForFunction(() => { const e = document.querySelector(".caso-auto .insignia"); return e && /Listo|Error|revisión/.test(e.textContent); }, null, {timeout: ESPERA, polling: 250});
 // Palabras de nombres y números (5 o más cifras) de los datos de la página que aparecen en un texto

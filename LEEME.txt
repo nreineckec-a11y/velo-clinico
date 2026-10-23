@@ -6,7 +6,13 @@ MODO AUTOMÁTICO (activado por omisión; se apaga en Ajustes)
 - Cada caso guarda lo que se envió, tal cual («Ver lo enviado»), para revisarlo después.
 - La única excepción: si el validador encuentra un dato que no puede ocultar, el caso queda en «Requiere revisión» y no se envía.
 - Como nadie revisa antes de enviar, todo campo rotulado que quede con su valor a la vista (por ejemplo «Nombre:» con un apellido poco común) se oculta solo, y un nombre que el lector leyó con una o dos letras distintas («PERE2») también.
-- Mientras un caso se procesa puedes fotografiar el siguiente.
+- Mientras un caso se procesa puedes fotografiar el siguiente: la cola los procesa uno tras otro (la lectura) y los envía en paralelo.
+- Estados de cada caso: Capturando, Procesando, Enviado, Listo, Requiere revisión y Error.
+- La cola queda guardada en el teléfono: si iOS cierra la app (al bloquearlo o al pasar a otra), al volver cada caso sigue donde quedó. Si estaba leyendo, vuelve a leer desde las fotos guardadas; si esperaba la respuesta, envía de nuevo lo mismo. Una captura interrumpida queda como «Capturando» con «Procesar» o «Borrar».
+- Errores de red, de límite de uso o del servidor: hasta 3 reintentos (a los 2, 4 y 8 segundos) y después «Error» con «Reintentar». Un error que no se arregla reintentando (una clave inválida, un modelo que no existe) queda en «Error» de inmediato. Sin respuesta en 10 minutos cuenta como error de red.
+- Mientras haya casos en curso, la pantalla no se apaga sola.
+- Límite de iOS: una página web (también instalada en la pantalla de inicio) se detiene al bloquear el teléfono o al pasar a otra app; no hay forma de que el envío siga en segundo plano (eso solo lo permite una app nativa). Lo que quedó a medias sigue al volver a abrirla.
+- Lo guardado: las fotos solo hasta leerlas y anonimizarlas; después, lo enviado (ya anonimizado), la respuesta y los marcadores para mostrarla con los datos reales. «Borrar» (con un segundo toque) lo quita del teléfono.
 - Ajustes: proveedor (Claude con tu cuenta dentro de la app de Claude, o Claude, ChatGPT o Gemini con tu clave API), modelo (por omisión claude-opus-5-5) y prompt por defecto (por omisión, Transcriptor de exámenes). La clave queda solo en el teléfono (puedes no recordarla) y la consulta va directo del teléfono al proveedor.
 - El texto leído en el teléfono puede traer errores (decimales, unidades, tablas): la IA recibe ese aviso. Revisa «Ver lo enviado» cuando un valor no te cuadre.
 - Dentro de la app de Claude la cámara puede no estar disponible: usa «Usar la cámara del sistema» o «Elegir fotos o PDF».
