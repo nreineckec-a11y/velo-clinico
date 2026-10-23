@@ -44,3 +44,13 @@ test("si el residuo persiste: «Requiere revisión», no se puede copiar ni envi
   assert.deepEqual(pg.errores, []);
   await pg.context().close();
 });
+
+test("modo manual: elegir el prompt sigue igual; se cuenta su uso al copiar", {skip: saltar}, async () => {
+  const pg = await abrir();
+  await pg.click('#tareas [data-t="cert"]');
+  await escribir(pg, "Certificado de reposo. Paciente: Juan Pérez Soto, 3 días.");
+  await pg.click("#copiarAnon");
+  assert.match(await pg.evaluate(() => __velo.caso().turnos[0].anon), /INSTRUCCIONES DEL PROYECTO «CERTIFICADOS»/);
+  assert.deepEqual(await pg.evaluate(() => JSON.parse(localStorage.getItem("velo_ajustes")).usos), {cert: 1});
+  await pg.context().close();
+});

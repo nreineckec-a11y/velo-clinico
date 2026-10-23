@@ -175,3 +175,42 @@ test("«?camara» o «Abrir la cámara al iniciar»: la app abre directo en la c
   assert.equal(await pg.isVisible("#camara"), false);
   await pg.context().close();
 });
+
+/* ---------- elegir el prompt en la pantalla principal ---------- */
+const chips = (pg, id) => pg.evaluate(id => [...document.querySelectorAll("#" + id + " .chip")].map(b => b.textContent + (b.getAttribute("aria-pressed") === "true" ? " ✓" : "")), id);
+
+test("modo automático: los prompts se eligen en la pantalla principal, primero los más usados, y el marcado es el que se envía", {skip: saltar}, async () => {
+  const pg = await abrir(Object.assign({}, AJ_CLAUDE, {usos: {med: 5, cert: 3, exam: 1}}));
+  assert.deepEqual(await chips(pg, "tareasAuto"),
+    ["Medicamentos", "Certificados", "Transcriptor de exámenes ✓", "Interconsulta", "Epicrisis", "Morbilidades", "Salud Mental"]);
+  // Marcar «Epicrisis»: se envía con sus instrucciones y queda como prompt de los próximos casos (y en Ajustes)
+  await pg.click('#tareasAuto [data-t="epi"]');
+  assert.match(await pg.textContent("#autoInfo"), /Prompt: Epicrisis\./);
+  await pg.setInputFiles("#adjuntoAuto", {name: "caso.txt", mimeType: "text/plain", buffer: Buffer.from("Ingreso por neumonía. Creatinina 1,1 mg/dL.")});
+  await esperarCaso(pg);
+  assert.match(pg.envios[0].cuerpo.messages[0].content, /INSTRUCCIONES DEL PROYECTO «EPICRISIS»/);
+  const aj = await pg.evaluate(() => JSON.parse(localStorage.getItem("velo_ajustes")));
+  assert.equal(aj.tarea, "epi");
+  assert.deepEqual(aj.usos, {med: 5, cert: 3, exam: 1, epi: 1}, "cada caso suma un uso a su prompt");
+  // Tocarlo de nuevo lo desmarca: el caso va sin instrucciones de proyecto
+  await pg.click('#tareasAuto [data-t="epi"]');
+  assert.ok(!(await chips(pg, "tareasAuto")).some(c => c.endsWith("✓")));
+  await pg.setInputFiles("#adjuntoAuto", {name: "caso.txt", mimeType: "text/plain", buffer: Buffer.from("Control de HTA. PA 130/80 mmHg.")});
+  await pg.waitForFunction(() => document.querySelectorAll(".caso-auto").length === 2 && /Listo/.test(document.querySelector(".caso-auto .insignia").textContent));
+  assert.doesNotMatch(pg.envios[1].cuerpo.messages[0].content, /INSTRUCCIONES DEL PROYECTO/);
+  await pg.context().close();
+});
+
+test("el orden por uso se recalcula con cada caso; el modo manual muestra el mismo orden", {skip: saltar}, async () => {
+  const pg = await abrir(Object.assign({}, AJ_CLAUDE, {tarea: "ic", usos: {exam: 1}}));
+  assert.equal((await chips(pg, "tareasAuto"))[0], "Transcriptor de exámenes");
+  for (let i = 0; i < 2; i++){
+    await pg.setInputFiles("#adjuntoAuto", {name: "caso.txt", mimeType: "text/plain", buffer: Buffer.from("Derivo a urología. APE 6,4 ng/ml.")});
+    await pg.waitForFunction(n => document.querySelectorAll(".caso-auto").length === n && /Listo/.test(document.querySelector(".caso-auto .insignia").textContent), i + 1);
+  }
+  assert.equal((await chips(pg, "tareasAuto"))[0], "Interconsulta ✓", "con 2 usos, Interconsulta pasa primero");
+  // En el modo manual, el mismo orden (y ahí se elige por caso, como siempre)
+  await pg.click("#btnManual");
+  assert.deepEqual((await chips(pg, "tareas")).slice(0, 2), ["Interconsulta", "Transcriptor de exámenes"]);
+  await pg.context().close();
+});
