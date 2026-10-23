@@ -21,16 +21,16 @@ const buscar = (ocr, texto, n = 0) => {
 const CASOS = [
   ["ocr-informe-rm.json",
     ["PEREZ", "MARIA", "ELENA", "4.567.890-1", "12/03/1934", "121013870.2", "001799876", "Fuentes"],
-    ["92", "años", "(Fazekas", "microangiopáticos", "STROKE", "Edad:", "01:57", "Radiólogo"]],
+    ["92", "años", "(Fazekas", "microangiopáticos", "STROKE", "Edad:", "15/10/2026", "01:57", "Radiólogo"]],
   ["ocr-laboratorio.json",
-    ["GONZALEZ", "ANTONIO", "9.876.543-2", "778812", "03/10/2026", "Reinecke", "8765", "33445566", "Carolina"],
-    ["67", "13.5", "245.000", "0.82", "Hemoglobina", "Glucosa", "Nombre:", "RUT:", "Sexo:"]],
+    ["GONZALEZ", "ANTONIO", "9.876.543-2", "778812", "Reinecke", "8765", "33445566", "Carolina"],
+    ["67", "03/10/2026", "13.5", "245.000", "0.82", "Hemoglobina", "Glucosa", "Nombre:", "RUT:", "Sexo:"]],
   ["ocr-informe-rm-dificil.json",
     ["PEREZ", "MARIA", "ELENA", "4.567.890-1", "12/03/1934", "1210138702", "001799876", "Juan", "Fuentes"],
     ["92", "años", "(Fazekas", "STROKE", "Edad:", "01:57", "Médico", "Radiólogo"]],
   ["ocr-laboratorio-dificil.json",
-    ["GONZALEZ", "PEDRO", "ANTONIO", "9.876.543-2", "778812", "03/10/2026", "Reinecke", "8765", "33445566", "Carolina"],
-    ["67", "7.540", "245.000", "0.82", "Hemoglobina", "Glucosa", "Nombre:", "RUT:", "Sexo:", "Orden"]]
+    ["GONZALEZ", "PEDRO", "ANTONIO", "9.876.543-2", "778812", "Reinecke", "8765", "33445566", "Carolina"],
+    ["67", "03/10/2026", "7.540", "245.000", "0.82", "Hemoglobina", "Glucosa", "Nombre:", "RUT:", "Sexo:", "Orden"]]
 ];
 
 for (const [archivo, tapar, dejar] of CASOS){

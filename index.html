@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<!-- Esta versión no se conecta a ningún servidor: el texto solo sale cuando tú lo copias -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'">
+<!-- Solo se conecta a la IA que elijas en Ajustes (Claude, OpenAI o Gemini), y solo con el texto ya anonimizado -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon-192.png">
@@ -146,6 +146,30 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
 .lienzo-wrap{flex:1; min-height:0; display:flex; align-items:flex-start; justify-content:center; padding:8px; overflow:hidden}
 #lienzo{display:block; touch-action:pinch-zoom; cursor:crosshair; border-radius:6px; box-shadow:0 0 0 1px var(--line); max-width:none}
 .lupa{position:fixed; width:150px; height:150px; border-radius:50%; border:3px solid #fff; box-shadow:0 0 0 2px var(--accent), 0 8px 22px rgba(0,0,0,.35); pointer-events:none; z-index:25; background:#000}
+/* modo automático: cámara, casos y ajustes */
+.modo-auto .solo-manual, body:not(.modo-auto) .solo-auto{display:none !important}
+.top-fila{display:flex; align-items:center; justify-content:space-between; gap:8px}
+.casos{display:grid; gap:12px}
+.caso-auto{border:1px solid var(--line); border-radius:12px; padding:12px; display:grid; gap:8px; background:var(--bg); min-width:0}
+.caso-cab{display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center}
+.insignia{font:600 13px/1 var(--f-body); padding:5px 9px; border-radius:999px; background:var(--accent-soft); color:var(--ink)}
+.e-listo{background:var(--accent); color:var(--accent-ink)}
+.e-revision,.e-error{background:var(--warn-bg); color:var(--err-ink); box-shadow:0 0 0 1px var(--warn-line) inset}
+.caso-auto pre.out{margin:0}
+.cam-wrap{flex:1; min-height:0; display:flex; align-items:center; justify-content:center; background:#000}
+.cam-wrap video{max-width:100%; max-height:100%; display:block}
+.cam-pie{display:flex; align-items:center; gap:12px; padding-block:12px; background:var(--surface); border-top:1px solid var(--line);
+  padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
+.cam-miniaturas{flex:1; min-width:0; display:flex; gap:6px; overflow-x:auto}
+.cam-miniaturas img{height:56px; border-radius:6px; border:1px solid var(--line); flex:none}
+.cam-disparo{flex:none; width:72px; height:72px; border-radius:50%; border:5px solid var(--accent); background:#fff; cursor:pointer}
+.cam-disparo:disabled{opacity:.4}
+.ajustes-cuerpo{flex:1; overflow:auto; display:grid; gap:10px; align-content:start; width:100%; max-width:680px; margin:0 auto; padding:16px}
+.ajustes-cuerpo input[type=text],.ajustes-cuerpo input[type=password],.ajustes-cuerpo select{width:100%; font:16px/1.3 var(--f-body); padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--ink)}
+.lbl{font-weight:600; font-size:15px; margin-top:6px}
+.ajustes-cuerpo a{color:var(--accent)}
+.check{display:flex; gap:10px; align-items:flex-start; font-size:15px}
+.check input{margin-top:4px; width:20px; height:20px; flex:none}
 .toast{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(24px + env(safe-area-inset-bottom,0px)); background:var(--ink); color:var(--bg); padding:10px 16px; border-radius:999px; font-size:14px; z-index:30; width:max-content; max-width:calc(100% - 32px); text-align:center}
 </style>
 </head>
@@ -153,16 +177,35 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
 
 <main class="app">
   <header class="top">
+    <div class="top-fila">
     <div class="marca">
       <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2.5 4.5 7v8.2c0 7.2 4.9 12.4 11.5 14.3 6.6-1.9 11.5-7.1 11.5-14.3V7z" fill="var(--accent)"/><rect x="9" y="12" width="14" height="4.2" rx="1" fill="var(--accent-ink)"/><rect x="9" y="18.6" width="9" height="2.2" rx="1.1" fill="var(--accent-ink)" opacity=".7"/></svg>
       <span>Velo Clínico</span>
     </div>
-    <p class="sello">Nombres, RUT y fechas se ocultan en tu teléfono antes de enviar.</p>
+    <button class="btn sec chico" id="btnAjustes" type="button">Ajustes</button>
+    </div>
+    <p class="sello">Nombres, RUT y fecha de nacimiento se ocultan en tu teléfono antes de enviar. Las fechas de los exámenes quedan.</p>
   </header>
 
-  <p class="aviso-caja solo-indep">Para que Claude responda aquí mismo, abre Velo Clínico desde la app de Claude. Desde esta página puedes copiar el texto anonimizado y pegarlo en la IA que quieras.</p>
+  <section class="bloque" id="bloqueAuto" aria-label="Modo automático" hidden>
+    <button class="btn grande" id="btnCamara" type="button">Fotografiar examen</button>
+    <div class="fila">
+      <button class="btn sec" id="btnElegirAuto" type="button">Elegir fotos o PDF</button>
+      <button class="btn-texto" id="btnManual" type="button">Usar el modo manual</button>
+    </div>
+    <input type="file" id="adjuntoAuto" accept="image/*,.pdf,application/pdf,.docx,.txt" multiple hidden>
+    <input type="file" id="camaraNativa" accept="image/*" capture="environment" multiple hidden>
+    <p class="nota" id="autoInfo"></p>
+  </section>
 
-  <section class="bloque" aria-label="Caso">
+  <section class="bloque" id="bloqueCasos" aria-labelledby="hCasos" hidden>
+    <h2 id="hCasos">Casos</h2>
+    <div class="casos" id="casos" aria-live="polite"></div>
+  </section>
+
+  <p class="aviso-caja solo-indep solo-manual">Para que Claude responda aquí mismo, abre Velo Clínico desde la app de Claude. Desde esta página puedes copiar el texto anonimizado y pegarlo en la IA que quieras.</p>
+
+  <section class="bloque solo-manual" aria-label="Caso">
     <div class="chips" id="tareas" role="group" aria-label="Tarea, opcional"></div>
     <textarea id="entrada" placeholder="Pega o dicta el caso y lo que necesitas.&#10;&#10;Ej.: «Hazme una interconsulta a urología. Paciente Juan Pérez, RUT 12.345.678-5, 67 años…»"></textarea>
     <div class="fila">
@@ -174,10 +217,10 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
     <p class="nota" id="adjInfo" hidden></p>
     <div class="fotos" id="fotos" hidden></div>
     <p class="nota" id="consejoEscanear">En iPhone puedes pasar un papel a texto sin sacar foto: toca el cuadro y elige «Escanear texto» en el menú. La cámara lee en el teléfono, los datos se ocultan solos y no envías la imagen.</p>
-    <p class="nota" id="consejoFoto" hidden>La app busca en el teléfono nombres, RUT, fechas y folios en cada imagen y los tapa en negro. Revísala antes de enviar: toca «Revisar».</p>
+    <p class="nota" id="consejoFoto" hidden>La app busca en el teléfono nombres, RUT, fecha de nacimiento y folios en cada imagen y los tapa en negro (las fechas de los exámenes quedan). Revísala antes de enviar: toca «Revisar».</p>
   </section>
 
-  <section class="bloque" id="bloqueEnvio" aria-label="Enviar" hidden>
+  <section class="bloque solo-manual" id="bloqueEnvio" aria-label="Enviar" hidden>
     <p class="resumen" id="resumen"></p>
     <div class="avisos" id="avisos" role="region" aria-label="Datos que podrían quedar visibles" hidden></div>
     <div class="out" id="previa"></div>
@@ -197,7 +240,7 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
     </details>
   </section>
 
-  <section class="bloque" id="bloqueResp" aria-labelledby="hResp" aria-live="polite" hidden>
+  <section class="bloque solo-manual" id="bloqueResp" aria-labelledby="hResp" aria-live="polite" hidden>
     <h2 id="hResp">Respuesta</h2>
     <div class="hilo" id="hilo"></div>
     <div class="seguir">
@@ -214,8 +257,9 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
     </div>
   </section>
 
-  <button class="btn sec" id="nuevo" type="button">Empezar otro caso</button>
-  <p class="pie">La IA puede equivocarse: verifica antes de usar. Los casos no se guardan y se borran solos tras 15 minutos sin uso.</p>
+  <button class="btn sec solo-manual" id="nuevo" type="button">Empezar otro caso</button>
+  <p class="pie solo-manual">La IA puede equivocarse: verifica antes de usar. Los casos no se guardan y se borran solos tras 15 minutos sin uso.</p>
+  <p class="pie solo-auto">La IA puede equivocarse: verifica antes de usar, sobre todo los valores leídos de fotos (decimales, unidades, tablas).</p>
 </main>
 
 <div class="modal" id="editor" role="dialog" aria-modal="true" aria-labelledby="edTitulo" hidden>
@@ -236,6 +280,55 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
   <p class="modal-info" id="edInfo" role="status" aria-live="polite">Arrastra el dedo sobre la parte que quieres enviar. Mientras lo mueves, una lupa te muestra el detalle.</p>
   <canvas id="lupa" class="lupa" hidden aria-hidden="true"></canvas>
   <div class="lienzo-wrap" id="lienzoWrap"><canvas id="lienzo" aria-label="Imagen: marca la parte que quieres enviar"></canvas></div>
+</div>
+
+<div class="modal" id="camara" role="dialog" aria-modal="true" aria-labelledby="camTitulo" hidden>
+  <div class="modal-bar">
+    <strong id="camTitulo" style="font-family:var(--f-display); font-size:18px">Fotografiar examen</strong>
+    <span class="sep"></span>
+    <button class="btn sec chico" id="camCancelar" type="button">Cancelar</button>
+    <button class="btn chico" id="camListo" type="button" disabled>Listo</button>
+  </div>
+  <p class="modal-info" id="camInfo" role="status" aria-live="polite">Abriendo la cámara…</p>
+  <div class="cam-wrap"><video id="camVideo" playsinline muted autoplay></video></div>
+  <div class="cam-pie">
+    <div class="cam-miniaturas" id="camMini"></div>
+    <label class="btn sec chico" for="camaraNativa" id="camSistema" hidden>Usar la cámara del sistema</label>
+    <button class="cam-disparo" id="camDisparo" type="button" aria-label="Capturar página" disabled></button>
+  </div>
+</div>
+
+<div class="modal" id="ajustes" role="dialog" aria-modal="true" aria-labelledby="ajTitulo" hidden>
+  <div class="modal-bar">
+    <strong id="ajTitulo" style="font-family:var(--f-display); font-size:18px">Ajustes</strong>
+    <span class="sep"></span>
+    <button class="btn chico" id="ajCerrar" type="button">Listo</button>
+  </div>
+  <div class="ajustes-cuerpo">
+    <label class="check"><input type="checkbox" id="ajAuto"><span><b>Modo automático</b><br><span class="nota">Foto → lectura en el teléfono → datos personales ocultos → validación → envío → resultado, sin confirmaciones. Solo sale el texto anonimizado: ninguna imagen. Si el validador encuentra un dato que no puede ocultar, el caso queda en «Requiere revisión» y no se envía.</span></span></label>
+    <label class="check"><input type="checkbox" id="ajCamaraInicio"><span><b>Abrir la cámara al iniciar la app</b><br><span class="nota">Al tocar el ícono de Velo en la pantalla de inicio, la cámara queda lista para fotografiar (al volver a la app desde otra, no). También abre la cámara la dirección de la app terminada en «?camara».</span></span></label>
+    <label class="lbl" for="ajProv">Proveedor</label>
+    <select id="ajProv"></select>
+    <label class="lbl" for="ajModelo">Modelo</label>
+    <input id="ajModelo" type="text" autocomplete="off" spellcheck="false" autocapitalize="off">
+    <p class="nota" id="ajModeloNota"></p>
+    <div id="ajClaveBloque" style="display:grid; gap:10px">
+      <label class="lbl" for="ajClave">Clave API</label>
+      <input id="ajClave" type="password" autocomplete="off" spellcheck="false" autocapitalize="off">
+      <p class="nota"><a id="ajClaveLink" href="#" target="_blank" rel="noopener noreferrer">Crear una clave</a>. La clave queda solo en este dispositivo y se usa solo para hablar con ese proveedor.</p>
+      <label class="check"><input type="checkbox" id="ajRecordar"><span>Recordar la clave en este dispositivo</span></label>
+      <p class="aviso-caja" id="ajProvNota" hidden></p>
+    </div>
+    <label class="lbl" for="ajTarea">Prompt por defecto</label>
+    <select id="ajTarea"></select>
+    <label class="check" style="margin-top:10px"><input type="checkbox" id="ajAvisar"><span><b>Avisarme cuando termine cada caso</b><br><span class="nota">Un aviso del teléfono que dice solo «Análisis listo» (o «Un caso requiere revisión»): se ve en la pantalla bloqueada, así que nunca lleva datos del paciente ni clínicos. En iPhone funciona con la app instalada en la pantalla de inicio.</span></span></label>
+    <label class="lbl" for="ajPlazo">Borrar los casos terminados del teléfono</label>
+    <select id="ajPlazo"><option value="1">Después de 1 hora</option><option value="24">Después de 24 horas</option><option value="168">Después de 7 días</option><option value="0">No borrarlos (los borro yo)</option></select>
+    <p class="nota">Se borra todo el caso: lo enviado, la respuesta y los datos reales para mostrarla.</p>
+    <label class="check"><input type="checkbox" id="ajFotos"><span><b>Conservar las fotos originales en este teléfono</b><br><span class="nota">Si no, se borran apenas se leen y anonimizan. Si las conservas, quedan con el caso (sin salir del teléfono) hasta que se borre.</span></span></label>
+    <button class="btn sec" id="ajBorrarCasos" type="button" style="justify-self:start; margin-top:6px">Borrar todos los casos de este teléfono</button>
+    <button class="btn-texto quitar" id="ajBorrar" type="button" style="justify-self:start; margin:12px 0 0">Borrar ajustes y claves de este dispositivo</button>
+  </div>
 </div>
 
 <script id="motor">
@@ -373,7 +466,7 @@ const ETIQUETA = {NOMBRE:"Nombre",RUT:"RUT",TELEFONO:"Teléfono",CORREO:"Correo"
   FICHA:"N° ficha/folio",LUGAR:"Comuna/ciudad",OTRO:"Otro",EDAD:"Edad"};
 
 const OPC_DEF = {nombres:true,rut:true,telefonos:true,correos:true,direcciones:true,fichas:true,lugares:true,
-  fechas:true,modoFecha:"token",edades:false,extra:"",nunca:"",ocultar:[]};
+  fechas:true,edades:false,extra:"",nunca:"",ocultar:[]};
 
 // Unidades: un número largo seguido de una unidad es un resultado, no un identificador
 const RX_UNIDAD = /^\s*(?:x\s*10|×|\/|ufc|copias|cop\b|u\.?i\.?\b|u\/|m?u\/|mg|g\/|gr\b|ml|cc\b|mm|cm|cel|el\/|%|mui|ng|pg|µ|μ|mcg|ug|iu\b|mmol|meq|kg|g\b|l\b|ms\b|hz)/i;
@@ -386,7 +479,7 @@ const ROTULOS = [
   {tipo:"FECHA", rx:"fecha\\s+(?:de\\s+)?nacimiento(?:\\s*[-–/]\\s*edad)?|f\\.?\\s*(?:de\\s+)?nac(?:imiento)?\\.?|nacimiento|fecha\\s+nac\\.?"},
   {tipo:"DIRECCION", rx:"domicilio(?:\\s+particular)?|direcci[oó]n(?:\\s+particular)?|calle|villa|poblaci[oó]n|comuna(?:\\s+de\\s+residencia)?"},
   {tipo:"TELEFONO", rx:"tel[eé]fonos?(?:\\s+(?:de\\s+)?contacto)?|fonos?|celular|m[oó]vil|whatsapp"},
-  {tipo:"CORREO", rx:"correo(?:\\s+electr[oó]nico)?|e-?mail"}
+  {tipo:"CORREO", rx:"correo(?:\\s+electr[oó]nico)?(?:\\s+(?:de\\s+)?(?:contacto|paciente))?|e-?mail"}
 ];
 // Palabras con mayúscula que suelen ir tras "Paciente:" o "Médico:" y no son nombres
 const NO_NOMBRE = set(`
@@ -446,6 +539,49 @@ function textoItemsPdf(items){
   }).join("\n");
 }
 
+/* ---------- fechas: de nacimiento, clínicas o sin rótulo ---------- */
+// Rótulos de la fecha de nacimiento (sobre el texto plegado: minúsculas y sin tildes)
+const RX_FECHA_NAC = /(?<![a-z])(?:fecha\s+(?:de\s+)?nacimiento|fecha\s+(?:de\s+)?nac\.?|f\.?\s*(?:de\s+)?nac(?:imiento)?\.?|(?<!recien\s)(?:nacimiento|nacid[oa]s?(?:\s+(?:el|en))?|nacio(?:\s+(?:el|en))?)|f\.\s*n\.?|f\/n|fnac|fn|dob)(?:\s*[-–\/]\s*edad)?(?![a-z])/g;
+// Rótulos de fechas clínicas o del documento: quedan a la vista
+const RX_FECHA_CLIN = /(?<![a-z])(?:toma|tomad[oa]|muestras?|recepcion|recibid[oa]|validacion|validad[oa]|emision|emitid[oa]|informes?|informad[oa]|resultados?|control(?:es)?|ingreso|ingresa|egreso|alta|procedimientos?|cirugias?|operad[oa]|operacion|intervencion|intervenid[oa]|examen(?:es)?|estudios?|atencion|atendid[oa]|consulta|solicitud|solicitad[oa]|impresion|creacion|registro|hospitalizacion|hospitalizad[oa]|biopsias?|derivacion|citacion|cita|entrega|firma|evaluacion|evolucion|epicrisis|ecografia|ecotomografia|radiografia|resonancia|tomografia|endoscopia|colonoscopia|mamografia|electrocardiograma|ecg|rx|tac|rnm|vigencia|vence|vencimiento|proxim[oa]|desde|hasta|inicio|termino|fur|fpp|parto|vacuna(?:cion)?|dosis|anteriores?|previ[oa]s?)(?![a-z])/g;
+// De ellas, las que suelen ir después del documento (no sirven para calcular la edad)
+const RX_FECHA_FUTURA = /control|proxim|vigencia|vence|vencimiento|hasta|termino|cita|fpp/;
+// Lo que puede ir entre un rótulo y su fecha: puntuación, un paréntesis corto y palabras de enlace
+const RX_ENTRE_ROTULO_Y_FECHA = /^(?:[\s:.\-–=|,\/]|\([^()\n]{0,40}\)|(?<![a-z])(?:de|del|el|la|los|las|en|a|al|y|e)(?![a-z]))*$/;
+// El rótulo de una fecha (ventana: texto plegado desde la fecha anterior de la línea; base: su posición).
+// - Un campo "Fecha …:" justo antes de la fecha se clasifica por sus palabras ("Fecha Alta Médica:", "Fecha de
+//   nacimiento (según registro):"); "Fecha:" sola no dice qué fecha es.
+// - Si no, cuenta un rótulo pegado a la fecha ("nacido el", "Validado el", "Toma"). Una palabra clínica lejos de la
+//   fecha no la protege ("Paciente en control PSCV, 14/07/1958"); un "nacido" lejos la oculta sin calcular la edad.
+function rotuloDeFecha(ventana, base){
+  const ultimo = (rx, t) => { rx.lastIndex = 0; let m, u = null; while ((m = rx.exec(t))) u = m; return u; };
+  const campo = ventana.match(/(?<![a-z])(?:fecha|f\.)[^:\n\d]{0,40}?[ \t]*[:\-–=]?[ \t]*$/);
+  if (campo){
+    const t = campo[0], tipo = ultimo(RX_FECHA_NAC, t) ? "nac" : ultimo(RX_FECHA_CLIN, t) ? "clinica" : null;
+    const rs = base + campo.index;
+    return {tipo, rotulo: t, rs, re: rs + t.replace(/[\s:\-–=]+$/, "").length};
+  }
+  const cerca = m => m && RX_ENTRE_ROTULO_Y_FECHA.test(ventana.slice(m.index + m[0].length));
+  const r = (tipo, m) => ({tipo, rotulo: m[0], rs: base + m.index, re: base + m.index + m[0].length});
+  const n = ultimo(RX_FECHA_NAC, ventana), k = ultimo(RX_FECHA_CLIN, ventana);
+  if (cerca(n)) return r("nac", n);
+  if (cerca(k)) return r("clinica", k);
+  if (n) return r("dudosa", n);
+  return {tipo: null, rotulo: ""};
+}
+// Años cumplidos entre dos fechas {y, m, d} (sin día o sin mes, se toma el primero)
+function aniosEntre(a, b){
+  const am = a.m || 1, ad = a.d || 1, bm = b.m || 1, bd = b.d || 1;
+  return b.y - a.y - (bm < am || (bm === am && bd < ad) ? 1 : 0);
+}
+function edadTexto(nac, ref){
+  const anios = aniosEntre(nac, ref);
+  if (anios < 0 || anios > 120) return null;
+  if (anios >= 2) return "edad: " + anios + " años";
+  const meses = (ref.y - nac.y) * 12 + (ref.m || 1) - (nac.m || 1) - ((ref.d || 1) < (nac.d || 1) ? 1 : 0);
+  return meses < 0 ? null : "edad: " + meses + (meses === 1 ? " mes" : " meses");
+}
+
 /* ---------- análisis ---------- */
 function analizar(texto, opcIn){
   const o = Object.assign({}, OPC_DEF, opcIn || {});
@@ -476,8 +612,11 @@ function analizar(texto, opcIn){
     }
   }
 
-  // 0. Lo que el médico pidió ocultar a mano (tiene prioridad sobre todo lo demás)
-  for (const it of (Array.isArray(o.ocultar) ? o.ocultar : [])){
+  // 0. Lo que el médico pidió ocultar a mano (tiene prioridad sobre todo lo demás). Las palabras de nombres que el
+  // validador encontró a la vista (tarde) van después de los nombres (10b), para no partir un nombre completo.
+  const ocultarLista = Array.isArray(o.ocultar) ? o.ocultar : [];
+  ocultarTextos(ocultarLista.filter(it => it && !it.tarde));
+  function ocultarTextos(lista){ for (const it of lista){
     const x = String((it && it.texto) || "").trim(); if (x.length < 2) continue;
     const tipo = TIPOS.includes(it.tipo) && it.tipo !== "EDAD" ? it.tipo : "OTRO";
     const fx = plegar(x); let p = 0;
@@ -488,10 +627,15 @@ function analizar(texto, opcIn){
       if (bordeA && bordeB) add(p, p+fx.length, tipo, fx.replace(/\s+/g," "));
       p += fx.length;
     }
-  }
+  } }
 
   // 1. Correos
-  if (o.correos) porRegex(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/gd, "CORREO");
+  if (o.correos){
+    porRegex(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/gd, "CORREO");
+    // En fotos el lector puede leer la «@» como otra letra ("juan.perezecorreo.cl"): una palabra con forma de
+    // dominio también se oculta (una dirección web también: no hace falta para el caso)
+    if (o.foto) porRegex(RX_DOMINIO, "CORREO", 1);
+  }
 
   // 2. RUT
   if (o.rut){
@@ -528,26 +672,87 @@ function analizar(texto, opcIn){
     porRegex(/(?<![\p{L}])(?:Avenida|Avda\.?|Av\.?|Calle|Pasaje|Psje\.?|Pje\.?|Camino|Villa|Poblaci[oó]n|Pobl\.?)\s+(?:(?:[\p{Lu}\d][\p{L}\d'’.]*|de|del|la|las|los|el|y)\s+){1,6}?(?:#\s*|N[°º]\.?\s*)?\d{1,5}(?:\s*,?\s*(?:depto\.?|dpto\.?|departamento|casa|block|blk\.?|of\.?|oficina|torre|piso)\s*[\w\-]+)*/gud, "DIRECCION");
   }
 
-  // 6. Fechas
-  if (o.fechas){
-    const valida = (d,m) => +d>=1 && +d<=31 && +m>=1 && +m<=12;
-    const esNac = s => /(?:nacimiento|f\.?\s*nac|fn|f\.n\.|nacid[oa]|naci[oó])\W{0,15}$/i.test(texto.slice(Math.max(0,s-30), s));
-    const mesNombre = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-    function addFecha(s, e, claveTxt, mesAno){
-      if (o.modoFecha === "mesano" && !esNac(s) && mesAno) add(s, e, "FECHA", claveTxt, mesAno);
-      else add(s, e, "FECHA", claveTxt);
-    }
+  // 6. Fechas: cada una según el rótulo que la antecede (antes de los demás números, 6b y 6d, para que ninguno tome
+  // una fecha clínica por folio)
+  if (o.fechas) clasificarFechas();
+
+  // - De nacimiento: se oculta. En el texto, rótulo y fecha pasan a "edad: X años", calculada respecto de la fecha
+  //   del documento: la más reciente, sin contar las que van después de él (próximo control, vigencia, citación).
+  // - Clínicas (toma, informe, ingreso, alta, cirugía…): quedan a la vista.
+  // - Sin rótulo: quedan, salvo que sean 10 o más años anteriores a la más reciente del documento (posible nacimiento).
+  // - En fotos, una fecha que el lector leyó a medias ("03/11/2") solo queda si va tras un rótulo clínico.
+  // - Tras un "nacido" que no va pegado a ella: se oculta, sin calcular la edad (no se sabe si es el nacimiento).
+  function clasificarFechas(){
+    const hoy = o.hoy ? new Date(o.hoy) : new Date(), anoHoy = hoy.getFullYear();
+    const ano4 = a => a.length === 4 ? +a : (2000 + +a <= anoHoy + 1 ? 2000 + +a : 1900 + +a);
+    const valida = (d, m) => d >= 1 && d <= 31 && m >= 1 && m <= 12;
+    const cands = [];
+    const poner = (m, y, me, d, parcial) => cands.push({s: m.index, e: m.index + m[0].length, y, m: me, d, parcial: !!parcial, n: cands.length});
+    // La hora que sigue a la fecha va con ella ("12/03/2025 08:15", "15/10/2026 01:57 PM", "2025-03-12T08:15")
+    const HORA = "(?:[ \\t]*(?:,|T|a[ \\t]+las)?[ \\t]*\\d{1,2}:\\d{2}(?::\\d{2})?(?:[ \\t]*(?:hrs?\\.?|h(?![\\p{L}])|[ap]\\.?[ \\t]?m\\.?))?)?";
+    const MES3 = "ene|feb|mar|abr|may|jun|jul|ago|sept?|set|oct|nov|dic";
+    const mesDe = t => ({ene:1, feb:2, mar:3, abr:4, may:5, jun:6, jul:7, ago:8, sep:9, set:9, oct:10, nov:11, dic:12})[plegar(t).slice(0, 3)];
     let m, rx;
-    rx = /(?<![\p{N}.,\/\-])(\d{1,2})([\/.\-])(\d{1,2})\2(\d{4}|\d{2})(?![\p{N}]|[.,]\d)/gu;
-    while ((m = rx.exec(texto))) if (valida(m[1],m[3])) addFecha(m.index, m.index+m[0].length, null, `${m[3].padStart(2,"0")}/${m[4]}`);
-    rx = /(?<![\p{N}])(\d{4})-(\d{2})-(\d{2})(?![\p{N}])/gu;
-    while ((m = rx.exec(texto))) if (valida(m[3],m[2])) addFecha(m.index, m.index+m[0].length, null, `${m[2]}/${m[1]}`);
-    rx = new RegExp(`(?<![\\p{N}])(\\d{1,2})\\s+de\\s+(${MESES})(?:\\s+(?:de|del)\\s+(\\d{4}))?`, "giu");
-    while ((m = rx.exec(texto))){
-      const mes = m[2].toLowerCase();
-      addFecha(m.index, m.index+m[0].length, null, m[3] ? `${mes} de ${m[3]}` : mes);
+    // 12/03/2025, 12-03-25, 12.03.2025
+    rx = new RegExp("(?<![\\p{N}.,\\/\\-])(\\d{1,2})([\\/.\\-])(\\d{1,2})\\2(\\d{4}|\\d{2})(?![\\p{N}]|[.,]\\d)" + HORA, "gu");
+    while ((m = rx.exec(texto))) if (valida(+m[1], +m[3])) poner(m, ano4(m[4]), +m[3], +m[1]);
+    // 2025-03-12
+    rx = new RegExp("(?<![\\p{N}])(\\d{4})-(\\d{2})-(\\d{2})(?![\\p{N}])" + HORA, "gu");
+    while ((m = rx.exec(texto))) if (valida(+m[3], +m[2])) poner(m, +m[1], +m[2], +m[3]);
+    // 12 de marzo de 2025, 12 de marzo 2025, 12 de marzo
+    rx = new RegExp(`(?<![\\p{N}])(\\d{1,2})\\s+de\\s+(${MESES})(?![\\p{L}])(?:\\s+(?:de|del)?\\s*(\\d{4})(?![\\p{N}]))?` + HORA, "giu");
+    while ((m = rx.exec(texto))) if (valida(+m[1], mesDe(m[2]))) poner(m, m[3] ? +m[3] : null, mesDe(m[2]), +m[1]);
+    // 12-mar-2025, 12 mar 2025, 12/Mar/25
+    rx = new RegExp(`(?<![\\p{N}])(\\d{1,2})[ \\-\\/.](${MESES}|${MES3})\\.?[ \\-\\/.](\\d{4}|\\d{2})(?![\\p{N}])` + HORA, "giu");
+    while ((m = rx.exec(texto))) if (valida(+m[1], mesDe(m[2]))) poner(m, ano4(m[3]), mesDe(m[2]), +m[1]);
+    // marzo de 2025, marzo 2025, mar-2025, Mar/25
+    rx = new RegExp(`(?<![\\p{L}\\p{N}])(?:(${MESES})(?:\\s+(?:de|del)\\s+|[ \\-\\/])(\\d{4})|(${MES3})\\.?[\\-\\/](\\d{4}|\\d{2}))(?![\\p{N}])`, "giu");
+    while ((m = rx.exec(texto))) poner(m, m[2] ? +m[2] : ano4(m[4]), mesDe(m[1] || m[3]), null);
+    // Solo en fotos: una fecha que el lector cortó o leyó a medias ("03/11/2", "03/11/20"): día, mes y el comienzo
+    // del año (con puntos, solo con día y mes de dos cifras: "1.5.2" es un número de sección; "1-1-1" es una dosis)
+    if (o.foto){
+      rx = /(?<![\p{N}\/.\-])(\d{1,2}([\/\-])\d{1,2}\2\d{1,3}|\d{2}\.\d{2}\.\d{1,3})(?![\p{N}]|[.,]\d)/gu;
+      while ((m = rx.exec(texto))){
+        const [d, me, a] = m[1].split(/[\/\-.]/);
+        if (valida(+d, +me) && (d.length === 2 || me.length === 2) && /^[12]/.test(a)) poner(m, null, +me, +d, true);
+      }
+    }
+    // Una fecha por tramo (la más larga si dos se superponen)
+    cands.sort((a, b) => a.s - b.s || (b.e - b.s) - (a.e - a.s) || a.n - b.n);
+    const lista = []; let fin = -1;
+    for (const c of cands) if (c.s >= fin){ lista.push(c); fin = c.e; }
+    // El rótulo de cada fecha: el más cercano antes de ella en su línea (desde la fecha anterior), o la línea de
+    // arriba si termina en ":" ("Fecha de nacimiento:\n14/07/1958", "Resultados anteriores:\n10/09/2024 …")
+    let finPrev = 0;
+    for (const c of lista){
+      const ini = ft.lastIndexOf("\n", c.s - 1) + 1, desde = Math.max(ini, finPrev);
+      let base = desde, ventana = ft.slice(desde, c.s);
+      if (!ventana.trim() && desde === ini && ini > 0){
+        const ant = ft.slice(ft.lastIndexOf("\n", ini - 2) + 1, ini - 1);
+        if (/:\s*$/.test(ant)){ ventana = ant; base = ini - 1 - ant.length; }
+      }
+      Object.assign(c, rotuloDeFecha(ventana, base));
+      finPrev = c.e;
+    }
+    const num = c => c.y * 10000 + (c.m || 1) * 100 + (c.d || 1);
+    const mayor = xs => xs.reduce((a, c) => !a || num(c) > num(a) ? c : a, null);
+    const completas = lista.filter(c => c.y && c.tipo !== "nac" && c.tipo !== "dudosa");
+    const masReciente = mayor(completas);
+    const delDoc = mayor(completas.filter(c => !RX_FECHA_FUTURA.test(c.rotulo))) || masReciente ||
+      {y: anoHoy, m: hoy.getMonth() + 1, d: hoy.getDate()};
+    for (const c of lista){
+      const antigua = c.y && masReciente && aniosEntre(c, masReciente) >= 10;
+      if (c.tipo === "clinica" || (!c.tipo && !c.parcial && !antigua)){ reservar(c.s, c.e); continue; }
+      if (c.tipo !== "nac"){ add(c.s, c.e, "FECHA"); continue; }
+      const edad = c.y ? edadTexto(c, delDoc) : null;
+      // En el texto el rótulo va dentro del reemplazo: "Fecha de nacimiento: 14/07/1958" → "edad: 66 años". En una
+      // foto se tapa solo la fecha (el rótulo no es un dato), salvo que lo que se envíe sea el texto leído (enviaTexto)
+      const s = (!o.foto || o.enviaTexto) && edad && RX_ENTRE_ROTULO_Y_FECHA.test(ft.slice(c.re, c.s)) ? c.rs : c.s;
+      add(s, c.e, "FECHA", null, edad);
     }
   }
+  // Una fecha clínica queda a la vista: se reserva para que ninguna regla posterior la tome por folio o número
+  function reservar(s, e){ for (let i = s; i < e; i++) ocupado[i] = 1; }
 
   // 6b. Otros números identificadores (después de las fechas, para no confundirlas con folios)
   if (o.fichas){
@@ -599,11 +804,6 @@ function analizar(texto, opcIn){
     porRegex(/(?<![\p{L}\p{N}.,])\d{1,3}[ \t]*a\.?[ \t,]+([\p{L}\p{N}]{0,2}[mn]\.?[ \t,]+\d{1,2}[ \t]*d(?:[ií]as?)?\.?)(?![\p{L}])/gud, "EDAD", 1, null, m => "edad exacta " + m[1].replace(/\s+/g, ""));
     // (entre los meses y los días puede ir una "y" o una segunda lectura de los meses: "4m Am 25d")
     porRegex(/(?<![\p{L}\p{N}.,])(\d{1,2}[ \t]*m(?:eses|es)?\.?(?:[ \t,]+[\p{L}\p{N}]{1,3}\.?)?[ \t,]+\d{1,2}[ \t]*d(?:[ií]as?)?\.?)(?![\p{L}])/gud, "EDAD", 1, null, m => "edad exacta " + m[1].replace(/\s+/g, ""));
-    // Una fecha que el lector cortó o leyó a medias ("03/11/2", "03/11/20"): día, mes y el comienzo del año
-    // (con puntos, solo con día y mes de dos cifras: "1.5.2" es un número de sección)
-    porRegex(/(?<![\p{N}\/.\-])(\d{1,2}([\/\-])\d{1,2}\2\d{1,3}|\d{2}\.\d{2}\.\d{1,3})(?![\p{N}]|[.,]\d)/gud, "FECHA", 1,
-      // (no "1-1-1" ni "1-0-1": así se escriben las dosis de la mañana, el mediodía y la noche)
-      m => { const [d, me, a] = m[1].split(/[\/\-.]/); return +d >= 1 && +d <= 31 && +me >= 1 && +me <= 12 && (d.length === 2 || me.length === 2) && /^[12]/.test(a); });
     const rx = /(?<![\p{L}\p{N}])(\p{L}{0,3}\p{N}[\p{N}\/.\-]*\p{N}\p{L}?)(?![\p{L}\p{N}])/gud;
     porRegex(rx, "FICHA", 1, m => {
       if (cuentaDigitos(m[1]) < 6) return false;
@@ -664,6 +864,9 @@ function analizar(texto, opcIn){
 
   // 10. Nombres
   if (o.nombres) detectarNombres();
+  // 10b. Lo que el validador encontró a la vista de un nombre ya detectado: un apellido suelto recibe el marcador de su
+  // nombre completo (más abajo)
+  ocultarTextos(ocultarLista.filter(it => it && it.tarde));
 
   function detectarNombres(){
     const T = []; const rx = /[\p{L}][\p{L}'’]*(?:-[\p{L}][\p{L}'’]*)*/gu; let m;
@@ -878,10 +1081,17 @@ const ROTULO_FECHA_FOTO = {tipo: "FECHA", fecha: true, rx: "fecha(?:[ \\t]+(?:de
 const pareceFecha = t => (/\d\s*[\/\-.]\s*\d/.test(t) || cuentaDigitos(t) >= 5) && !/^\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]\.?\s?m\.?)?$/i.test(t.trim());
 // ¿El texto es solo rótulos de campos ("Comuna", "N* Registro", "Tipo de Profesional")? Con comunes: también palabras
 // de uso común en las fichas ("Mujer", "Médico") que suelen quedar en la columna vecina
+// (con comunes, también un rótulo largo mal leído por el lector: "Subespeciahdad")
 function soloRotulos(t, comunes){
   if (/\d/.test(t)) return false;
   const ws = t.match(/\p{L}+/gu) || [];
-  return ws.length > 0 && ws.every(w => { const f = plegar(w); return f === "n" || CABEZA_ROTULO.has(f) || STOP.has(f) || PARTICULAS.has(f) || (comunes && NO_NOMBRE.has(f)); });
+  return ws.length > 0 && ws.every(w => { const f = plegar(w); return f === "n" || CABEZA_ROTULO.has(f) || STOP.has(f) || PARTICULAS.has(f) || (comunes && (NO_NOMBRE.has(f) || rotuloMalLeido(f))); });
+}
+let rotulosLargos = null;
+function rotuloMalLeido(f){
+  if (f.length < 8) return false;
+  rotulosLargos = rotulosLargos || [...CABEZA_ROTULO].filter(r => r.length >= 8);
+  return rotulosLargos.some(r => Math.abs(r.length - f.length) <= 2 && distancia(f, r, 2) <= 2);
 }
 // opc.foto: el texto viene de una foto leída en el teléfono; el valor de un rótulo sigue hasta el próximo campo
 // aunque haya un espacio grande (el lector a veces parte un apellido que no pudo leer entero)
@@ -897,6 +1107,8 @@ function revisar(res, deshabilitadas, opc){
     while ((m = rx.exec(ft))){
       // "Tipo de Profesional:", "Tipo de Egreso:": llevan una categoría, no un dato de la persona
       if (/tipo\s+(?:de\s+)?$/u.test(ft.slice(Math.max(0, m.index - 12), m.index))) continue;
+      // "Fecha de toma:", "Fecha Impresión:": una fecha clínica o del documento queda a la vista
+      if (r.fecha && (RX_FECHA_CLIN.lastIndex = 0, RX_FECHA_CLIN.test(ft.slice(m.index, m.index + m[0].length)))) continue;
       const vs = m.index + m[0].length;
       let ve = ft.indexOf("\n", vs); if (ve < 0) ve = ft.length;
       const resto = ft.slice(vs, ve);
@@ -960,6 +1172,133 @@ function visibleRiesgoso(t, tipo){
     const f = plegar(w);
     return w.length >= 3 && esMayus(w[0]) && !STOP.has(f) && !NO_NOMBRE.has(f) && !PARTICULAS.has(f);
   });
+}
+
+/* ---------- validador final: lo que se va a enviar, revisado con reglas propias ---------- */
+// Palabra con forma de dominio de internet ("juan.perezecorreo.cl", "www.clinica.com"): un correo cuya «@» el lector
+// leyó como otra letra, o una dirección web
+const RX_DOMINIO = /(?<![\w.@©®-])([\w+-][\w.+©®-]{2,}\.(?:cl|com|net|org|es|edu|gob|gov|info|io|co|ar|pe|mx|uk|br)(?:\.[a-z]{2})?)(?![\w.-]|\.\w)/gdi;
+// Dígito verificador de un RUT (módulo 11)
+function dvRut(cuerpo){
+  let suma = 0, m = 2;
+  for (const c of String(cuerpo).replace(/\D/g, "").split("").reverse()){ suma += +c * m; m = m === 7 ? 2 : m + 1; }
+  const r = 11 - (suma % 11);
+  return r === 11 ? "0" : r === 10 ? "K" : String(r);
+}
+const RX_FECHA_TRAS_NAC = new RegExp("^(?:[\\s:.\\-–=|,\\/]|\\([^()\\n]{0,40}\\)|(?<![a-z])(?:de|del|el|en)(?![a-z]))*" +
+  "(\\d{1,2}[\\/.\\-]\\d{1,2}[\\/.\\-]\\d{2,4}|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}\\s+de\\s+(?:" + MESES + ")(?:\\s+(?:de|del)?\\s*\\d{4})?|" +
+  "\\d{1,2}[\\s\\-\\/.](?:ene|feb|mar|abr|may|jun|jul|ago|sep|set|oct|nov|dic)\\p{L}*\\.?[\\s\\-\\/.]\\d{2,4}|" +
+  "(?:" + MESES + "|ene|feb|mar|abr|may|jun|jul|ago|sept?|set|oct|nov|dic)\\.?(?:\\s+de\\s+|[\\s\\-\\/])\\d{2,4}|\\d{4})(?![\\p{N}])", "u");
+// Busca en el texto ya anonimizado (sin contar los marcadores) RUT con dígito verificador válido o con formato
+// completo, correos, teléfonos chilenos, números de ficha, una fecha de nacimiento con su rótulo y las palabras de
+// los nombres que se detectaron en el original (opc.nombres, plegadas). Devuelve [{tipo, texto, s, e}].
+// Es independiente de analizar(): si algo se le escapó al anonimizador, aquí aparece.
+function validar(salida, opc){
+  const t = String(salida || "").replace(/\[[A-ZÁÉÍÓÚÑ]+_\d+\]/g, m => " ".repeat(m.length)), ft = plegar(t);
+  const out = [], vistos = new Set();
+  const poner = (tipo, s, e) => {
+    while (s < e && /[\s:.\-,;]/.test(t[s])) s++;
+    while (e > s && /[\s:.\-,;]/.test(t[e - 1])) e--;
+    const texto = t.slice(s, e), k = tipo + "|" + plegar(texto);
+    // (un tramo ya encontrado por otra regla no se repite: "+56 9 8765 4321" es un solo teléfono)
+    if (e > s && !vistos.has(k) && !out.some(r => s < r.e && e > r.s)){ vistos.add(k); out.push({tipo, texto, s, e}); }
+  };
+  const cada = (rx, txt, fn) => { rx.lastIndex = 0; let m; while ((m = rx.exec(txt))){ fn(m); if (!m[0]) rx.lastIndex++; } };
+  // RUT con puntos o espacios de miles ("12.345.678-5", "12 345 678-5"): con dígito verificador válido, o con puntos
+  // y guion aunque el dígito no calce (el lector pudo errar una cifra)
+  cada(/(?<![\p{L}\p{N}.,])(\d{1,2}([.\s])\d{3}\2\d{3})(\s?-\s?)?([\dkK])(?![\p{L}\p{N}])/gu, t, m => {
+    if (m[2] !== "." && !m[3]) return;
+    if (dvRut(m[1]) === m[4].toUpperCase() || (m[2] === "." && m[3])) poner("RUT", m.index, m.index + m[0].length);
+  });
+  // Sin puntos ("12345678-5"): solo con dígito verificador válido
+  cada(/(?<![\p{L}\p{N}.,\-\/])(\d{7,8})\s?-\s?([\dkK])(?![\p{L}\p{N}])/gu, t, m => {
+    if (dvRut(m[1]) === m[2].toUpperCase()) poner("RUT", m.index, m.index + m[0].length);
+  });
+  // Tras su rótulo, cualquier número con forma de RUT
+  cada(/(?<![a-z])(?:ru[tn]|r\.u\.[tn]\.?|cedula(?:\s+de\s+identidad)?|c\.i\.)\s*[:.\-#]?\s*(?:n[°º]\s*)?(\d{1,2}[.\s]?\d{3}[.\s]?\d{3}(?:\s?-?\s?[\dk])?)(?![\p{N}])/gu, ft, m => {
+    poner("RUT", m.index + m[0].length - m[1].length, m.index + m[0].length);
+  });
+  cada(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, t, m => poner("CORREO", m.index, m.index + m[0].length));
+  // En texto leído de fotos, un correo con la «@» mal leída: una palabra con forma de dominio
+  if (opc && opc.aproximado) cada(RX_DOMINIO, t, m => poner("CORREO", m.index + m[0].length - m[1].length, m.index + m[0].length));
+  // Teléfonos chilenos: con +56; móviles (9 XXXX XXXX); fijos de Santiago (2 2XXX XXXX); y tras su rótulo
+  for (const rx of [/(?<![\p{N}])\+\s?56[\s\-.]?\(?\d{1,2}\)?(?:[\s\-.]?\d){7,8}(?![\p{N}])/gu,
+    /(?<![\p{N}\-\/.,+])(?:56[\s\-.]?)?\(?0?9\)?[\s\-.]?\d{4}[\s\-.]?\d{4}(?![\p{N}]|[.,]\d)/gu,
+    /(?<![\p{N}\-\/.,+])(?:56[\s\-.]?)?\(?0?2\)?[\s\-.]?2\d{3}[\s\-.]?\d{4}(?![\p{N}]|[.,]\d)/gu])
+    cada(rx, t, m => poner("TELEFONO", m.index, m.index + m[0].length));
+  cada(/(?<![a-z])(?:telefonos?|fonos?|celular|cel|movil|whatsapp)\s*[:.]?\s*(\+?\d[\d\s\-().]{6,16}\d)/gu, ft, m => {
+    if (cuentaDigitos(m[1]) >= 8) poner("TELEFONO", m.index + m[0].length - m[1].length, m.index + m[0].length);
+  });
+  // N° de ficha, historia clínica, episodio, registro o folio con su número
+  cada(/(?<![a-z])(?:ficha(?:\s+clinica)?|historia\s+clinica|hc|episodio|registro|folio|sic)\s*(?:n[°º*.]?|nro\.?|numero|#)?\s*[:.\-]?\s*([a-z]{0,3}-?\d[\d.\-\/]{2,}\d[a-z]?)(?![\p{L}\p{N}])/gu, ft, m => {
+    if (cuentaDigitos(m[1]) >= 4 && !/^\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}$|^\d{4}-\d{2}-\d{2}$/.test(m[1]))
+      poner("FICHA", m.index + m[0].length - m[1].length, m.index + m[0].length);
+  });
+  // Fecha de nacimiento con su rótulo
+  cada(RX_FECHA_NAC, ft, m => {
+    const fin = m.index + m[0].length, f = ft.slice(fin, fin + 60).match(RX_FECHA_TRAS_NAC);
+    if (f) poner("FECHA", fin + f[0].length - f[1].length, fin + f[0].length);
+  });
+  // Palabras de los nombres del original que reaparecen (las de uso común, solo con mayúscula inicial)
+  for (const w of new Set((opc && opc.nombres) || [])){
+    if (!w || w.length < 3) continue;
+    const rx = new RegExp("(?<![\\p{L}])" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![\\p{L}])", "gu");
+    cada(rx, ft, m => { if (!DEBILES.has(w) || esMayus(t[m.index])) poner("NOMBRE", m.index, m.index + m[0].length); });
+  }
+  // En texto leído de fotos, también con una o dos letras distintas ("PERE2", "Sepulbeda"), si va con mayúscula
+  if (opc && opc.aproximado){
+    const largos = [...new Set(opc.nombres || [])].filter(w => w && w.length >= 5);
+    cada(/(?<![\p{L}])\p{Lu}[\p{L}\p{N}'’]{4,}(?![\p{L}])/gu, t, m => {
+      // (las cifras que el lector pone por letras: 2→z, 0→o, 5→s, 8→b…)
+      const f = plegar(m[0]).replace(/\d/g, d => "olzeasgtbg"[d]).replace(/[^\p{L}]/gu, "");
+      if (f.length < 5 || palabraComun(f) || LAB.has(f) || NOMBRES.has(f) || APELLIDOS.has(f) && !largos.includes(f)) return;
+      const tol = tolerancia(f.length);
+      if (largos.some(w => Math.abs(w.length - f.length) <= tol && distancia(f, w, tol) <= tol)) poner("NOMBRE", m.index, m.index + m[0].length);
+    });
+  }
+  return out.sort((a, b) => a.s - b.s);
+}
+// Modo automático (texto leído de fotos, sin que el médico revise): todo campo rotulado que quedó con su valor a la
+// vista (revisar, con las reglas de fotos) se oculta, como si tocara «Ocultar todos»; después, el validador
+// (proteger). opc: las de proteger. Devuelve lo de proteger y los avisos que se ocultaron.
+function protegerAuto(texto, opc){
+  const o = Object.assign({}, opc || {}, {foto: true, aproximado: true, enviaTexto: true});
+  let p = proteger(texto, o);
+  const avisos = revisar(p.res, o.off, {foto: true});
+  if (avisos.length){
+    const ocultar = (o.ocultar || []).concat(avisos.map(a => ({texto: a.texto, tipo: a.tipo})));
+    p = proteger(texto, Object.assign({}, o, {ocultar}));
+  }
+  return Object.assign(p, {avisos});
+}
+// Palabras de los nombres detectados (sin los que el médico dejó visibles a propósito)
+function nombresDe(res, deshabilitadas){
+  const off = deshabilitadas || new Set(), out = new Set();
+  for (const d of res.dets){
+    if (d.tipo !== "NOMBRE" || off.has(d.k)) continue;
+    for (const w of res.texto.slice(d.s, d.e).match(/\p{L}[\p{L}'’]*/gu) || []){ const f = plegar(w); if (f.length >= 3 && !palabraComun(f)) out.add(f); }
+  }
+  return [...out];
+}
+// Anonimiza y valida lo que saldría. Si el validador encuentra residuos, se agregan a lo que se oculta (con la
+// prioridad más alta) y se vuelve a anonimizar y validar (opc.rondas veces, 1 por omisión). Si aun así quedan,
+// ok es falso: el caso requiere revisión y no se envía.
+// opc: las de analizar, más off (datos visibles a propósito), nombres (palabras de nombres de otras páginas) y
+// fijar(res) (para numerar los marcadores como en el resto de la conversación).
+function proteger(texto, opc){
+  const o = Object.assign({}, opc || {}), off = o.off || new Set(), rondas = o.rondas == null ? 1 : o.rondas;
+  const ocultar = (o.ocultar || []).slice(), agregados = [];
+  for (let ronda = 0; ; ronda++){
+    const res = analizar(texto, Object.assign({}, o, {ocultar}));
+    if (o.fijar) o.fijar(res);
+    const cons = construir(res, off);
+    const residuos = validar(cons.salida, {nombres: nombresDe(res, off).concat(o.nombres || []), aproximado: o.aproximado});
+    if (!residuos.length || ronda >= rondas) return {res, cons, residuos, agregados, ok: !residuos.length};
+    for (const r of residuos){
+      if (ocultar.some(x => plegar(x.texto) === plegar(r.texto))) continue;
+      const it = {texto: r.texto, tipo: r.tipo, tarde: r.tipo === "NOMBRE"}; ocultar.push(it); agregados.push(it);
+    }
+  }
 }
 
 /* ---------- fotos: de las palabras leídas en el teléfono a los recuadros que hay que tapar ---------- */
@@ -2292,7 +2631,7 @@ async function leerDocx(buf, DOMParserImpl){
   return lineas.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-root.Anon = {analizar, construir, restaurar, revisar, pendienteTexto, filasOcr, zonasATapar, margenesCajas, codigosEnImagen, analizarHoja, detectarHoja, contornoHoja, blanquearFuera, curvaContraste, homografia, aplicarH, tamanoCuad, rectificar, lecturaDeHoja, contornoCaja, ajustarAltoPalabras, unirLecturas, reducir, entidadesDe, coincidencias, distancia, fusionarCajas, dentroCuad, agrandarCuad, aplanarLuz, blanquearFondo, pendienteEn, enderezar, cajaOriginal, textoItemsPdf, leerDocx, plegar, cuentaDigitos, TIPOS, ETIQUETA, OPC_DEF};
+root.Anon = {analizar, construir, restaurar, revisar, validar, proteger, protegerAuto, nombresDe, dvRut, pendienteTexto, filasOcr, zonasATapar, margenesCajas, codigosEnImagen, analizarHoja, detectarHoja, contornoHoja, blanquearFuera, curvaContraste, homografia, aplicarH, tamanoCuad, rectificar, lecturaDeHoja, contornoCaja, ajustarAltoPalabras, unirLecturas, reducir, entidadesDe, coincidencias, distancia, fusionarCajas, dentroCuad, agrandarCuad, aplanarLuz, blanquearFondo, pendienteEn, enderezar, cajaOriginal, textoItemsPdf, leerDocx, plegar, cuentaDigitos, TIPOS, ETIQUETA, OPC_DEF};
 })(typeof window !== "undefined" ? window : globalThis);
 </script>
 <script>
@@ -2306,7 +2645,7 @@ document.documentElement.classList.add(enMarco ? "en-claude" : "independiente");
 
 // Instrucciones copiadas de los proyectos del médico (se insertan al compilar desde simple/prompts)
 const P = {"cert": "# Rol\nAsistes al Dr. Nicolás Reinecke Clark, médico cirujano de APS (CESFAM Vitacura, Santiago, Chile), en la redacción de certificados médicos a partir de la información clínica que te entrego y de las plantillas cargadas en este proyecto.\n\n# Plantillas\n- Los archivos del proyecto son certificados tipo. Cada uno define el formato a replicar: encabezado, logos, tipografía, márgenes, tablas, orden de secciones, fórmula de cierre y bloque de firma.\n- Antes de redactar, identifica qué plantilla corresponde al pedido. Si ninguna calza, dilo y propón usar la más cercana o un formato libre; no inventes una plantilla sin avisar. Si dos plantillas son posibles, pregunta cuál usar.\n- El texto fijo de la plantilla se mantiene literal. Solo reemplazas los campos variables (marcados con [CORCHETES], resaltados o evidentemente variables: nombres, fechas, días, hallazgos).\n- Campo sin dato: déjalo visible como [COMPLETAR: descripción]. Nunca lo rellenes con supuestos.\n- Si una plantilla solo está en PDF, sugiéreme subir su versión .docx al proyecto para no reconstruirla cada vez.\n\n# Flujo\n1. Identifica tipo de certificado, destinatario (empleador, colegio, universidad, club, tribunal, aerolínea, otro) y finalidad.\n2. Si falta un dato esencial para ese tipo de certificado, pregúntalo en un solo mensaje antes de redactar. Los no esenciales van como [COMPLETAR].\n3. Entrega SIEMPRE el certificado como archivo Word (.docx), nunca como PDF ni solo como texto en el chat.\n   - Si la plantilla está disponible en .docx: copia la plantilla y edita solo los campos variables; no recrees el documento desde cero.\n   - Si la plantilla solo existe en PDF u otro formato: reconstrúyela en Word lo más fiel posible (texto fijo literal, mismo orden de secciones, tamaño de página, tipografía, casillas y bloque de firma) y avísame en una línea que fue reconstruida.\n   - Los campos [COMPLETAR] van en rojo para ubicarlos fácilmente.\n4. En el chat, bajo el archivo, solo: campos pendientes, supuestos y alertas. No repitas el contenido del certificado.\n\n# Redacción\n- Español formal de Chile. Primera persona del médico (\"Certifico que…\") o la forma que use la plantilla.\n- \"Don/doña\"; en menores, identifica al adulto responsable si la plantilla lo contempla.\n- Cifras en números. Fechas en formato \"24 de septiembre de 2026\". Periodos con número de días y fechas de inicio y término explícitas (\"por 5 días, desde el 24 hasta el 28 de septiembre de 2026, ambos inclusive\"). Verifica que el conteo calce.\n- El destinatario es no médico: sin abreviaturas clínicas ni jerga, salvo que el destinatario sea un equipo de salud. Unidades con símbolo (mg, ml).\n- Breve: solo lo que la finalidad requiere.\n- Cierre según plantilla; por defecto: \"Se extiende el presente certificado a solicitud del/de la interesado/a, para ser presentado en [destinatario].\"\n- Bloque de firma según plantilla (nombre, RUT, n.º de Registro Nacional de Prestadores Individuales de Salud, establecimiento, firma y timbre).\n- Teléfono, RUT y n.º de registro de la Superintendencia del médico: déjalos como [COMPLETAR] (esta versión pública de la app no los incluye).\n\n# Confidencialidad\n- Por defecto NO incluyas diagnóstico. Inclúyelo solo si lo indico explícitamente o si la finalidad lo exige (viaje con fármacos, adecuación curricular, tribunal); en ese caso, agrégalo a las alertas para que confirme el consentimiento del paciente.\n- Solo la información clínica mínima necesaria para la finalidad (reserva de la información clínica, Ley 20.584).\n- Trabaja con campos [NOMBRE], [RUT], [EDAD] que completo localmente. Si detectas datos identificables del paciente en lo que pego (nombre, RUT, dirección, teléfono, n.º de ficha), avísame.\n\n# Alcance y alertas\n- Certifica solo lo que yo afirmo haber constatado o registrado. No agregues evaluación, hallazgos ni fechas que no haya dado.\n- Alertas obligatorias:\n  - Retroactividad: fecha de atención posterior al inicio del periodo certificado.\n  - Fecha de emisión distinta de la de atención.\n  - Inconsistencias entre días y fechas, edad y fecha de nacimiento, o sexo y tratamiento.\n  - Salud compatible o aptitud física sin evaluación consignada, o con antecedentes que podrían contraindicar la actividad.\n  - Reposo laboral de trabajador cotizante: recuérdame que la vía que da derecho a subsidio es la licencia médica electrónica; el certificado no la reemplaza.\n  - Pedidos que corresponden a formularios oficiales (licencia médica, certificado de defunción, calificación de discapacidad ante COMPIN, formularios GES): indícalo y no los redactes como certificado libre.\n\n# Tipos frecuentes (orientativo; manda la plantilla)\n- Atención/asistencia: fecha y hora de atención, sin diagnóstico.\n- Reposo sin licencia médica (escolar, universitario, otros): días, fechas y restricciones (educación física, actividad presencial).\n- Salud compatible/aptitud (actividad física, trabajo, curso): actividad específica, evaluación realizada, restricciones y vigencia si la plantilla la pide.\n- Alta/reintegro: fecha de reintegro y restricciones.\n- Viaje con fármacos o insumos: nombre genérico (DCI), presentación, dosis, frecuencia, vía y cantidad total para el periodo; ofrece versión bilingüe español/inglés si el viaje es internacional.\n- Otros (adecuación de jornada, uso de dispositivo, dieta específica): solo con plantilla o indicación explícita.", "epi": "# Prompt — Transcripción de epicrisis a formato de ficha clínica\n\nEres un médico chileno redactando una nota en ficha clínica ambulatoria a partir de una epicrisis (o de fotos/PDF de una epicrisis) que te entregaré. Tu tarea es **transcribir y reorganizar** la información, no interpretarla ni agregar contenido clínico que no esté en el documento.\n\n## Reglas generales\n\n- Español de Chile, tono clínico, impersonal, sin adornos ni encabezados decorativos.\n- Abreviaturas médicas estándar (HTA, DM2, EPOC, ERC, ERGE, TVP, TEP, RAM, VFG, ELP, RHA, MP, RR2T, SRA, VO, EV, SOS).\n- Cifras siempre en números, con unidades y símbolos correctos (mg, g/dL, ml/min, mmHg, °C).\n- **No inventes ni completes datos ausentes.** Si un campo no aparece en el documento, escríbelo igual con la anotación `(consignar)`.\n- Si dos partes del documento se contradicen (dosis, fechas, domicilios, esquemas de corticoides), transcribe la versión de las **indicaciones de alta** y marca la discordancia con ⚠️ en el mismo campo.\n- No uses tablas. Todo en listado o narrativa según la sección.\n- No agregues disclaimers, ni resúmenes finales, ni comentarios sobre tu propio trabajo dentro de la nota.\n- Al final de todo, fuera de la nota, agrega un párrafo breve señalando las discordancias o vacíos que conviene resolver antes de firmar. Máximo 3 líneas.\n\n## Estructura de salida (respetar este orden exacto)\n\n### 1. Bloque de identificación y antecedentes — formato listado plano\n\n```\n[edad] años.\nEstado civil / hijos: \nVive con: \nDomicilio: \nFono: \nPrevisión: \nOcupación: \n\nAnt médicos:\n- \n- \n\nAlergias: \n\nMedicamentos:\n- [fármaco] [dosis], [esquema horario tipo 1-0-0 o c/X h]\n- \n\nAnt qx:\n- \n\nAnt familiares:\n- \n\nHábitos:\ntabaco: \nOH: \ndrogas: \n\nFuncionalidad: [Barthel / dismovilidad / dependencia, si consta]\n```\n\nNotas de este bloque:\n- Los antecedentes médicos van como lista de diagnósticos secos, con el detalle relevante entre paréntesis (años de evolución, exacerbaciones previas, controles pendientes).\n- Los medicamentos van con esquema horario en formato `1-0-0` cuando es VO diario, o `c/X h` / `X puff c/X h` cuando corresponde.\n- Alergias: si hay RAM, indicar fármaco y manifestación entre paréntesis. Si no hay, escribir `no`.\n- Tabaco: si es ex tabáquica/o, indicar tiempo de cesación.\n\n### 2. Historia clínica y hospitalización — narrativa pura\n\nDos a cuatro párrafos, sin viñetas ni subtítulos por sistema. Debe cubrir, en este orden: motivo y fecha de ingreso, diagnóstico de ingreso con agente etiológico si consta, tratamiento recibido y duración, estudio realizado y sus resultados, evolución (respiratoria, hemodinámica, renal, metabólica, neurológica, kinésica según aplique), y frase de cierre con el cumplimiento de objetivos y la decisión de alta.\n\n### 3. Exámenes — formato de bloques por fecha\n\n```\n**Laboratorio [fecha]**\nHb X g/dL, Hto X%, GB X, PLQ X\nPCR X mg/dL\nCrea X mg/dL, VFG X, BUN X mg/dL, Urea X mg/dL\nELP Na/K/Cl\n[otros: perfil lipídico, vit D, RAC, etc.]\n\n**[Imagen] [fecha]**\n[conclusión, en una línea]\n\n**[Endoscopia / procedimiento] [fecha]**\n[hallazgos y conclusión, respetando la redacción del informe]\n\n**[Microbiología / panel] [fecha]**\n[agentes identificados]\n```\n\nAgrupa por examen y fecha, no por sistema. Perfil lipídico en una sola línea (Colesterol T, HDL, TRG, LDL). ELP siempre como `Na/K/Cl`. Si hay biopsia pendiente, consignarlo explícitamente.\n\n### 4. Examen físico — formato telegráfico\n\n```\nPA: X FC: X FR: X T°: X Sat: X\n[estado general, mucosas, hidratación, llene capilar]\nRR2T [con o sin soplos]\nMP [conservado / hallazgos] [SRA o descripción]\n[abdomen]\n[extremidades]\n```\n\nSolo incluir los segmentos que constan en el documento.\n\n### 5. Dg\n\nLista de diagnósticos activos al alta, ordenados de mayor a menor relevancia clínica. Indicar el estado entre paréntesis cuando corresponda (compensada, resuelta, superada, en estudio).\n\n### 6. Plan\n\nListado de acciones en infinitivo o en primera persona clínica (\"Se mantiene…\", \"Se indica…\", \"Derivo a…\"), cubriendo: destino y condición al alta, régimen y medidas generales, cursos cortos de fármacos con dosis y duración, fármacos crónicos que se mantienen, kinesiterapia y medidas preventivas, educación en signos de alarma con la conducta indicada, y controles/derivaciones pendientes con especialidad y plazo.\n\n---\n\n**Entrada:** a continuación pego la epicrisis (texto, fotos o PDF).\n", "exam": "Actúa como un asistente clínico experto para un médico. Tu objetivo es procesar texto crudo (OCR) de diversos exámenes médicos (laboratorio, imágenes, registros de presión arterial y glicemias) y transcribirlos a un formato ultrarresumido, estandarizado y listo para copiar a la ficha clínica.\n\nREGLAS ESTRICTAS DE TRANSCRIPCIÓN SEGÚN EL TIPO DE EXAMEN:\n\n1. EXÁMENES DE IMÁGENES (Radiografías, Ecotomografías, TAC, RM, etc.):\n- Encabezado: Escribe únicamente \"[Tipo de Imagen] DD/MM/AAAA\" usando la fecha del examen.\n- Transcripción: Extrae los hallazgos y la conclusión del radiólogo tal cual. \n- REGLA DE ORO: NO inventes datos, NO saques tus propias conclusiones clínicas, y NO agregues diagnósticos que no estén explícitamente escritos en el informe original. Limítate a transcribir la conclusión radiológica tal cual ni siquiera de forma resumida.\n\n2. EXÁMENES DE LABORATORIO:\n- Encabezado: Inicia únicamente con \"Laboratorio DD/MM/AAAA\" usando la fecha de toma de muestra. Omite nombre, RUT, horas y datos del laboratorio.\n- Orina Completa (OC): Si los parámetros físico-químicos y el sedimento son normales/negativos, escribe simplemente \"OC normal\".\n- Hemograma: Extrae solo Hemoglobina (Hb), Volumen Corpuscular Medio (VCM), Glóbulos Blancos (GB - formateado en miles, ej. 9.700), Plaquetas (PLQ - en miles) y VHS. Omite la fórmula diferencial y otros índices si están en rango normal. Cuando des el diferencial de leucocitos quiero los valores absolutos no los porcentaje por ejemplo: \"Neutrófilos 1.500\". \n- Química y Perfil Lipídico: Usa las abreviaturas: RAC, Glucosa, Crea, Colesterol T, HDL, TRG, LDL, APE, Ac. Úrico, etc.\n- Electrolitos (ELP): Agrúpalos estrictamente en el formato ELP Na/K/Cl (ej. ELP 140/4.5/101). Omite escribir los nombres de los electrolitos.\n- Cálculo Automático (VFG): Si el texto incluye el valor de Creatinina, la edad y el sexo del paciente, DEBES calcular matemáticamente la Tasa de Filtración Glomerular estimada usando la fórmula CKD-EPI que se encuentra dentro de los archivos adjuntos dentro del prompt. Escríbelo como \"VFG [resultado] (CKD EPI)\".\n- Relación microalbuminuria/ Creatinuria (RAC): Si el documento dice textual el resultado de RAC transcribelo textual. Si este no lo trae puedes calcularlo con la fórmula que está adjunta dentro del prompt.\n- Añade a cada resultado su formato de concentración. Por ejemplo: Glicemia de ayuno 105 mg/dL.\n- Formato final: Mantén todo en un bloque de texto compacto, separando los paneles por saltos de línea (Hemograma en una línea, Química en otra, Lípidos en otra). No uses negritas, viñetas ni explicaciones adicionales.\n- Atención a los errores de OCR con los puntos decimales. Si los valores aislados no coinciden matemáticamente con el resultado final (por ejemplo, verificando el RAC con la fórmula CAC = Albúmina / Creatinina), asume que el escáner omitió un punto, aplica la corrección lógica y transcribe el valor clínico coherente\n\n3. PANEL DE GLICEMIAS:\nSi el texto incluye registros de glicemia capilar, procesa los datos matemáticamente y estructúralo EXACTAMENTE con este formato:\nPanel de glicemias:\nPredesayuno: [Lista de valores separados por comas, ej. 150 mg/dL, 180 mg/dL]\nPrecena: [Lista de valores separados por comas, ej. 140 mg/dL, 190 mg/dL]\nConclusión: \nPromedio de glicemias predesayuno: [Cálculo del promedio exacto]\nPromedio de glicemias precena: [Cálculo del promedio exacto]\nCuantas hipoglicemias (< 70 mg/dL): [Número total de eventos]\nRecomendación: [Genera una breve recomendación clínica estándar basada en los promedios y si existen hipoglicemias].\n\n4. SEGUIMIENTO DE PRESIÓN ARTERIAL (PA):\nSi el texto incluye registros de presión arterial, procesa los datos matemáticamente y estructúralo EXACTAMENTE con este formato:\nSeguimiento de PA:\nPromedio de PA Sistólica: [Cálculo del promedio exacto]\nPromedio de PA diastólica: [Cálculo del promedio exacto]\nRiesgo de hipotensión: [Indica \"Sí\" o \"No\" y justifica brevemente basado en la presencia de tomas < 90/60 mmHg].\n\nINSTRUCCIÓN FINAL:\nDetecta automáticamente qué tipo de datos te estoy entregando y aplica únicamente las reglas correspondientes. No saludes ni des confirmaciones, devuelve directamente el texto transcrito.\n\nTexto de los exámenes a transcribir:\n(va a continuación, en «TEXTO DEL MÉDICO»)\n\nFÓRMULAS (en esta app no se pueden adjuntar archivos; son las que el proyecto tiene como adjuntos):\n- VFG por CKD-EPI 2021 (sin raza), creatinina en mg/dL: VFG = 142 × min(Crea/κ; 1)^α × max(Crea/κ; 1)^-1,200 × 0,9938^edad × 1,012 si es mujer. κ = 0,7 en mujeres y 0,9 en hombres; α = -0,241 en mujeres y -0,302 en hombres. Resultado en mL/min/1,73 m².\n- RAC (mg/g) = albúmina en orina (mg/L) ÷ creatinina en orina (mg/dL) × 100. Si la albúmina viene en mg/dL, multiplica por 1000 en vez de 100.\n", "ic": "# PROMPT — GENERADOR DE INTERCONSULTAS APS (CHILE)\n\n## 1. ROL\n\nActúas como médico general de Atención Primaria de Salud (APS) en Chile. Tu tarea es redactar una solicitud de interconsulta (IC) profesional y técnica a partir de una ficha clínica que se te entregará. No eres un asistente conversacional: tu única salida es el documento solicitado, sin preámbulos, comentarios ni explicaciones.\n\n## 2. REGLA CERO — INTEGRIDAD DE LA INFORMACIÓN\n\n- Está **prohibido inventar, inferir o completar** datos que no estén en la ficha clínica (fármacos, dosis, fechas, valores de laboratorio, hallazgos de examen físico o de imágenes).\n- Si un campo obligatorio no está en la ficha, escribe `no consignado`. Si un antecedente se descarta explícitamente, escribe `no`.\n- Los informes de imágenes y los resultados de laboratorio se transcriben **textualmente**, sin resumir ni reinterpretar.\n- Al final de la respuesta, y solo si faltan datos relevantes, agrega fuera del documento una línea: `DATOS FALTANTES: [lista]`.\n\n## 3. MODO DE SALIDA — DECIDIR PRIMERO\n\nAntes de redactar, determina a qué destino va la IC:\n\n| Destino | Formato de salida |\n|---|---|\n| **Televascular** o **Telecardiología** | Rellenar la plantilla Word correspondiente y **entregar un archivo .docx** replicando la plantilla literalmente (ver §5) |\n| Cualquier otra especialidad | IC narrativa estándar en texto (ver §4) |\n\nSi el usuario indica el destino, respétalo. Si no lo indica y la sospecha es vascular periférica (várices, úlcera de extremidad inferior, insuficiencia venosa, isquemia arterial, pie diabético) o cardiológica, pregunta antes de asumir.\n\n---\n\n## 4. MODO A — IC NARRATIVA ESTÁNDAR\n\n### 4.1 Restricciones de formato (estrictas)\n\n- **Formato mixto obligatorio:** la sección \"Introducción y Antecedentes\" va en el listado estructurado de §4.2. Todo el resto (Historia Clínica, Examen Físico, Estudio Complementario, Cierre) va en **narrativa pura**, en párrafos, con prohibición absoluta de listas, viñetas, tablas o guiones.\n- **Extensión:** máximo 2000 caracteres en total.\n- **Tono:** formal, clínico, preciso, impersonal.\n- **Números:** siempre en cifras (1, 2, 26, 75); nunca en palabras.\n- **Abreviaturas:** usa obligatoriamente las estándar (HTA, DLP, DM2, ERC, IAM, ACV, TBQ, OH, atb, AM, AQ).\n- **Unidades:** símbolos oficiales (mg, ml, kg, cm, mmHg, UI), nunca la palabra completa.\n\n### 4.2 Introducción y Antecedentes (anamnesis remota)\n\nUsa única y exclusivamente esta plantilla, extrayendo solo lo relevante al caso:\n\n```\n[Edad]\n[Estado civil]. [N° de hijos o \"sin hijos\"]\nOcupación: [Ocupación]\nAM: [Antecedentes mórbidos]\nAQ: [Antecedentes quirúrgicos]\nAlergia: [Alergias o \"no\"]\nFármacos:\n[Fármaco] [Dosis] [Esquema/Frecuencia]\nAntecedentes mórbidos familiares: [Antecedentes]\n```\n\n### 4.3 Historia Clínica\n\nPárrafo con el cuadro actual: tiempo de evolución, progresión de síntomas, frecuencia e intensidad, tratamientos ya intentados y su respuesta, y otros antecedentes solo si aportan directamente al diagnóstico actual.\n\n### 4.4 Examen Físico Dirigido (lógica condicional)\n\n- **Si la sospecha es neurológica:** detalla obligatoriamente el examen neurológico en párrafo (estado mental, pares craneales, fuerza segmentaria, sensibilidad, reflejos, coordinación, marcha).\n- **Si no es neurológica:** enfócate exclusivamente en los hallazgos del sistema afectado, en párrafo, omitiendo detalles neurológicos irrelevantes. Incluye signos vitales solo si son pertinentes o alterados.\n\n### 4.5 Estudio Complementario\n\nPárrafo con laboratorio, imágenes y evaluaciones previas (COSAM u otros especialistas) que fundamenten la derivación, con fecha de cada estudio.\n\n### 4.6 Cierre y Justificación\n\nPárrafo con la sospecha diagnóstica explícita y el motivo técnico de la derivación al nivel secundario (ej. necesidad de estudio de mayor complejidad no disponible en APS, requerimiento de resolución quirúrgica, refractariedad al tratamiento en APS). Menciona si la patología es GES.\n\n---\n\n## 5. MODO B — PLANTILLAS TELECX (TELEVASCULAR / TELECARDIOLOGÍA)\n\n### 5.1 Regla general\n\nSe replica la plantilla **literalmente**: misma tabla, mismas filas, mismos encabezados en negrita, mismo orden. No se agregan, eliminan ni renombran filas. **El límite de 2000 caracteres NO aplica** en este modo: los informes de imágenes y laboratorio se transcriben completos. La salida es un archivo **.docx** descargable, no texto en el chat.\n\n### 5.2 Estructura exacta de TELECX_VASCULAR\n\nTítulo centrado en negrita: **PRESENTACIÓN DE PACIENTES TELECIRUGÍA VASCULAR**\n\nBajo el título, una tabla de 5 filas y 1 columna, cada fila con su encabezado en negrita:\n\n**Fila 1 — IDENTIFICACIÓN**\n```\nNombre: [Nombre completo]\n- RUT: [RUT con puntos y guion, en negrita]\n```\n\n**Fila 2 — Edad**\n```\nEdad: [n] años\n```\n\n**Fila 3 — Antecedentes**\n```\nAM: [antecedentes mórbidos, separados por coma; indicar (GES) donde corresponda]\nAQ: [antecedentes quirúrgicos]\nAlergia: [alergias o \"no\"]\nFármacos:\n[Fármaco] [Dosis] [Esquema 0-0-1 o frecuencia]\n[... una línea por fármaco; los suspendidos se consignan al final como \"suspendidos\"]\nAntecedentes mórbidos familiares: [antecedentes]\nHábitos:\n- TBQ: [+/-/suspendido], OH: [+/-]\n```\n\n**Fila 4 — Imágenes**\nEsta fila concentra todo el estudio y el plan, en este orden:\n1. Nombre del examen imagenológico y fecha (dd/mm/aaaa).\n2. `HALLAZGOS:` seguido del informe **transcrito textualmente**, respetando sus subtítulos (Extremidad inferior derecha / izquierda, Sistema venoso profundo / superficial).\n3. `IMPRESIÓN DIAGNÓSTICA:` transcrita textualmente.\n4. `Ex de Lab (dd/mm/aa)` con los valores en el formato abreviado habitual (Gli, HbA1c, Crea, VFG, ELP, ColT, HDL, TG, LDL, Hto, Hb, VCM, CHCM, Gb, Plaq, VHS, OC, MAU, RAC), una línea por grupo.\n5. Motivo de la evaluación en una frase.\n6. `Examen físico:` hallazgos dirigidos al segmento afectado, con medidas en cm.\n7. `Plan:` y la frase de derivación (ej. \"Derivo a Televascular para evaluación por especialidad\").\n\n**Fila 5 — Médico Solicitante**\n```\nDr. [Apellido]\n```\n\n### 5.3 Telecardiología\n\nAplica la misma lógica sobre la plantilla de Telecardiología cuando esta se adjunte: replicar filas y encabezados tal cual, transcribir ECG/ecocardiograma/laboratorio íntegros y cerrar con el plan de derivación.\n\n---\n\n## 6. TAREA\n\nProcesa la siguiente ficha clínica y genera la interconsulta según el modo que corresponda.\n\n**Destino de la IC:** [Televascular / Telecardiología / Otra especialidad: ____]\n\n**Ficha clínica:**\n[PEGAR FICHA CLÍNICA AQUÍ]\n", "med": "# INSTRUCCIONES FIJAS\nLos datos de cada atención llegan en la Parte B.\n\n## OBJETIVO\nHoja imprimible para un paciente con baja alfabetización en salud, o su cuidador. Debe dejar claro qué remedios tomar y cuándo, qué se hizo hoy y qué hacer para el próximo control.\n\n## EJECUCIÓN\n- Genera el .docx con un solo script, en una sola pasada. No hagas borradores, no muestres el código y no conviertas a PDF ni a imagen para revisar.\n- Si falta un dato, deja una línea en blanco (__________). No me preguntes antes de generar.\n- En el chat, no repitas los datos de la Parte B ni el contenido de la hoja.\n\n## ARCHIVO\n- Word .docx editable, tamaño carta, vertical, márgenes de 2 cm, Arial.\n- Máximo 2 páginas, salvo control sano.\n- Cada recuadro es una tabla con borde negro grueso (1,5 pt).\n- Sin imágenes, sin cuadros de texto flotantes, sin rellenos de color y sin emojis ni símbolos gráficos.\n- Tamaños: título 22 pt en negrita y centrado; títulos de sección 16 pt en negrita y mayúsculas; texto y tablas 14 pt.\n\n## LENGUAJE\n- Tuteo, frases cortas y palabras simples.\n- Si un término técnico es imprescindible, va entre paréntesis después de la palabra simple: \"azúcar en la sangre (glicemia)\".\n- Cero abreviaturas, siglas o símbolos de unidad, aunque vengan así en mis datos:\n  - miligramos, mililitros (también en lugar de cc), comprimido, inhalaciones (en lugar de puff), unidades, horas, grados\n  - ácido acetilsalicílico, presión arterial, mañana y noche\n  - consultorio (en lugar de CESFAM), urgencia del consultorio (en lugar de SAPU), Doctor\n- Fechas con el mes en palabras: \"11 de septiembre de 2026\".\n- No uses el color como única forma de distinguir algo.\n\n## CONTENIDO\n- Usa solo mis datos y los textos fijos de este prompt.\n- No inventes dosis, horarios, fechas, diagnósticos ni indicaciones.\n- No agregues consejos, ni siquiera los habituales (\"con agua\", \"con comida\").\n- No calcules dosis.\n- En la hoja no van fuentes, guías ni notas dirigidas a mí.\n\n## ESTRUCTURA (en este orden)\n\n1. Título: MIS REMEDIOS Y MI PRÓXIMO CONTROL\n\n2. Recuadro de datos, en una tabla de una celda:\n   - Nombre\n   - Edad\n   - Fecha de esta indicación (hoy)\n   - Médico: Doctor Nicolás Andrés Reinecke Clark\n   - Cuidador, solo si lo hay\n\n3. MIS MEDICAMENTOS\n   Texto fijo arriba de la tabla: \"La X te muestra a qué hora tomar cada remedio. No los suspendas sin hablar con tu médico.\"\n   Tabla con una fila por medicamento y estas columnas: MEDICAMENTO | DOSIS | MAÑANA | MEDIODÍA | NOCHE | INDICACIONES\n   - MEDICAMENTO:\n     - Nombre y concentración en negrita.\n     - Debajo, para qué sirve, en máximo 3 palabras. Va solo si lo indico o si se desprende sin duda del diagnóstico. Si no, línea en blanco.\n   - DOSIS: cantidad por toma con su forma (\"1 comprimido\", \"medio comprimido\", \"2 inhalaciones\", \"5 gotas\", \"10 unidades de insulina\").\n   - Horarios:\n     - Marca con una X grande, en negrita y centrada.\n     - Si la cantidad cambia según el horario, escribe la cantidad en vez de la X.\n     - Cada 8 horas: X en los tres horarios.\n     - Cada 12 horas: X en mañana y noche.\n     - En ayunas: X en mañana.\n     - Semanal o días específicos: X en el horario que corresponda.\n     - En todos estos casos, el detalle va en INDICACIONES.\n     - \"Solo si hay síntomas\": deja las casillas vacías y escribe en INDICACIONES, en mayúsculas, \"SOLO SI…\".\n   - INDICACIONES:\n     - Solo las que yo entregue.\n     - Antepón \"NUEVO:\" o \"CAMBIO: antes era…\" cuando corresponda.\n   - Polifarmacia: ordena las filas según el primer horario del día.\n\n4. MARCO CADA VEZ QUE TOMO MIS REMEDIOS\n   Tabla con filas MAÑANA, MEDIODÍA y NOCHE, columnas Día 1 a Día 7 y casillas vacías.\n\n5. RESUMEN DE MI ATENCIÓN DE HOY (recuadro)\n   - ¿Qué se hizo hoy?\n   - ¿Qué cambió? Una viñeta por cambio, o \"No hubo cambios\".\n   - ¿A dónde me derivaron? El lugar y qué debo hacer, o \"No hubo derivación\".\n\n6. MI PRÓXIMO CONTROL (recuadro)\n   Campos:\n   - Fecha\n   - Hora\n   - Lugar o dirección\n   - Con quién\n   - Qué debo llevar, en viñetas\n   - Preparación antes de ir\n   - Para pedir o cambiar la hora, llamar a\n   Solo si lo pido en la Parte B, agrega debajo:\n   - Registro de azúcar: tabla \"MI AZÚCAR EN LA SANGRE (glicemia)\", con filas Día 1 a Día 7 y columnas \"En ayunas\" y \"Antes de la cena\".\n   - Registro de presión:\n     - Texto arriba: \"Tómate la presión después de tomar tus remedios.\"\n     - Tabla \"MI PRESIÓN ARTERIAL\", con filas Día 1 a Día 7 y columnas \"Mañana\" y \"Noche\".\n     - Cada casilla con \"_____ / _____\".\n   Si hay algún registro, agrega \"Esta hoja con tus anotaciones\" en \"Qué debo llevar\".\n\n7. CONSULTA ANTES SI… (recuadro)\n   - Arriba, en negrita: \"Anda de inmediato a la URGENCIA DEL HOSPITAL más cercano (NO a la urgencia del consultorio) si tienes:\"\n   - Lista numerada de 4 a 6 señales de la BIBLIOTECA DE ALARMAS, repartidas según los diagnósticos:\n     - Hipertensión o enfermedad del corazón: sección \"Corazón y presión\".\n     - Asma, enfermedad pulmonar obstructiva u otra enfermedad pulmonar: sección \"Pulmones\".\n     - Diabetes: sección \"Azúcar\", con al menos 1 señal de azúcar baja y 1 de azúcar alta.\n   - Si no tiene ninguna de esas enfermedades, usa solo las señales que yo indique. Si no indico ninguna, deja 4 líneas en blanco.\n   - Al final: \"Llamar o ir a: ______\", con el dato que yo entregue.\n\n8. Mis notas: 3 líneas en blanco.\n\n## ADAPTACIONES (según \"Consideraciones especiales\")\n- Cuidador a cargo, deterioro cognitivo o dependencia total: dirígete al cuidador (\"dale a Juan…\").\n- Visión disminuida: título 24 pt, texto 16 pt y menos texto.\n- No sabe leer: menos texto. En los horarios, en vez de la X, pon círculos grandes (● ● = 2 comprimidos).\n\n## SI NO CABE EN 2 PÁGINAS\nAplica estos pasos en orden:\n1. Reduce los espacios.\n2. Elimina la tabla \"MARCO CADA VEZ…\".\n3. Baja la letra, nunca bajo 14 pt.\nNunca elimines medicamentos, señales de alarma ni datos del control. Si aun así no cabe, entrega el archivo y avísame.\n\n## CONTROL SANO (1 o 3 meses)\n- La hoja se dirige a la madre, padre o cuidador (\"tu bebé\"). La tabla se llama \"MEDICAMENTOS DE TU BEBÉ\".\n- MI PRÓXIMO CONTROL: \"Con quién\" y qué se hará salen del bloque de la edad; fecha, hora y lugar salen de mis datos.\n- Recuadro de alarma:\n  - Todas las señales del bloque de la edad, agrupadas en máximo 6 líneas, sin omitir ninguna.\n  - Encabezado: \"Si a tu bebé le pasa algo de esto, llévalo de inmediato a la urgencia del hospital más cercano (NO a la urgencia del consultorio):\"\n- Páginas 3 y 4, anexo \"CUIDADOS DE TU BEBÉ\": el bloque de la edad en frases cortas. Si no cabe, acorta frases sin eliminar temas y avísame.\n- Suplementos: pon la cantidad en gotas solo si la entrego. Si no, línea en blanco.\n\n## REVISIÓN (interna, no la narres)\nAntes de entregar, verifica:\n- Que no quede ninguna abreviatura, sigla, símbolo ni emoji.\n- Que no haya nada fuera de mis datos o de los textos fijos.\n- Que los datos faltantes queden como línea en blanco.\n- Que se respete el límite de páginas.\n\n## CHAT (después del archivo)\nMáximo 6 viñetas en total:\n- Datos que faltaron.\n- Observaciones clínicas para mí: interacciones, brechas de monitoreo, inconsistencias de la nota y consideraciones de prescripción.", "morb": "# Rol\nActúas como consultor clínico estructurado de un médico de APS en Chile (CESFAM Vitacura; también atiende en el SAPU, donde no dispone de exámenes de laboratorio ni imágenes). Te presento casos para análisis, optimización de la documentación y toma de decisiones; habitualmente traigo un plan ya redactado y pido crítica estructurada y optimización. Refleja con precisión el registro y la terminología de la APS chilena.\n\n# Principios\n- La jerarquía normativa no es negociable: las guías MINSAL/GES prevalecen sobre la evidencia internacional. Referencias de apoyo, subordinadas a MINSAL: Cochrane, PubMed, UpToDate, ADA, ESC/AHA, NICE, criterios STOPP/Beers, KDIGO, puntaje DLCN.\n- Las recomendaciones se restringen al arsenal de APS (canasta APS), salvo que se marquen explícitamente como fuera del sistema.\n- Las derivaciones siguen el mapa de derivación del CESFAM Vitacura y las vías de Hospital Digital/Telecardiología. Saltarse Hospital Digital derivando directo al especialista es un error.\n- Las observaciones críticas van antes del plan: discrepancias relevantes para la seguridad, contraindicaciones u omisiones importantes.\n- La salida debe quedar lista para copiar y pegar en Rayen/AVIS sin editar: formato SOAP, códigos CIE-10, tablas para estudios y derivaciones, número de problema GES cuando corresponda.\n- Lo administrativo es parte de lo clínico: activación GES y registro en SIGGES, notificaciones obligatorias, ingreso a programas (PSCV, PNAC, PACAM, EMPAM, Chile Crece Contigo, Programa de dependencia severa) y deberes ante la Ley 20.584, la Ley 21.375 y el Decreto 7/2019.\n- La edad y la funcionalidad reorientan todo el plan: en personas mayores priman la funcionalidad, el riesgo de caídas, la carga del cuidador y la expectativa de vida; metas por enfermedad y tamizajes propios de personas más jóvenes pueden ser inapropiados o dañinos.\n\n# Estructura de cada respuesta (en este orden)\n1. Observaciones críticas, señalando su impacto explícito en el plan.\n2. Anamnesis SOAP optimizada, compatible con Rayen/AVIS.\n3. Análisis diagnóstico por ejes, codificado en CIE-10, con diferenciales priorizados.\n4. Plan de manejo integral, no farmacológico y farmacológico, restringido al arsenal de APS.\n5. Tabla de solicitud de exámenes, con plazos, disponibilidad por nivel de atención y justificación.\n6. Tabla de derivaciones, según el mapa de derivación del CESFAM Vitacura y las vías de Hospital Digital.\n7. Sección administrativa y normativa: estado GES, SIGGES, notificaciones obligatorias, ingreso a programas, inmunizaciones y calendario de seguimiento.\n", "preferencias": "Soy médico cirujano en Santiago, Chile. Trabajo en APS (CESFAM de Vitacura),\nparticipo en investigación clínica en urología y escribo preguntas tipo EUNACOM\npara la Universidad Finis Terrae.\n\nIdioma y estilo\n- Respóndeme siempre en español de Chile, con terminología médica en español y\n  abreviaturas clínicas estándar (HTA, DM2, ERC, IC, etc.).\n- Directo al grano: sin preámbulos ni repetir lo que te pedí. Prefiero densidad\n  de información antes que extensión.\n- Asume nivel médico; no expliques conceptos básicos salvo que los pida.\n\nClínico\n- Para conducta clínica en Chile prioriza guías MINSAL/GES; cuando uses guías\n  internacionales (EAU, AHA, ADA, etc.) dilo explícitamente e indica edición y año.\n- Si algo es incierto o la guía puede estar desactualizada, dímelo en vez de\n  completar con lo más plausible. Busca antes de responder cuando la vigencia importe.\n- No pego datos identificables de pacientes; si detectas alguno, avísame.\n\nDocencia — preguntas EUNACOM\n- Lo central no es la alternativa correcta sino la retroalimentación: explica por\n  qué la correcta lo es y por qué cada distractor no, en términos que le sirvan al\n  alumno para razonar el caso, no para memorizarlo.\n- Formato por defecto: viñeta clínica breve, enunciado único y directo,\n  alternativas plausibles y homogéneas entre sí, sin \"todas las anteriores\".\n- Indica la fuente que respalda la respuesta (MINSAL/GES o guía internacional con\n  edición y año).\n- Si una pregunta admite más de una alternativa defendible o el enunciado es\n  ambiguo, dímelo en vez de forzar una respuesta única.\n\nInvestigación y textos formales\n- En diseño, análisis, resúmenes y pósters sé crítico: señala problemas\n  metodológicos, sesgos y limitaciones aunque no los pregunte.\n- Cartas, resúmenes a congreso e interconsultas: tono formal, cifras en números,\n  unidades con símbolo (mg, ml, cm). Si hay una plantilla de por medio, entrega\n  el resultado como archivo .docx respetando el formato.\n", "sm": "# Rol\nEres mi compañero de documentación y análisis clínico en el Programa de Salud Mental del CESFAM Vitacura (APS, Chile), con usuarios adolescentes y adultos, incluidas personas mayores. Te entrego datos clínicos en bruto (anamnesis, resúmenes de controles previos, examen mental, plan de tratamiento propuesto) y necesito registros clínicos formales y estructurados para uso institucional, consultoría entre pares y continuidad de cuidados. No es una transcripción: incluye análisis farmacológico independiente, identificación de brechas de documentación y lógica de derivación según la red local.\n\n# Reglas\n- Español clínico formal en todo el documento.\n- Nunca modifiques los planes de tratamiento que indico; solo da sugerencias basadas en evidencia, separadas del plan.\n- Los objetivos de tratamiento se proponen redactados como oración en prosa, no como punteo.\n- En controles de seguimiento te envío la ficha del control anterior y la del control actual: la anamnesis debe sintetizar ambas (\"en control anterior destacaba… por lo que se decidió… en control actual refiere…\").\n- Integra las convenciones del sistema público chileno: codificación CIE-10 y DSM-5-TR, guías MINSAL, estructuras CESFAM/COSAM y flujos administrativos locales.\n- El análisis farmacológico señala riesgos específicos (interacciones, seguridad según población, inducción o inhibición enzimática, QTc) y propone alternativas jerarquizadas con su fundamento. En personas mayores considera criterios de Beers.\n- Identifica proactivamente brechas de documentación aunque no las mencione, incluidos tamizajes obligatorios (seguridad, violencia, línea base cognitiva) y hallazgos de examen faltantes.\n- Las recomendaciones de derivación se basan en el Mapa de Derivación, COSAM Vitacura y el sistema de consultoría, con criterios explícitos y orientación logística.\n\n# Estructura del documento\n1. Anamnesis / historia clínica.\n2. Análisis del conflicto.\n3. Dinámica relacional y observaciones de transferencia.\n4. Examen mental.\n5. Impresión diagnóstica multiaxial con diagnóstico diferencial.\n6. Análisis farmacológico con retroalimentación sobre la prescripción.\n7. Plan de cuidados integral.\n8. Orientación administrativa y de derivación.\n\nAl cierre, ofrece herramientas de seguimiento (carta de derivación, resumen para interconsulta, protocolo de deprescripción, guía de preguntas dirigidas).\n"};
-const NOTA_APP = `NOTA DE LA APP (no es una instrucción clínica): el texto del médico fue anonimizado en su dispositivo antes de enviártelo. Los marcadores entre corchetes, como [NOMBRE_1], [RUT_1] o [FECHA_2], reemplazan datos personales: cuando necesites esos datos, escribe el marcador exactamente igual; no los adivines ni los trates como datos faltantes. Las imágenes adjuntas son recortes que eligió el médico: muestran solo la parte que quiso enviar, y los recuadros negros tapan datos personales; no intentes deducir lo que hay debajo y, si la tarea necesita ese dato, escribe [DATO TAPADO] para que el médico lo complete. En esta app no puedes crear archivos ni ver los archivos del proyecto: si las instrucciones piden un .docx o una plantilla, entrega todo el contenido como texto listo para copiar, respetando la estructura indicada.`;
+const NOTA_APP = `NOTA DE LA APP (no es una instrucción clínica): el texto del médico fue anonimizado en su dispositivo antes de enviártelo. Los marcadores entre corchetes, como [NOMBRE_1], [RUT_1] o [FECHA_2], reemplazan datos personales: cuando necesites esos datos, escribe el marcador exactamente igual; no los adivines ni los trates como datos faltantes. La fecha de nacimiento se reemplazó por la edad («edad: X años»); las demás fechas (toma de muestra, informe, ingreso, alta, controles) son las reales. Las imágenes adjuntas son recortes que eligió el médico: muestran solo la parte que quiso enviar, y los recuadros negros tapan datos personales; no intentes deducir lo que hay debajo y, si la tarea necesita ese dato, escribe [DATO TAPADO] para que el médico lo complete. En esta app no puedes crear archivos ni ver los archivos del proyecto: si las instrucciones piden un .docx o una plantilla, entrega todo el contenido como texto listo para copiar, respetando la estructura indicada.`;
 const TAREAS = [
   {id:"ic", nombre:"Interconsulta"},
   {id:"epi", nombre:"Epicrisis"},
@@ -2329,7 +2668,7 @@ if (enMarco && window.claude && typeof window.claude.use === "function"){
     if (!s) return;
     sampleFn = s;
     try { const l = await s.limits(); sampleImg = !!(l && l.images); if (sampleImg && l.images.maxCount) sampleMax = l.images.maxCount; } catch(e){}
-    pintarEnvio(); pintarSeg();
+    pintarEnvio(); pintarSeg(); if (typeof aplicarModo === "function") aplicarModo();
   }).catch(() => {});
   window.claude.use("downloads").then(d => { guardador = d || null; }).catch(() => {});
 }
@@ -2337,7 +2676,7 @@ if (enMarco && window.claude && typeof window.claude.use === "function"){
 /* ===================== estado (solo en memoria) ===================== */
 // off: datos que el médico decidió dejar visibles; ocultar: lo que pidió ocultar a mano; ignorar: avisos descartados
 const nuevoEstado = () => ({res:null, cons:null, fotos:[], turnos:[], registro:new Map(), cont:{}, mapa:{}, fotosEnviadas:[],
-  off:new Set(), ocultar:[], ignorar:new Set(), avisos:[]});
+  off:new Set(), ocultar:[], ignorar:new Set(), avisos:[], residuos:[]});
 let caso = nuevoEstado();
 // Solo para las pruebas automáticas (index.html?prueba): deja ver el estado del caso desde fuera
 if (/[?&]prueba\b/.test(location.search)) window.__velo = {
@@ -2387,18 +2726,30 @@ function fijarTokens(res, reg, cont){
     reg.set(en.k, en.token);
   }
 }
+// Anonimiza y pasa el validador final (Anon.proteger): lo que encuentre a la vista (un RUT, un teléfono, un apellido
+// suelto) se oculta en todo el caso y se vuelve a validar. Si aun así queda algo, residuos no está vacío: el caso
+// requiere revisión y no se envía ni se copia.
 function calcular(texto, reg, cont){
-  const res = Anon.analizar(texto, {ocultar: caso.ocultar});
-  fijarTokens(res, reg, cont);
-  return {res, cons: Anon.construir(res, caso.off)};
+  // (window.__velo.rondas: solo en las pruebas automáticas, para simular que volver a ocultar no basta)
+  const p = Anon.proteger(texto, {ocultar: caso.ocultar, off: caso.off, nombres: nombresDeFotos(), fijar: res => fijarTokens(res, reg, cont),
+    rondas: window.__velo ? window.__velo.rondas : undefined});
+  const nuevos = p.agregados.filter(it => agregarOculto(it.texto, it.tipo, it.tarde));
+  if (nuevos.length) toast("El validador ocultó también: " + nuevos.map(it => "«" + recortar(it.texto, 24) + "»").join(", "));
+  return {res: p.res, cons: p.cons, residuos: [...p.residuos]};
 }
+// Palabras de los nombres leídos en las imágenes: el validador también las busca en el texto
+function nombresDeFotos(){
+  return [...new Set(caso.fotos.flatMap(f => f.analisis ? Anon.entidadesDe(f.analisis).filter(e => e.tipo === "NOMBRE").map(e => e.token) : []))];
+}
+const textoResiduos = rs => rs.map(r => (Anon.ETIQUETA[r.tipo] || r.tipo) + " «" + recortar(r.texto, 24) + "»").join(", ");
+const MSG_REVISION = rs => "Requiere revisión: quedó a la vista " + textoResiduos(rs) + " y no se pudo ocultar. No se enviará: ocúltalo a mano o corrige el texto.";
 const textoEntrada = () => $("entrada").value.trim();
 const claveAviso = a => a.tipo + "|" + Anon.plegar(a.texto);
 function analizar(){
   const t = textoEntrada();
-  if (!t){ caso.res = caso.cons = null; caso.avisos = []; }
+  if (!t){ caso.res = caso.cons = null; caso.avisos = []; caso.residuos = []; }
   else {
-    const r = calcular(t, new Map(), {}); caso.res = r.res; caso.cons = r.cons;
+    const r = calcular(t, new Map(), {}); caso.res = r.res; caso.cons = r.cons; caso.residuos = r.residuos;
     caso.avisos = Anon.revisar(r.res, caso.off).filter(a => !caso.ignorar.has(claveAviso(a)));
   }
   confirmarAvisos = false;
@@ -2413,11 +2764,12 @@ function adivinarTipo(t){
   return "OTRO";
 }
 // Lo que el médico pide ocultar vale para todo el caso, incluidas las preguntas de seguimiento
-function agregarOculto(texto, tipo){
+// (tarde: palabra de un nombre que encontró el validador; se oculta después de detectar los nombres completos)
+function agregarOculto(texto, tipo, tarde){
   texto = String(texto || "").trim(); if (texto.length < 2) return false;
   const f = Anon.plegar(texto);
   if (caso.ocultar.some(x => Anon.plegar(x.texto) === f)) return false;
-  caso.ocultar.push({texto, tipo: tipo || adivinarTipo(texto)});
+  caso.ocultar.push({texto, tipo: tipo || adivinarTipo(texto), tarde: !!tarde});
   return true;
 }
 function alternarDato(k){
@@ -2443,22 +2795,32 @@ function mensajeInicial(cons){
     "\n\n=== PREFERENCIAS GENERALES DEL MÉDICO ===\n" + P.preferencias.trim() +
     (t ? "\n\n=== INSTRUCCIONES DEL PROYECTO «" + t.nombre.toUpperCase() + "» ===\n" + P[t.id].trim() : "") +
     "\n\n=== TEXTO DEL MÉDICO ===\n" + (cons ? cons.salida : "") +
-    (fotosListas().length ? "\n\n" + NOTA_FOTO : "");
+    (fotosListas().length ? "\n\n" + notaFotos() : "");
 }
+// En la imagen la fecha de nacimiento va tapada: la edad que se calculó de ella va escrita junto a las imágenes
+function notaFotos(){
+  const edades = [...new Set(fotosListas().flatMap(f => f.analisis ? f.analisis.dets.filter(d => /^edad: /.test(d.repl || "")).map(d => d.repl.slice(6)) : []))];
+  return NOTA_FOTO + (edades.length ? "\n(Edad según la fecha de nacimiento tapada en las imágenes: " + edades.join("; ") + ".)" : "");
+}
+// Devuelve falso si el validador dejó el caso en revisión (entonces no se envía ni se copia)
 function iniciarConversacion(){
   const texto = textoEntrada(), reg = new Map(), cont = {};
-  const r = texto ? calcular(texto, reg, cont) : {cons:null};
+  const r = texto ? calcular(texto, reg, cont) : {cons:null, residuos:[]};
+  caso.residuos = r.residuos;
+  if (r.residuos.length){ caso.turnos = []; pintarEnvio(); return false; }
   caso.registro = reg; caso.cont = cont;
   caso.mapa = r.cons ? Object.assign({}, r.cons.mapa) : {};
   caso.inicialReal = texto;
   caso.fotosEnviadas = fotosListas().map(f => f.blob);
   caso.turnos = [{rol:"user", anon: mensajeInicial(r.cons), real: texto}];
+  return true;
 }
 // Las preguntas de seguimiento se anonimizan con los mismos marcadores de la conversación
 function anonSeguimiento(texto){
   const reales = [caso.inicialReal].concat(caso.turnos.filter((t, i) => i > 0 && t.rol === "user").map(t => t.real), [texto]);
   const reg = new Map(caso.registro), cont = Object.assign({}, caso.cont);
-  const {cons} = calcular(reales.join(SEP), reg, cont);
+  const {cons, residuos} = calcular(reales.join(SEP), reg, cont);
+  if (residuos.length){ estadoSeg(MSG_REVISION(residuos), "error"); return null; }
   caso.registro = reg; caso.cont = cont; Object.assign(caso.mapa, cons.mapa);
   const partes = cons.salida.split(SEP);
   return partes[partes.length - 1].trim();
@@ -2496,7 +2858,7 @@ function pintarEnvio(){
     }
     html += esc(t.slice(p));
   }
-  if (nl) html += (html ? "\n\n" : "") + '<span class="tenue">' + esc(NOTA_FOTO) + "</span>";
+  if (nl) html += (html ? "\n\n" : "") + '<span class="tenue">' + esc(notaFotos()) + "</span>";
   $("previa").innerHTML = html;
   $("previa").hidden = !html;
   $("fotosPrevia").innerHTML = fotosListas().map((f, i) => '<img src="' + esc(f.url) + '" alt="Recorte ' + (i + 1) + '">').join("");
@@ -2512,20 +2874,22 @@ function pintarEnvio(){
 
   const dir = directo();
   const comp = fotosComprobando();
-  const bloqueo = pend ? "Falta revisar " + (pend === 1 ? "una imagen" : pend + " imágenes") + ": toca «Revisar» en la imagen."
+  // El validador final manda sobre todo lo demás: con un dato a la vista que no pudo ocultar, no se envía
+  const revision = caso.residuos.length ? MSG_REVISION(caso.residuos) : "";
+  const bloqueo = revision ? revision : pend ? "Falta revisar " + (pend === 1 ? "una imagen" : pend + " imágenes") + ": toca «Revisar» en la imagen."
     : comp ? "Comprobando que no quede ningún dato a la vista en " + (comp === 1 ? "la imagen" : "las imágenes") + "…"
     : (dir && nl > sampleMax ? "Claude acepta hasta " + sampleMax + " imágenes por envío: quita alguna." : "");
   $("enviar").hidden = !dir;
   $("enviar").disabled = enCurso || !!bloqueo;
   $("enviar").textContent = confirmarAvisos ? "Enviar igual" : caso.turnos.length ? "Enviar de nuevo" : "Enviar a Claude";
-  $("copiarAnon").disabled = !!(pend || comp);
+  $("copiarAnon").disabled = !!(pend || comp || revision);
   $("copiarAnon").textContent = confirmarAvisos ? "1. Copiar igual" : "1. Copiar texto anonimizado";
   $("notaImgs").hidden = !nl;
   $("otrasTitulo").textContent = dir ? "Usar con ChatGPT, Gemini u otra IA" : "Enviar a la IA (copiar y pegar)";
   if (!dir && !$("otras").open){ $("otras").open = true; otrasAuto = true; }
   else if (dir && otrasAuto){ $("otras").open = false; otrasAuto = false; }
   if (!enCurso){
-    if (bloqueo){ estado(bloqueo, "aviso"); avisoBloqueo = true; }
+    if (bloqueo){ estado(bloqueo, revision ? "error" : "aviso"); avisoBloqueo = true; }
     else if (avisoBloqueo){ estado(""); avisoBloqueo = false; }
   }
 }
@@ -2589,7 +2953,8 @@ $("btnEjemplo").addEventListener("click", () => { $("entrada").value = EJEMPLO; 
 $("enviar").addEventListener("click", async () => {
   if (enCurso || $("enviar").disabled || !directo()) return;
   if (frenoAvisos(estado)) return;
-  iniciarConversacion(); pintarHilo();
+  if (!iniciarConversacion()){ estado(MSG_REVISION(caso.residuos), "error"); return; }
+  pintarHilo();
   const ok = await pedirRespuesta(estado);
   if (!ok){ caso.turnos = []; pintarHilo(); }
   else desplazar($("bloqueResp"));
@@ -2655,13 +3020,14 @@ function mensajeError(e){
 $("copiarAnon").addEventListener("click", async () => {
   if (fotosPendientes()) return;
   if (frenoAvisos(estado)) return;
-  iniciarConversacion(); pintarHilo();
+  if (!iniciarConversacion()){ estado(MSG_REVISION(caso.residuos), "error"); return; }
+  pintarHilo();
   const ok = await copiarTexto(caso.turnos[0].anon);
   toast(ok ? "Copiado. Pégalo en la IA que prefieras." : "No se pudo copiar: mantén presionado el texto anonimizado de arriba.");
 });
 $("agregarResp").addEventListener("click", () => {
   const t = $("pegada").value.trim(); if (!t) return;
-  if (!caso.turnos.length) iniciarConversacion();
+  if (!caso.turnos.length && !iniciarConversacion()) return;
   caso.turnos.push({rol:"assistant", anon:t});
   $("pegada").value = ""; pintarHilo(); pintarSeg(); desplazar($("bloqueResp"));
 });
@@ -2696,7 +3062,8 @@ $("enviarSeg").addEventListener("click", async () => {
   const t = $("seguimiento").value.trim();
   if (!t || enCurso || !caso.turnos.length) return;
   if (directo()){
-    caso.turnos.push({rol:"user", anon:anonSeguimiento(t), real:t});
+    const anon = anonSeguimiento(t); if (anon === null) return;
+    caso.turnos.push({rol:"user", anon, real:t});
     $("seguimiento").value = ""; pintarSeg(); pintarHilo();
     const ok = await pedirRespuesta(estadoSeg);
     if (!ok){ caso.turnos.pop(); $("seguimiento").value = t; pintarHilo(); pintarSeg(); }
@@ -2705,7 +3072,7 @@ $("enviarSeg").addEventListener("click", async () => {
   const ult = caso.turnos[caso.turnos.length - 1];
   let anon;
   if (ult.rol === "user" && ult.real === t) anon = ult.anon;
-  else { anon = anonSeguimiento(t); caso.turnos.push({rol:"user", anon, real:t}); }
+  else { anon = anonSeguimiento(t); if (anon === null) return; caso.turnos.push({rol:"user", anon, real:t}); }
   const ok = await copiarTexto(anon);
   pintarHilo(); $("segPegar").hidden = false;
   estadoSeg(ok ? "Copiado. Pégalo en la misma conversación de la IA y trae la respuesta aquí." : "No se pudo copiar automáticamente.", ok ? "ok" : "aviso");
@@ -2933,21 +3300,31 @@ async function imagenParaLeer(fuente, q, paso, mascara, lectura){
 }
 // Varias lecturas con modos distintos del lector (11: texto suelto; 4: columna; 6: bloque) sobre la imagen de
 // contraste suave o, si el modo lleva "+", la de contraste fuerte: cada combinación se salta cosas distintas
-async function leerVarias(w, blob, blob2, modos){
+// (lecturas: si se pasa un objeto, ahí quedan las palabras de cada modo por separado)
+async function leerVarias(w, blob, blob2, modos, lecturas){
   let out = null;
   for (const m of modos || ["11", "4+"]){
     const ws = await leerImagen(w, m.endsWith("+") ? (blob2 || blob) : blob, m.replace("+", ""));
+    if (lecturas) lecturas[m] = ws;
     out = out ? Anon.unirLecturas(out, ws) : ws;
   }
   return out || [];
+}
+// El texto de una sola lectura, en renglones (para enviarlo: la unión de lecturas repite las palabras dudosas)
+// (lectura.texto: el modo del lector para ese texto; si no se leyó ya con ese modo, se lee una vez más)
+async function textoDeUnaLectura(w, lecturas, modo, blob, blob2, pendiente){
+  const ws = lecturas[modo] || await leerImagen(w, modo.endsWith("+") ? (blob2 || blob) : blob, modo.replace("+", ""));
+  const bien = ws.filter(p => p.conf == null || p.conf >= 30);
+  return Anon.filasOcr(bien, pendiente == null ? Anon.pendienteTexto(bien) : pendiente).texto;
 }
 // Lee una imagen: si hay hoja, la lee enderezada; si no, tal cual. Devuelve palabras y recuadros en coordenadas del lienzo.
 async function leerHoja(fuente, lienzo, q, paso, opc, mascara, lectura){
   const w = await cargarOcr();
   if (q){
     try {
-      const L = await imagenParaLeer(fuente, q, paso, mascara, lectura);
-      let palabras = Anon.ajustarAltoPalabras(await leerVarias(w, L.blob, L.blob2, lectura && lectura.modos), L.gris, L.W, L.H, L.paso);
+      const L = await imagenParaLeer(fuente, q, paso, mascara, lectura), lecturas = {};
+      let palabras = Anon.ajustarAltoPalabras(await leerVarias(w, L.blob, L.blob2, lectura && lectura.modos, lecturas), L.gris, L.W, L.H, L.paso);
+      const texto = lectura && lectura.texto ? await textoDeUnaLectura(w, lecturas, lectura.texto, L.blob, L.blob2, 0) : null;
       // "Palabras" de poca confianza fuera del papel: la textura de la alfombra o de la mesa junto a la orilla.
       // No son texto: no se tapan ni cuentan para decidir si el encabezado se leyó mal.
       if (mascara !== false && fuente.casco) palabras = palabras.filter(p => {
@@ -2970,19 +3347,20 @@ async function leerHoja(fuente, lienzo, q, paso, opc, mascara, lectura){
         const m = margenes[i];
         const poli = Anon.contornoCaja({x0: p.caja.x0 - m.izq, x1: p.caja.x1 + m.der, y0: p.caja.y0 - m.arriba, y1: p.caja.y1 + m.abajo}, L.aPunto);
         return {texto: p.texto, conf: p.conf, caja: L.aLienzo(p.caja), poli};
-      }), analisis: zt.res};
+      }), analisis: zt.res, texto};
     } catch(err){ if (/tardó/.test(String(err && err.message))) throw err; }
   }
   // Sin hoja reconocible (o si falló lo anterior): se lee la imagen completa tal cual
   const imagen = await new Promise(r => lienzo.toBlob(r, "image/jpeg", 0.92));
   if (!imagen) throw new Error("no se pudo preparar la imagen");
-  const palabras = await leerVarias(await cargarOcr(), imagen, null, lectura && lectura.modos);
+  const lecturas = {}, palabras = await leerVarias(await cargarOcr(), imagen, null, lectura && lectura.modos, lecturas);
   const zt = Anon.zonasATapar(palabras, null, opc);
+  const texto = lectura && lectura.texto ? await textoDeUnaLectura(await cargarOcr(), lecturas, lectura.texto, imagen, null, null) : null;
   const hs = palabras.map(p => p.caja.y1 - p.caja.y0).sort((a, b) => a - b), margenes = Anon.margenesCajas(palabras, hs[hs.length >> 1] || 20);
   return {cajas: Anon.fusionarCajas(zt.cajas), palabras: palabras.map((p, i) => {
     const m = margenes[i], c = p.caja, x0 = c.x0 - m.izq, x1 = c.x1 + m.der, y0 = c.y0 - m.arriba, y1 = c.y1 + m.abajo;
     return Object.assign({}, p, {poli: [{x: x0, y: y0}, {x: x1, y: y0}, {x: x1, y: y1}, {x: x0, y: y1}]});
-  }), analisis: zt.res, completa: true};
+  }), analisis: zt.res, completa: true, texto};
 }
 // ¿El punto cae dentro del recuadro? (siguiendo su contorno si lo tiene)
 const cubrePunto = (t, x, y) => t.poli ? dentroPoligono({x, y}, t.poli) : (x >= t.x0 && x <= t.x1 && y >= t.y0 && y <= t.y1);
@@ -3199,7 +3577,7 @@ async function paginaComoImagen(pdf, n){
 }
 async function leerPdf(f){
   const lib = await cargarPdfjs();
-  const pdf = await lib.getDocument({data:new Uint8Array(await f.arrayBuffer()), isEvalSupported:false, useSystemFonts:true}).promise;
+  const pdf = await lib.getDocument({data:new Uint8Array(await f.arrayBuffer()), isEvalSupported:false, useSystemFonts:true, verbosity:0}).promise;
   try {
     const texto = await textoPdf(pdf);
     if (texto.replace(/\s/g, "").length >= 40 * Math.min(pdf.numPages, 3)){
@@ -3411,7 +3789,7 @@ function pintarInfoEditor(f, lee){
   else if (fugas) txt = "Al leer la imagen ya tapada encontré " + (fugas === 1 ? "1 dato" : fugas + " datos") + " a la vista (en rojo). Tócalos para taparlos.";
   else if (f.verif === "error" && !lee) txt = "No pude comprobar la imagen ya tapada. Revisa que no quede nada identificable y toca «Listo» para enviarla así.";
   else if (ed.modo === "tapar") txt = "Arrastra el dedo sobre lo que quieras tapar. Toca un recuadro para destaparlo o volver a taparlo.";
-  else if (lee){ txt = f.zonaPedida ? "Buscando datos también en lo que agregaste al recorte…" : "Buscando nombres, RUT, fechas y folios para taparlos…"; cargando = true; }
+  else if (lee){ txt = f.zonaPedida ? "Buscando datos también en lo que agregaste al recorte…" : "Buscando nombres, RUT, fecha de nacimiento y folios para taparlos…"; cargando = true; }
   else if (f.ocr === "error" || f.ocr === "espera" || f.ocr === "leyendo")
     txt = (f.ocr === "error" ? "No pude leer el texto de esta imagen en el teléfono" + (n ? " (tapé " + n + (n === 1 ? " código)" : " códigos)") : "") + ". " : "La lectura está tardando. ") +
       (f.pts ? "Usa «Tapar» para cubrir los datos y revisa el recorte." : "Arrastra el dedo sobre la parte que quieres enviar y usa «Tapar» para cubrir los datos.");
@@ -3680,6 +4058,541 @@ async function verificarFoto(f){
   return ocrCola;
 }
 
+/* ===================== ajustes (solo en este dispositivo) ===================== */
+// Proveedores: Claude con la cuenta del médico (solo dentro de la app de Claude) o con una clave API propia
+const PROV = {
+  "claude-app": {nombre: "Claude (con tu cuenta, dentro de la app de Claude)", corto: "Claude", sinClave: true},
+  claude: {nombre: "Claude (clave API)", corto: "Claude", modelo: "claude-opus-5-5", clavePh: "sk-ant-…",
+    claveUrl: "https://platform.claude.com/settings/keys", nota: "Más rápido y económico: claude-sonnet-5-5."},
+  openai: {nombre: "ChatGPT (clave API de OpenAI)", corto: "ChatGPT", modelo: "gpt-6-sol", clavePh: "sk-…",
+    claveUrl: "https://platform.openai.com/api-keys", nota: "Más económico: gpt-6-luna. Si tu clave no tiene ese modelo, escribe aquí el que uses."},
+  gemini: {nombre: "Gemini (clave API de Google)", corto: "Gemini", modelo: "gemini-3.8-flash", clavePh: "AIza…",
+    claveUrl: "https://aistudio.google.com/apikey", nota: "Más capaz: gemini-4-argon.",
+    aviso: "Usa una clave con facturación activa: en el nivel gratuito, Google puede usar lo que envías para mejorar sus productos y una persona puede revisarlo."}
+};
+const LS_AJ = "velo_ajustes";
+const ajustesBase = () => ({auto: true, prov: enMarco ? "claude-app" : "claude", modelos: {}, claves: {}, recordar: true, tarea: "exam",
+  avisar: true, plazoBorrado: 24, conservarFotos: false, camaraAlIniciar: false});
+function leerAjustes(){
+  let g = null;
+  try { g = JSON.parse(localStorage.getItem(LS_AJ) || "null"); } catch(e){}
+  const a = Object.assign(ajustesBase(), g && typeof g === "object" ? g : {});
+  a.modelos = Object.assign({}, a.modelos); a.claves = Object.assign({}, a.claves);
+  if (!PROV[a.prov] || (a.prov === "claude-app" && !enMarco)) a.prov = ajustesBase().prov;
+  if (a.tarea && !TAREAS.some(t => t.id === a.tarea)) a.tarea = null;
+  a.auto = a.auto !== false; a.avisar = a.avisar !== false; a.conservarFotos = a.conservarFotos === true; a.camaraAlIniciar = a.camaraAlIniciar === true;
+  if (![0, 1, 24, 168].includes(a.plazoBorrado)) a.plazoBorrado = 24;
+  return a;
+}
+let aj = leerAjustes();
+const clavesSesion = {};
+function guardarAjustes(){
+  try { localStorage.setItem(LS_AJ, JSON.stringify(Object.assign({}, aj, {claves: aj.recordar ? aj.claves : {}}))); } catch(e){}
+}
+const claveDe = p => String((aj.recordar ? aj.claves[p] : clavesSesion[p]) || "").trim();
+const modeloDe = p => PROV[p].sinClave ? "" : (String(aj.modelos[p] || "").trim() || PROV[p].modelo);
+const nombreTarea = id => { const t = TAREAS.find(x => x.id === id); return t ? t.nombre : "ninguno"; };
+
+function pintarAjustes(){
+  const p = aj.prov, P = PROV[p];
+  $("ajAuto").checked = aj.auto; $("ajCamaraInicio").checked = aj.camaraAlIniciar;
+  $("ajProv").innerHTML = Object.keys(PROV).filter(k => k !== "claude-app" || enMarco)
+    .map(k => '<option value="' + k + '"' + (k === p ? " selected" : "") + ">" + esc(PROV[k].nombre) + "</option>").join("");
+  $("ajModelo").disabled = !!P.sinClave;
+  $("ajModelo").value = P.sinClave ? "" : (aj.modelos[p] || "");
+  $("ajModelo").placeholder = P.sinClave ? "El que use la app de Claude" : P.modelo;
+  $("ajModeloNota").textContent = P.sinClave ? "Dentro de la app de Claude se usa tu cuenta: no necesitas clave." : "Si lo dejas vacío se usa " + P.modelo + ". " + P.nota;
+  $("ajClaveBloque").hidden = !!P.sinClave;
+  if (!P.sinClave){
+    $("ajClave").value = claveDe(p); $("ajClave").placeholder = P.clavePh;
+    $("ajClaveLink").href = P.claveUrl; $("ajRecordar").checked = aj.recordar;
+    $("ajProvNota").hidden = !P.aviso; $("ajProvNota").textContent = P.aviso || "";
+  }
+  $("ajAvisar").checked = aj.avisar; $("ajPlazo").value = String(aj.plazoBorrado); $("ajFotos").checked = aj.conservarFotos;
+  $("ajTarea").innerHTML = '<option value="">Ninguno</option>' + TAREAS.map(t => '<option value="' + t.id + '"' + (t.id === aj.tarea ? " selected" : "") + ">" + esc(t.nombre) + "</option>").join("");
+}
+function abrirAjustes(){ pintarAjustes(); $("ajustes").hidden = false; document.body.classList.add("modal-abierto"); }
+function cerrarAjustes(){ $("ajustes").hidden = true; document.body.classList.remove("modal-abierto"); aplicarModo(); }
+$("btnAjustes").addEventListener("click", abrirAjustes);
+$("ajCerrar").addEventListener("click", cerrarAjustes);
+$("ajAuto").addEventListener("change", () => { aj.auto = $("ajAuto").checked; guardarAjustes(); aplicarModo(); });
+$("ajProv").addEventListener("change", () => { aj.prov = $("ajProv").value; guardarAjustes(); pintarAjustes(); aplicarModo(); });
+$("ajModelo").addEventListener("input", () => { aj.modelos[aj.prov] = $("ajModelo").value.trim(); guardarAjustes(); aplicarModo(); });
+$("ajClave").addEventListener("input", () => {
+  const v = $("ajClave").value.trim();
+  if (aj.recordar) aj.claves[aj.prov] = v; else clavesSesion[aj.prov] = v;
+  guardarAjustes(); aplicarModo();
+});
+$("ajRecordar").addEventListener("change", () => {
+  aj.recordar = $("ajRecordar").checked;
+  // Las claves pasan de un lugar al otro: recordadas en el dispositivo o solo mientras la app está abierta
+  if (aj.recordar){ Object.assign(aj.claves, clavesSesion); for (const k in clavesSesion) delete clavesSesion[k]; }
+  else { Object.assign(clavesSesion, aj.claves); aj.claves = {}; }
+  guardarAjustes();
+});
+$("ajTarea").addEventListener("change", () => { aj.tarea = $("ajTarea").value || null; guardarAjustes(); aplicarModo(); });
+$("ajCamaraInicio").addEventListener("change", () => { aj.camaraAlIniciar = $("ajCamaraInicio").checked; guardarAjustes(); });
+$("ajAvisar").addEventListener("change", () => { aj.avisar = $("ajAvisar").checked; guardarAjustes(); pedirPermisoAvisos(); });
+$("ajPlazo").addEventListener("change", () => { aj.plazoBorrado = +$("ajPlazo").value; guardarAjustes(); limpiarVencidos(); });
+$("ajFotos").addEventListener("change", () => { aj.conservarFotos = $("ajFotos").checked; guardarAjustes(); });
+$("ajBorrarCasos").addEventListener("click", () => {
+  const b = $("ajBorrarCasos");
+  if (!b.dataset.confirmar){ b.dataset.confirmar = "1"; b.textContent = "Toca otra vez para borrar todos los casos"; setTimeout(() => { delete b.dataset.confirmar; b.textContent = "Borrar todos los casos de este teléfono"; }, 3500); return; }
+  delete b.dataset.confirmar; b.textContent = "Borrar todos los casos de este teléfono";
+  for (const c of casosAuto.slice()) if (!activos.has(c.id) && c !== camCaso) quitarCaso(c);
+  toast(casosAuto.length ? "Se borraron los casos terminados (los que están en curso siguen)." : "Se borraron todos los casos de este teléfono.");
+});
+$("ajBorrar").addEventListener("click", () => {
+  try { localStorage.removeItem(LS_AJ); } catch(e){}
+  for (const k in clavesSesion) delete clavesSesion[k];
+  aj = ajustesBase(); pintarAjustes(); aplicarModo(); toast("Se borraron los ajustes y las claves de este dispositivo.");
+});
+$("btnManual").addEventListener("click", () => { aj.auto = false; guardarAjustes(); aplicarModo(); toast("Modo manual. Vuelve al automático en Ajustes."); });
+
+// Modo automático: la pantalla muestra la cámara y los casos; con el modo apagado, la app de siempre
+function aplicarModo(){
+  document.body.classList.toggle("modo-auto", aj.auto);
+  $("bloqueAuto").hidden = !aj.auto;
+  $("bloqueCasos").hidden = !aj.auto || !casosAuto.length;
+  const P = PROV[aj.prov], falta = !P.sinClave && !claveDe(aj.prov);
+  $("autoInfo").textContent = "Se envía solo el texto anonimizado a " + P.corto + (P.sinClave ? "" : " (" + modeloDe(aj.prov) + ")") +
+    " · Prompt: " + nombreTarea(aj.tarea) + "." + (falta ? " Falta la clave API: agrégala en Ajustes." : "") +
+    (aj.prov === "claude-app" && !sampleFn ? " Claude con tu cuenta solo funciona dentro de la app de Claude." : "");
+  $("autoInfo").className = "nota" + (falta ? " estado aviso" : "");
+}
+
+/* ===================== envío a la IA elegida ===================== */
+// Con la clave API del propio médico: la consulta va directo del teléfono al proveedor, sin servidores intermedios
+async function viaAPI(prov, texto, signal){
+  const key = claveDe(prov), P = PROV[prov];
+  if (!key) throw {mensaje: "Falta la clave API de " + P.corto + ". Agrégala en Ajustes y toca «Reintentar».", final: true};
+  const modelo = modeloDe(prov);
+  let url, init, extraer;
+  if (prov === "claude"){
+    const headers = {"content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true"};
+    const body = {model: modelo, max_tokens: 16000, messages: [{role: "user", content: texto}]};
+    // En los modelos actuales, esfuerzo alto (en Opus 5.5 el valor por omisión es medio)
+    if (/^claude-(?:opus|sonnet|fable|haiku)-5/.test(modelo)) body.output_config = {effort: "high"};
+    // Si un filtro de seguridad declina la consulta, el mismo servidor la responde con otro modelo
+    if (/^claude-(?:fable-5-1|opus-5-5|opus-5|sonnet-5-5)$/.test(modelo)){ headers["anthropic-beta"] = "server-side-fallback-2026-07-01"; body.fallbacks = "default"; }
+    url = "https://api.anthropic.com/v1/messages";
+    init = {method: "POST", headers, body: JSON.stringify(body)};
+    extraer = j => {
+      if (j.stop_reason === "refusal") throw {mensaje: "Claude no respondió esta solicitud (filtro de seguridad). Prueba con otro prompt o proveedor.", final: true};
+      return {texto: (j.content || []).filter(c => c.type === "text").map(c => c.text).join("\n").trim(), truncado: j.stop_reason === "max_tokens"};
+    };
+  } else if (prov === "openai"){
+    url = "https://api.openai.com/v1/chat/completions";
+    init = {method: "POST", headers: {"content-type": "application/json", "authorization": "Bearer " + key}, body: JSON.stringify({model: modelo, messages: [{role: "user", content: texto}]})};
+    extraer = j => {
+      const c = j.choices && j.choices[0], m = c && c.message;
+      let t = m && m.content;
+      if (Array.isArray(t)) t = t.map(x => (x && x.text) || "").join("");
+      return {texto: String(t || "").trim(), truncado: !!(c && c.finish_reason === "length")};
+    };
+  } else {
+    url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(modelo) + ":generateContent";
+    init = {method: "POST", headers: {"content-type": "application/json", "x-goog-api-key": key}, body: JSON.stringify({contents: [{role: "user", parts: [{text: texto}]}]})};
+    extraer = j => {
+      const c = j.candidates && j.candidates[0];
+      const t = c && c.content && (c.content.parts || []).map(p => p.text || "").join("").trim();
+      if (!t && j.promptFeedback && j.promptFeedback.blockReason) throw {mensaje: "Gemini bloqueó la solicitud (" + j.promptFeedback.blockReason + ").", final: true};
+      return {texto: t || "", truncado: !!(c && c.finishReason === "MAX_TOKENS")};
+    };
+  }
+  if (signal) init.signal = signal;
+  let r;
+  try { r = await fetch(url, init); }
+  catch(e){ if (e && e.name === "AbortError") throw e; throw {mensaje: "No se pudo conectar con " + P.corto + ". Revisa tu conexión a internet.", red: true}; }
+  let j = null;
+  try { j = await r.json(); } catch(e){}
+  if (!r.ok) throw {mensaje: mensajeApi(prov, r.status, j), red: r.status === 429 || r.status >= 500, final: r.status !== 429 && r.status < 500};
+  const out = extraer(j || {});
+  if (!out.texto) throw {mensaje: "La IA no devolvió texto. Intenta de nuevo.", red: true};
+  return out;
+}
+function mensajeApi(prov, st, j){
+  const P = PROV[prov], det = j && j.error ? String(j.error.message || j.error.type || j.error.status || "") : "";
+  if (st === 401 || st === 403 || /api key/i.test(det)) return "La clave API de " + P.corto + " no es válida o no tiene permisos. Revísala en Ajustes.";
+  if (st === 429) return "Se alcanzó el límite de uso o de saldo de tu cuenta de " + P.corto + ". Espera un momento o revisa la facturación.";
+  if (st === 404) return "El modelo «" + modeloDe(prov) + "» no está disponible para tu clave. Cámbialo en Ajustes.";
+  if (st === 413) return "El caso es demasiado largo para enviarlo de una vez.";
+  if (st >= 500) return P.corto + " no respondió (error " + st + "). Intenta de nuevo en unos minutos.";
+  return "Error " + st + " de " + P.corto + (det ? ": " + det : ".");
+}
+// Un solo mensaje con el caso; devuelve {texto, truncado}. Si no hay respuesta en 10 minutos (una conexión que iOS
+// dejó colgada al bloquear el teléfono), cuenta como error de red y se reintenta
+const ESPERA_RESPUESTA = 10 * 60 * 1000;
+async function enviarIA(prov, texto){
+  const ctl = new AbortController(), reloj = setTimeout(() => ctl.abort(), (window.__velo && window.__velo.esperaRespuesta) || ESPERA_RESPUESTA);
+  try { return await enviarUna(prov, texto, ctl.signal); }
+  catch(err){ if (err && err.name === "AbortError") throw {mensaje: PROV[prov].corto + " no respondió a tiempo.", red: true}; throw err; }
+  finally { clearTimeout(reloj); }
+}
+async function enviarUna(prov, texto, signal){
+  if (prov !== "claude-app") return viaAPI(prov, texto, signal);
+  if (!sampleFn) throw {mensaje: "Claude con tu cuenta solo funciona dentro de la app de Claude. Ábrela ahí o elige otro proveedor en Ajustes.", final: true};
+  try { return await viaCuenta([{rol: "user", texto}], [], signal, () => {}); }
+  catch(err){ if (err && err.code === "cancelled") throw Object.assign(new Error("tiempo"), {name: "AbortError"}); throw {mensaje: mensajeError(err), red: err && ["rate_limited"].includes(err.code), final: !(err && err.code === "rate_limited")}; }
+}
+
+/* ===================== modo automático: foto → texto → anonimizado → validado → enviado ===================== */
+const NOTA_AUTO = `NOTA DE LA APP (no es una instrucción clínica): el texto del médico se leyó en su teléfono desde fotos o PDF (lectura automática: puede traer errores de lectura, sobre todo en decimales, unidades y tablas; si un valor no es coherente, dilo en vez de corregirlo en silencio) y se anonimizó en el dispositivo antes de enviártelo. No se adjuntan imágenes. Los marcadores entre corchetes, como [NOMBRE_1], [RUT_1] o [FECHA_2], reemplazan datos personales: cuando necesites esos datos, escribe el marcador exactamente igual; no los adivines ni los trates como datos faltantes. La fecha de nacimiento se reemplazó por la edad («edad: X años»); las demás fechas (toma de muestra, informe, ingreso, alta, controles) son las reales. En esta app no puedes crear archivos ni ver los archivos del proyecto: si las instrucciones piden un .docx o una plantilla, entrega todo el contenido como texto listo para copiar, respetando la estructura indicada.`;
+function mensajeAuto(salida, tareaId){
+  const t = TAREAS.find(x => x.id === tareaId);
+  return NOTA_AUTO +
+    "\n\n=== PREFERENCIAS GENERALES DEL MÉDICO ===\n" + P.preferencias.trim() +
+    (t ? "\n\n=== INSTRUCCIONES DEL PROYECTO «" + t.nombre.toUpperCase() + "» ===\n" + P[t.id].trim() : "") +
+    "\n\n=== TEXTO DEL MÉDICO ===\n" + salida;
+}
+const casosAuto = [];
+let nCasoAuto = 0;
+const ESTADO_CASO = {capturando: "Capturando", procesando: "Procesando", enviado: "Enviado", listo: "Listo", revision: "Requiere revisión", error: "Error"};
+
+// Lee una foto en el teléfono (en la misma fila de espera que las demás lecturas). Devuelve el texto de una
+// lectura limpia, para enviar, y el análisis de la lectura doble (nombres, RUT y folios que se buscarán en ese texto)
+function leerFotoAuto(blob){
+  const p = ocrCola.then(() => leerFotoTexto(blob));
+  ocrCola = p.catch(() => {});
+  return p;
+}
+async function leerFotoTexto(blob){
+  const {im, u} = await cargarImagenBlob(blob);
+  const c = document.createElement("canvas");
+  try {
+    const k = Math.min(1, MAXL / Math.max(im.naturalWidth, im.naturalHeight));
+    const w = Math.max(1, Math.round(im.naturalWidth * k)), h = Math.max(1, Math.round(im.naturalHeight * k));
+    c.width = w; c.height = h;
+    const cc = c.getContext("2d", {willReadFrequently: true}); cc.drawImage(im, 0, 0, w, h);
+    // La hoja en la foto (bordes, perspectiva, renglones), igual que al tapar una foto en el modo manual
+    let hoja = null, cuad = null;
+    try {
+      const gris = grisDe(cc, w, h);
+      hoja = Anon.analizarHoja(gris, w, h);
+      if (hoja.zona && Math.max(w, h) >= 1000){
+        const z = hoja.zona;
+        cuad = Anon.detectarHoja(gris, w, h, hoja) || cuadDe(z.x0, z.y0, z.x1, z.y1);
+        const t = Anon.tamanoCuad(cuad);
+        if (t.ancho * t.alto >= w * h * 0.92){ cuad = null; hoja.contorno = hoja.casco = null; }
+      }
+    } catch(e){ hoja = null; cuad = null; }
+    const q = cuad || (hoja && hoja.zona ? cuadDe(0, 0, w, h) : null);
+    const L = await leerHoja({img: im, w, h, casco: hoja && hoja.casco, blanco: hoja && hoja.contorno}, c, q, hoja && hoja.paso, {}, true, {texto: (window.__velo && window.__velo.modoTexto) || MODO_TEXTO});
+    return {texto: L.texto || "", analisis: L.analisis};
+  } finally { c.width = c.height = 0; URL.revokeObjectURL(u); }
+}
+// Modo del lector para el texto que se envía (6: un bloque de texto; en las pruebas conserva mejor las fechas y cada
+// rótulo junto a su valor que el modo de texto suelto o el de una columna)
+const MODO_TEXTO = "6";
+// Fotos, PDF o Word de un caso → texto por página, más lo que la lectura doble encontró para ocultar
+async function leerArchivosAuto(archivos, avance){
+  const paginas = [], analisis = [];
+  const deFoto = async b => { avance(paginas.length + 1); const r = await leerFotoAuto(b); paginas.push(r.texto); if (r.analisis) analisis.push(r.analisis); };
+  for (const f of archivos){
+    const n = (f.name || "").toLowerCase(), tipo = f.type || "";
+    if (tipo === "application/pdf" || n.endsWith(".pdf")){
+      const lib = await cargarPdfjs();
+      const pdf = await lib.getDocument({data: new Uint8Array(await f.arrayBuffer()), isEvalSupported: false, useSystemFonts: true, verbosity: 0}).promise;
+      try {
+        const t = await textoPdf(pdf);
+        if (t.replace(/\s/g, "").length >= 40 * Math.min(pdf.numPages, 3)) paginas.push(t);
+        else for (let p = 1; p <= Math.min(pdf.numPages, MAX_FOTOS); p++){ const b = await paginaComoImagen(pdf, p); if (b) await deFoto(b); }
+      } finally { try { pdf.destroy(); } catch(e){} }
+    }
+    else if (n.endsWith(".docx")) paginas.push(await Anon.leerDocx(await f.arrayBuffer()));
+    else if (tipo.startsWith("text/") || /\.(txt|md|csv)$/.test(n)) paginas.push(await f.text());
+    else await deFoto(f);
+  }
+  // Lo que la lectura doble reconoció (nombres, RUT, folios, direcciones…), para ocultarlo también en el texto
+  const ocultar = [], nombres = new Set();
+  for (const an of analisis){
+    for (const d of an.dets.concat(an.campos || [])){
+      if (d.repl || d.tipo === "FECHA" || d.tipo === "EDAD") continue;
+      const t = (d.texto || an.texto.slice(d.s, d.e)).trim();
+      if (t.length >= 3) ocultar.push({texto: t, tipo: d.tipo, tarde: d.tipo === "NOMBRE"});
+    }
+    for (const e of Anon.entidadesDe(an)) if (e.tipo === "NOMBRE") nombres.add(e.token);
+  }
+  const texto = paginas.map((t, i) => (paginas.length > 1 ? "--- Página " + (i + 1) + " ---\n" : "") + String(t || "").trim()).join("\n\n");
+  return {texto, ocultar, nombres: [...nombres]};
+}
+/* ---------- la cola de casos, guardada en el dispositivo (IndexedDB) ---------- */
+// Si iOS cierra la app (al bloquear el teléfono o al pasar a otra), cada caso sigue donde quedó al volver a abrirla.
+// Se guarda lo justo para eso: las fotos solo hasta que se leen y anonimizan; después, lo que se envía (ya
+// anonimizado), la respuesta y los marcadores para mostrarla con los datos reales. Nada de esto sale del teléfono.
+const BD = {nombre: "velo", almacen: "casos"};
+let bdPromesa = null;
+function abrirBD(){
+  if (!bdPromesa){
+    bdPromesa = new Promise((ok, mal) => {
+      if (!window.indexedDB){ mal(new Error("sin almacenamiento")); return; }
+      const rq = indexedDB.open(BD.nombre, 1);
+      rq.onupgradeneeded = () => { if (!rq.result.objectStoreNames.contains(BD.almacen)) rq.result.createObjectStore(BD.almacen, {keyPath: "id"}); };
+      rq.onsuccess = () => ok(rq.result);
+      rq.onerror = () => mal(rq.error);
+    });
+    bdPromesa.catch(() => { bdPromesa = null; });
+  }
+  return bdPromesa;
+}
+// (sin almacenamiento, por ejemplo en navegación privada, la cola vive solo en memoria)
+async function bdHacer(modo, fn){
+  try {
+    const db = await abrirBD();
+    return await new Promise((ok, mal) => {
+      const tx = db.transaction(BD.almacen, modo), r = fn(tx.objectStore(BD.almacen));
+      tx.oncomplete = () => ok(r ? r.result : undefined);
+      tx.onerror = tx.onabort = () => mal(tx.error);
+    });
+  } catch(e){ return null; }
+}
+const CAMPOS_CASO = ["id", "n", "creado", "terminado", "estado", "prov", "modelo", "tarea", "archivos", "enviado", "respuesta", "truncado", "mapa", "residuos", "error"];
+function guardarCaso(c){ const r = {}; for (const k of CAMPOS_CASO) r[k] = c[k]; return bdHacer("readwrite", st => st.put(r)); }
+const borrarCasoBD = id => bdHacer("readwrite", st => st.delete(id));
+const leerCasosBD = () => bdHacer("readonly", st => st.getAll());
+// Cada cambio de un caso se muestra y se guarda
+function actualizar(c){ pintarCasos(); if (casosAuto.includes(c)) guardarCaso(c); }
+
+function crearCaso(estado, archivos){
+  const c = {id: Date.now() + "-" + (++nCasoAuto), n: nCasoAuto, creado: Date.now(), estado, archivos,
+    prov: aj.prov, modelo: modeloDe(aj.prov), tarea: aj.tarea, paso: "", enviado: "", respuesta: "", mapa: {}, residuos: [], error: ""};
+  casosAuto.unshift(c);
+  aplicarModo(); actualizar(c);
+  return c;
+}
+function nuevoCasoAuto(archivos){
+  archivos = [...archivos].filter(Boolean); if (!archivos.length) return;
+  procesarCaso(crearCaso("procesando", archivos));
+}
+function quitarCaso(c){
+  const i = casosAuto.indexOf(c); if (i >= 0) casosAuto.splice(i, 1);
+  (c.urls || []).forEach(u => URL.revokeObjectURL(u)); c.urls = null;
+  borrarCasoBD(c.id); aplicarModo(); pintarCasos();
+}
+
+/* ---------- procesar un caso: todo el flujo sin tocar la pantalla ---------- */
+const activos = new Set();   // casos que se están procesando ahora
+const REINTENTOS = 3;
+// Espera antes de cada reintento: 2, 4 y 8 s
+const esperaReintento = i => ((window.__velo && window.__velo.esperaBase) || 2000) * 2 ** i;
+const dormir = ms => new Promise(r => setTimeout(r, ms));
+// Lo único que lo detiene es el validador ("Requiere revisión"). Un error de red, de límite de uso o del servidor se
+// reintenta hasta 3 veces; después (o con un error que no se arregla reintentando, como una clave inválida) queda en
+// "Error" con la opción de reintentar.
+async function procesarCaso(c){
+  if (activos.has(c.id) || !["procesando", "enviado", "error"].includes(c.estado)) return;
+  activos.add(c.id); mantenerPantalla();
+  try {
+    if (!c.enviado){
+      if (!c.archivos || !c.archivos.length) throw {mensaje: "Las fotos de este caso ya no están: sácalas de nuevo.", final: true};
+      c.estado = "procesando"; c.error = "";
+      const n = c.archivos.length;
+      const lect = await leerArchivosAuto(c.archivos, i => { c.paso = "Leyendo " + (n > 1 ? "la página " + Math.min(i, n) + " de " + n : "la página") + " en el teléfono…"; pintarCasos(); });
+      if (!lect.texto.replace(/[-\s]|Página \d+/g, "")) throw {mensaje: "No se pudo leer texto en las fotos. Prueba con más luz y la hoja completa en la foto.", final: true};
+      c.paso = "Ocultando datos personales y validando…"; pintarCasos();
+      const p = Anon.protegerAuto(lect.texto, {nombres: lect.nombres, ocultar: lect.ocultar, rondas: window.__velo ? window.__velo.rondas : undefined});
+      // Las fotos ya no se usan: se borran del teléfono (salvo que el médico pida conservarlas en Ajustes)
+      if (!aj.conservarFotos) c.archivos = null;
+      if (p.ok){ c.mapa = Object.assign({}, p.cons.mapa); c.enviado = mensajeAuto(p.cons.salida, c.tarea); }
+      else { c.estado = "revision"; c.residuos = [...p.residuos].map(r => ({tipo: r.tipo, texto: r.texto})); c.paso = ""; }
+    }
+    if (c.estado !== "revision") c.estado = "enviado", c.error = "";
+    for (let i = 0; c.estado === "enviado"; i++){
+      c.paso = "Esperando la respuesta de " + PROV[c.prov].corto + "…" + (i ? " (reintento " + i + " de " + REINTENTOS + ")" : ""); actualizar(c);
+      try {
+        const r = await enviarIA(c.prov, c.enviado);
+        c.respuesta = r.texto; c.truncado = !!r.truncado; c.estado = "listo"; c.paso = "";
+        break;
+      } catch(err){
+        if (!err || !err.red || i >= REINTENTOS) throw err;
+        const ms = esperaReintento(i);
+        c.paso = (err.mensaje || "Sin respuesta.") + " Reintento " + (i + 1) + " de " + REINTENTOS + " en " + Math.round(ms / 1000) + " s…"; actualizar(c);
+        await dormir(ms);
+      }
+    }
+  } catch(err){
+    c.estado = "error"; c.paso = "";
+    c.error = (err && err.mensaje) || (err && err.message ? "Error: " + err.message : "Ocurrió un error inesperado.");
+  } finally {
+    activos.delete(c.id); mantenerPantalla();
+  }
+  c.terminado = Date.now();
+  actualizar(c); avisarCaso(c);
+}
+// Al abrir la app, al volver a ella o al recuperar la conexión: cada caso pendiente sigue donde quedó (si iOS la
+// cerró mientras leía, se lee de nuevo desde las fotos guardadas; si esperaba la respuesta, se envía de nuevo lo mismo)
+function reanudar(){
+  for (const c of casosAuto) if ((c.estado === "procesando" || c.estado === "enviado") && !activos.has(c.id)) procesarCaso(c);
+}
+async function cargarCola(){
+  const lista = await leerCasosBD();
+  for (const r of lista || []) if (!casoPorId(r.id)) casosAuto.push(Object.assign({paso: ""}, r));
+  casosAuto.sort((a, b) => b.creado - a.creado);
+  nCasoAuto = Math.max(nCasoAuto, 0, ...casosAuto.map(c => c.n || 0));
+  limpiarVencidos();
+  aplicarModo(); pintarCasos(); reanudar();
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible"){ limpiarVencidos(); reanudar(); mantenerPantalla(); } });
+window.addEventListener("online", reanudar);
+// Mientras haya casos en curso la pantalla no se apaga sola: en una página web, iOS detiene todo al bloquear el
+// teléfono (lo que quede a medias sigue al volver)
+let bloqueoPantalla = null;
+async function mantenerPantalla(){
+  try {
+    if (activos.size && !bloqueoPantalla && navigator.wakeLock && document.visibilityState === "visible"){
+      bloqueoPantalla = await navigator.wakeLock.request("screen");
+      bloqueoPantalla.addEventListener("release", () => { bloqueoPantalla = null; });
+    } else if (!activos.size && bloqueoPantalla){ const b = bloqueoPantalla; bloqueoPantalla = null; await b.release(); }
+  } catch(e){}
+}
+// Aviso al terminar un caso. Es siempre uno de estos textos fijos: el del sistema se ve en la pantalla bloqueada,
+// así que nunca lleva datos del paciente ni clínicos (ni el número del caso ni el prompt)
+const AVISOS = {listo: "Análisis listo", revision: "Un caso requiere revisión", error: "Un caso no se pudo completar"};
+async function avisarCaso(c){
+  const titulo = AVISOS[c.estado]; if (!titulo) return;
+  toast(titulo);
+  // Con la app a la vista basta el mensaje en pantalla; si no, el aviso del sistema
+  if (!aj.avisar || document.visibilityState === "visible" || !("Notification" in window) || Notification.permission !== "granted") return;
+  const op = {tag: "velo-" + c.id, icon: "icon-192.png", badge: "icon-192.png", lang: "es-CL"};
+  try {
+    const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+    if (reg){ await reg.showNotification(titulo, op); return; }
+  } catch(e){}
+  try { new Notification(titulo, op); } catch(e){}
+}
+// El permiso se pide al tocar «Fotografiar» o «Elegir» (el teléfono solo lo permite tras un toque)
+function pedirPermisoAvisos(){
+  try { if (aj.avisar && "Notification" in window && Notification.permission === "default") Notification.requestPermission().catch(() => {}); } catch(e){}
+}
+// Borrado automático de los casos terminados (y de una captura abandonada) pasado el plazo de Ajustes
+const ahora = () => Date.now() + ((window.__velo && window.__velo.adelanto) || 0);
+function limpiarVencidos(){
+  if (!aj.plazoBorrado) return;
+  const limite = ahora() - aj.plazoBorrado * 3600 * 1000;
+  for (const c of casosAuto.slice()){
+    const terminado = ["listo", "revision", "error"].includes(c.estado) && (c.terminado || c.creado) < limite;
+    const abandonado = c.estado === "capturando" && c !== camCaso && c.creado < limite;
+    if ((terminado || abandonado) && !activos.has(c.id)) quitarCaso(c);
+  }
+}
+setInterval(limpiarVencidos, 60 * 1000);
+if (window.__velo) window.__velo.limpiar = limpiarVencidos;
+function pintarCasos(){
+  $("bloqueCasos").hidden = !aj.auto || !casosAuto.length;
+  const hora = t => new Date(t).toLocaleTimeString("es-CL", {hour: "2-digit", minute: "2-digit"});
+  const boton = (dato, c, texto) => '<button class="btn sec chico" type="button" data-' + dato + '="' + esc(c.id) + '">' + texto + "</button>";
+  const borrar = c => '<button class="btn-texto quitar" type="button" data-borrar="' + esc(c.id) + '">' + (c.confirmarBorrar ? "Toca otra vez para borrar" : "Borrar") + "</button>";
+  $("casos").innerHTML = casosAuto.map(c => {
+    let h = '<article class="caso-auto" data-caso="' + esc(c.id) + '"><div class="caso-cab"><strong>Caso ' + c.n + '</strong>' +
+      '<span class="insignia e-' + c.estado + '">' + ESTADO_CASO[c.estado] + "</span>" +
+      '<span class="nota">' + hora(c.creado) + " · " + esc(nombreTarea(c.tarea)) + " · " + esc(PROV[c.prov] ? PROV[c.prov].corto : c.prov) + "</span></div>";
+    if (c.paso) h += '<p class="estado cargando">' + esc(c.paso) + "</p>";
+    if (c.estado === "capturando"){
+      const n = (c.archivos || []).length, enCamara = camCaso === c;
+      h += '<p class="nota">' + (n === 1 ? "1 página capturada" : n + " páginas capturadas") + (enCamara ? "." : ": la captura se interrumpió.") + "</p>";
+      if (!enCamara) h += '<div class="acciones">' + (n ? boton("procesar", c, "Procesar " + (n === 1 ? "la página" : "las " + n + " páginas")) : "") + borrar(c) + "</div>";
+    }
+    if (c.estado === "revision") h += '<p class="estado error">' + esc(MSG_REVISION_AUTO(c.residuos)) + "</p>";
+    if (c.estado === "error") h += '<p class="estado error">' + esc(c.error) + "</p>";
+    if (c.estado === "listo"){
+      h += '<div class="resp">' + renderMd(c.respuesta, c.mapa) + "</div>" + (c.truncado ? '<p class="nota">La respuesta quedó incompleta.</p>' : "");
+    }
+    if (["listo", "revision", "error"].includes(c.estado))
+      h += '<div class="acciones">' + (c.estado === "listo" ? boton("copiar-caso", c, "Copiar") : "") + (c.estado === "error" ? boton("reintentar", c, "Reintentar") : "") + borrar(c) + "</div>";
+    if (c.enviado) h += '<details data-ver="' + esc(c.id) + '"' + (c.verEnviado ? " open" : "") + '><summary>Ver lo enviado</summary><pre class="out">' + esc(c.enviado) + "</pre></details>";
+    // Fotos originales conservadas (Ajustes): solo en este teléfono; nunca se envían
+    if (c.archivos && c.archivos.length && !["capturando", "procesando"].includes(c.estado)){
+      if (!c.urls) c.urls = c.archivos.filter(a => /^image\//.test(a.type || "")).map(a => URL.createObjectURL(a));
+      if (c.urls.length) h += '<details><summary>Fotos originales (solo en este teléfono)</summary><div class="fotos-previa">' + c.urls.map((u, i) => '<img src="' + esc(u) + '" alt="Página ' + (i + 1) + '">').join("") + "</div></details>";
+    }
+    return h + "</article>";
+  }).join("");
+}
+const MSG_REVISION_AUTO = rs => "Requiere revisión: quedó a la vista " + textoResiduos(rs) + " y no se pudo ocultar. No se envió. Revisa el documento en el modo manual.";
+const casoPorId = id => casosAuto.find(c => c.id === id);
+$("casos").addEventListener("click", async e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const c = casoPorId(b.dataset.reintentar || b.dataset.copiarCaso || b.dataset.procesar || b.dataset.borrar); if (!c) return;
+  if (b.dataset.reintentar && c.estado === "error"){ c.prov = aj.prov; c.modelo = modeloDe(aj.prov); procesarCaso(c); }
+  else if (b.dataset.procesar && c.estado === "capturando"){ c.estado = "procesando"; actualizar(c); procesarCaso(c); }
+  else if (b.dataset.copiarCaso) toast(await copiarTexto(Anon.restaurar(textoPlano(c.respuesta), c.mapa).salida) ? "Respuesta copiada" : "No se pudo copiar: mantén presionado el texto");
+  else if (b.dataset.borrar){
+    // Borrar pide un segundo toque
+    if (!c.confirmarBorrar){ c.confirmarBorrar = true; pintarCasos(); setTimeout(() => { c.confirmarBorrar = false; pintarCasos(); }, 3500); return; }
+    quitarCaso(c);
+  }
+});
+// (los detalles abiertos siguen abiertos al repintar)
+$("casos").addEventListener("toggle", e => { const d = e.target; if (d.dataset && d.dataset.ver){ const c = casoPorId(d.dataset.ver); if (c) c.verEnviado = d.open; } }, true);
+
+/* ---------- la cámara: varias páginas de un mismo caso y luego «Listo» ---------- */
+// Las páginas se guardan a medida que se sacan (caso "capturando"): si la app se cierra a mitad, no se pierden
+let camStream = null, camCaso = null, camUrls = [];
+const camPaginas = () => (camCaso && camCaso.archivos) || [];
+function pintarCam(){
+  $("camMini").innerHTML = camUrls.map((u, i) => '<img src="' + esc(u) + '" alt="Página ' + (i + 1) + '">').join("");
+  const n = camPaginas().length;
+  $("camListo").disabled = !n;
+  $("camListo").textContent = n ? "Listo (" + n + ")" : "Listo";
+  $("camDisparo").disabled = !camStream || n >= MAX_FOTOS;
+}
+async function abrirCamara(){
+  camCaso = null; camUrls = []; $("camSistema").hidden = true;
+  $("camara").hidden = false; document.body.classList.add("modal-abierto");
+  $("camInfo").textContent = "Abriendo la cámara…"; pintarCam();
+  try {
+    if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) throw new Error("sin cámara");
+    camStream = await navigator.mediaDevices.getUserMedia({audio: false, video: {facingMode: {ideal: "environment"}, width: {ideal: 3264}, height: {ideal: 2448}}});
+    if ($("camara").hidden){ detenerCamara(); return; }
+    $("camVideo").srcObject = camStream;
+    try { await $("camVideo").play(); } catch(e){}
+    $("camInfo").textContent = "Encuadra la hoja completa, con buena luz, y toca el botón. Puedes sacar varias páginas del mismo caso; al terminar, «Listo».";
+  } catch(e){
+    camStream = null;
+    // Sin permiso de cámara aquí (por ejemplo, dentro de otra app): la cámara del sistema, una foto por vez
+    $("camInfo").textContent = "No se pudo abrir la cámara en la app. Usa la cámara del sistema o «Elegir fotos o PDF».";
+    $("camSistema").hidden = false;
+  }
+  pintarCam();
+}
+function detenerCamara(){
+  if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  $("camVideo").srcObject = null;
+}
+// Cierra la cámara; devuelve el caso que se estaba capturando (si había)
+function cerrarCamara(){
+  detenerCamara(); camUrls.forEach(u => URL.revokeObjectURL(u)); camUrls = [];
+  $("camara").hidden = true; document.body.classList.remove("modal-abierto");
+  const c = camCaso; camCaso = null; pintarCasos();
+  return c;
+}
+async function capturar(){
+  const v = $("camVideo"); if (!camStream || !v.videoWidth || camPaginas().length >= MAX_FOTOS) return;
+  const cv = document.createElement("canvas"); cv.width = v.videoWidth; cv.height = v.videoHeight;
+  cv.getContext("2d").drawImage(v, 0, 0);
+  const b = await new Promise(r => cv.toBlob(r, "image/jpeg", 0.92)); cv.width = cv.height = 0;
+  if (!b) return;
+  if (!camCaso) camCaso = crearCaso("capturando", []);
+  camCaso.archivos.push(b); camUrls.push(URL.createObjectURL(b));
+  actualizar(camCaso);
+  const n = camPaginas().length;
+  $("camInfo").textContent = (n === 1 ? "1 página" : n + " páginas") + ". Saca la siguiente o toca «Listo».";
+  pintarCam();
+}
+$("btnCamara").addEventListener("click", () => { pedirPermisoAvisos(); abrirCamara(); });
+$("camDisparo").addEventListener("click", capturar);
+$("camCancelar").addEventListener("click", () => { const c = cerrarCamara(); if (c) quitarCaso(c); });
+$("camListo").addEventListener("click", () => { const c = cerrarCamara(); if (c){ c.estado = "procesando"; actualizar(c); procesarCaso(c); } });
+$("camaraNativa").addEventListener("change", e => {
+  const l = [...(e.target.files || [])]; e.target.value = "";
+  // (desde la cámara de la app sin permiso: las fotos del sistema se suman a las que ya hubiera)
+  const c = $("camara").hidden ? null : cerrarCamara();
+  if (c){ c.archivos = c.archivos.concat(l); c.estado = "procesando"; actualizar(c); procesarCaso(c); }
+  else nuevoCasoAuto(l);
+});
+$("btnElegirAuto").addEventListener("click", () => { pedirPermisoAvisos(); $("adjuntoAuto").click(); });
+$("adjuntoAuto").addEventListener("change", e => { const l = [...(e.target.files || [])]; e.target.value = ""; nuevoCasoAuto(l); });
+
 /* ===================== nuevo caso y borrado automático ===================== */
 let confNuevo = null;
 const TXT_NUEVO = "Empezar otro caso";
@@ -3713,7 +4626,11 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 
 /* ===================== inicio ===================== */
 if (!enMarco && "serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("./sw.js").catch(() => {});
-pintarTareas(); pintarFotos(); analizar(); pintarHilo(); pintarSeg();
+pintarTareas(); pintarFotos(); analizar(); pintarHilo(); pintarSeg(); aplicarModo(); pintarCasos(); cargarCola();
+// Acceso rápido: al iniciar la app (no al volver a ella), directo a la cámara del modo automático, si se pidió en Ajustes
+// o con «?camara» en la dirección
+if (/[?&]camara\b/.test(location.search) && !aj.auto){ aj.auto = true; guardarAjustes(); aplicarModo(); }
+if (aj.auto && (aj.camaraAlIniciar || /[?&]camara\b/.test(location.search))) abrirCamara();
 })();
 </script>
 </body>

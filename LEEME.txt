@@ -1,6 +1,28 @@
 VELO CLÍNICO
 
-Pegas o dictas el caso (o adjuntas foto, PDF o Word), la app oculta nombres, RUT, fechas, teléfonos, direcciones, folios y números de orden en el mismo teléfono, y la IA responde con los datos reales repuestos.
+MODO AUTOMÁTICO (activado por omisión; se apaga en Ajustes)
+- Tocas «Fotografiar examen», sacas una o varias páginas del mismo caso y tocas «Listo». También puedes elegir fotos, PDF o Word.
+- Sin tocar nada más: la app lee las páginas en el teléfono, oculta los datos personales, pasa el validador final y envía SOLO EL TEXTO anonimizado (ninguna imagen) con el prompt por defecto a la IA elegida. La respuesta aparece en «Casos» con los datos reales repuestos.
+- Cada caso guarda lo que se envió, tal cual («Ver lo enviado»), para revisarlo después.
+- La única excepción: si el validador encuentra un dato que no puede ocultar, el caso queda en «Requiere revisión» y no se envía.
+- Como nadie revisa antes de enviar, todo campo rotulado que quede con su valor a la vista (por ejemplo «Nombre:» con un apellido poco común) se oculta solo, y un nombre que el lector leyó con una o dos letras distintas («PERE2») también.
+- Mientras un caso se procesa puedes fotografiar el siguiente: la cola los procesa uno tras otro (la lectura) y los envía en paralelo.
+- Estados de cada caso: Capturando, Procesando, Enviado, Listo, Requiere revisión y Error.
+- La cola queda guardada en el teléfono: si iOS cierra la app (al bloquearlo o al pasar a otra), al volver cada caso sigue donde quedó. Si estaba leyendo, vuelve a leer desde las fotos guardadas; si esperaba la respuesta, envía de nuevo lo mismo. Una captura interrumpida queda como «Capturando» con «Procesar» o «Borrar».
+- Errores de red, de límite de uso o del servidor: hasta 3 reintentos (a los 2, 4 y 8 segundos) y después «Error» con «Reintentar». Un error que no se arregla reintentando (una clave inválida, un modelo que no existe) queda en «Error» de inmediato. Sin respuesta en 10 minutos cuenta como error de red.
+- Mientras haya casos en curso, la pantalla no se apaga sola.
+- Límite de iOS: una página web (también instalada en la pantalla de inicio) se detiene al bloquear el teléfono o al pasar a otra app; no hay forma de que el envío siga en segundo plano (eso solo lo permite una app nativa). Lo que quedó a medias sigue al volver a abrirla.
+- Lo guardado en el teléfono: las fotos solo hasta leerlas y anonimizarlas (salvo que en Ajustes pidas conservarlas); después, lo enviado (ya anonimizado), la respuesta y los marcadores para mostrarla con los datos reales. En un caso en «Requiere revisión», también el dato que quedó a la vista, para que sepas qué revisar.
+- Borrado: los casos terminados se borran solos del teléfono a las 24 horas (en Ajustes: 1 hora, 24 horas, 7 días o no borrarlos), con todo lo anterior. Una captura abandonada también. «Borrar» en un caso, o «Borrar todos los casos de este teléfono» en Ajustes, los quitan antes (con un segundo toque).
+- Aviso al terminar: «Análisis listo», «Un caso requiere revisión» o «Un caso no se pudo completar». Nada más: se ve en la pantalla bloqueada, así que nunca lleva datos del paciente ni clínicos. Con la app a la vista basta el mensaje en pantalla. En iPhone, el aviso del sistema funciona con la app instalada en la pantalla de inicio y el permiso concedido (se pide al tocar «Fotografiar examen» la primera vez), y solo si la app sigue activa al terminar: avisar con la app cerrada requeriría un servidor de notificaciones, que no hay.
+- Sin registros: la app no escribe nada en la consola ni tiene analítica; la única conexión es la consulta (ya anonimizada) a la IA elegida. Las fotos originales y el texto sin anonimizar nunca salen del teléfono.
+- Ajustes: proveedor (Claude con tu cuenta dentro de la app de Claude, o Claude, ChatGPT o Gemini con tu clave API), modelo (por omisión claude-opus-5-5) y prompt por defecto (por omisión, Transcriptor de exámenes). La clave queda solo en el teléfono (puedes no recordarla) y la consulta va directo del teléfono al proveedor.
+- El texto leído en el teléfono puede traer errores (decimales, unidades, tablas): la IA recibe ese aviso. Revisa «Ver lo enviado» cuando un valor no te cuadre.
+- Acceso rápido en iPhone: en Ajustes, «Abrir la cámara al iniciar la app»; así, al tocar el ícono de Velo en la pantalla de inicio la cámara queda lista. La dirección de la app terminada en «?camara» hace lo mismo. (Una app web no puede tener App Intents, botón de acción ni extensión para compartir: son exclusivos de las apps nativas. Un Atajo que abre la dirección la abre en Safari, que no comparte los ajustes ni los casos con la app instalada.)
+- Dentro de la app de Claude la cámara puede no estar disponible: usa «Usar la cámara del sistema» o «Elegir fotos o PDF».
+
+MODO MANUAL
+Pegas o dictas el caso (o adjuntas foto, PDF o Word), la app oculta nombres, RUT, fecha de nacimiento, teléfonos, direcciones, folios y números de orden en el mismo teléfono, y la IA responde con los datos reales repuestos.
 
 - Dentro de la app de Claude: tocas "Enviar a Claude" y la respuesta aparece ahí mismo.
 - En esta página: copias el texto anonimizado, lo pegas en la IA que quieras y traes la respuesta para ver los datos reales.
@@ -11,14 +33,14 @@ Antes de enviar:
 - Seleccionas cualquier texto del cuadro y tocas "Ocultar" para taparlo en todo el caso.
 
 Fotos y PDF escaneados:
-- La app lee la imagen en el teléfono y tapa en negro nombres, RUT, fechas, folios y códigos de barras o QR. Tú revisas, destapas o tapas a mano lo que haga falta y recortas. La IA recibe la imagen ya tapada.
+- La app lee la imagen en el teléfono y tapa en negro nombres, RUT, fecha de nacimiento, folios y códigos de barras o QR. Tú revisas, destapas o tapas a mano lo que haga falta y recortas. La IA recibe la imagen ya tapada.
 - Saca las fotos del documento ORIGINAL. Una imagen que ya trae recuadros negros (por ejemplo, la salida de una versión anterior) se lee peor: el texto pegado a esos recuadros puede quedar sin leer y sin tapar.
 
 Cómo se tapa una foto:
 1. La hoja: ubica los bordes del papel aunque esté en ángulo sobre una alfombra, madera o tela, corrige la perspectiva, empareja la luz y endereza los renglones si el papel está curvado. Lo que queda fuera de la hoja no se lee y sale en blanco; ningún recuadro queda fuera del papel.
 2. La lectura: el lector (Tesseract, español, modelo "best") corre en el dispositivo y lee dos veces de distinta forma (texto suelto y en columna, con contraste suave y fuerte), porque cada forma se salta cosas distintas. La caja de cada palabra se ajusta a su tinta para que el recuadro no se monte sobre las líneas vecinas.
 3. Los campos con rótulo: tras "Nombre del Paciente", "RUN/RUT", "Fecha Nacimiento", "Edad", "Dirección", "Comuna", "Fono/Teléfono", "N° Episodio", "N° Registro", "N° Ficha Clínica", "FI", "Usuario Impresión", "Registrado por", "Médico responsable" y "Dr./Dra./Int." se tapa todo hasta el campo siguiente de la misma fila (o el final de la línea), aunque el lector haya leído solo una parte del valor o ninguna. Si el nombre o la dirección siguen en la línea de abajo, también se tapa.
-4. Sin rótulo: RUT con o sin puntos y guion, teléfonos chilenos, direcciones (calle y número), fechas (también las que el lector rompe), folios alfanuméricos largos (H0000748203), números de 6 o más cifras que no son resultados ni dosis, correos y la edad exacta ("79a 4m 25d": quedan los años, meses y días se tapan).
+4. Sin rótulo: RUT con o sin puntos y guion, teléfonos chilenos, direcciones (calle y número), fechas según su clase (ver «Fechas»), folios alfanuméricos largos (H0000748203), números de 6 o más cifras que no son resultados ni dosis, correos y la edad exacta ("79a 4m 25d": quedan los años, meses y días se tapan).
 5. Entre páginas: lo que se tapó en una página (nombres, apellidos, RUT, dirección, nombres del personal, folios) se busca en todas las demás, aunque el lector yerre una o dos letras. Una página sin encabezado (por ejemplo, un registro de enfermería) queda tapada gracias a las otras.
 6. Si el encabezado se leyó con poca confianza, se tapa entero.
 7. Los recuadros abarcan palabras completas con un margen de un cuarto de su alto (menos si la línea vecina está muy cerca); los de un mismo dato en una línea se juntan. Se pintan sobre los píxeles y la imagen que se envía es nueva, sin EXIF ni GPS.
@@ -28,9 +50,24 @@ Cómo se tapa una foto:
 - La app es una página web: no tiene acceso a VisionKit (el escáner de documentos de iOS). La detección de la hoja y la lectura las hace ella misma en el dispositivo.
 - Límites: la letra manuscrita casi no se lee (revísala tú); la comprobación puede marcar algo que no es un dato (lo destapas tras mirarlo); y un dato que el lector no ve en ninguna de sus lecturas no se puede tapar solo: por eso la revisión final es tuya.
 
-Esta página no se conecta a ningún servidor: el texto solo sale cuando tú lo copias. El lector de fotos (carpeta ocr/) corre en el dispositivo.
+La página solo se conecta a la IA que elijas en Ajustes (api.anthropic.com, api.openai.com o generativelanguage.googleapis.com), y solo con el texto ya anonimizado. En el modo manual, el texto sale cuando lo copias o tocas «Enviar a Claude». El lector de fotos (carpeta ocr/) corre en el dispositivo.
+
+Fechas:
+- Fecha de nacimiento ("Fecha de nacimiento", "F. Nac", "FN", "F.N.", "Nacimiento", "nacido el"…): se oculta. En el texto, el rótulo y la fecha pasan a "edad: X años", calculada respecto de la fecha del documento (la más reciente, sin contar próximos controles ni vigencias); en lactantes, en meses. En una foto se tapa la fecha y la edad va escrita junto a las imágenes.
+- Fechas clínicas (toma o muestra, recepción, validación, emisión, informe, resultado, control, ingreso, alta, procedimiento, cirugía, impresión…): quedan a la vista, aunque sean antiguas.
+- Fecha sin rótulo: queda, salvo que sea 10 o más años anterior a la más reciente del documento; entonces se trata como posible nacimiento y se oculta (sin calcular edad). En una foto, una fecha que el lector leyó a medias se tapa salvo que vaya tras un rótulo clínico.
+- Formatos: 12/03/2025, 12-03-25, 12.03.2025, 2025-03-12, "12 de marzo de 2025", "12-mar-2025", "mar-2025", "marzo de 2025", con o sin hora.
+- Límite: una fecha de antecedente antigua sin rótulo ("IAM marzo de 2010") también se oculta.
+
+Validador final (antes de copiar o enviar):
+- Revisa el texto ya anonimizado con reglas propias, independientes del anonimizador: RUT (con dígito verificador válido, o con puntos y guion aunque el dígito no calce, o tras "RUT:"), correos, teléfonos chilenos (+56, 9 XXXX XXXX, 2 2XXX XXXX), N° de ficha, episodio, registro o folio, una fecha de nacimiento con su rótulo y las palabras de los nombres detectados (también en las imágenes) que reaparezcan.
+- Lo que encuentra se oculta en todo el caso y se vuelve a validar. Un RUT, teléfono o correo que dejaste visible a propósito también se vuelve a ocultar; un nombre visible a propósito, no.
+- Si aun así queda algo, el caso queda en "Requiere revisión": no se copia ni se envía hasta que lo ocultes a mano o corrijas el texto.
+- Las imágenes no pasan por este validador: las revisa la comprobación de la foto ya tapada.
 
 Pruebas (en un computador con Node 20 o superior):
 - node --test pruebas/*.test.mjs   (anonimizador, hoja, patrones, recuadros, propagación)
+- Modo automático de punta a punta (pruebas/sinteticos-fotos.test.mjs): los 6 exámenes sintéticos se dibujan como fotos y entran por la cámara; comprueba que lo enviado no lleva identificadores, que la fecha de nacimiento pasó a edad y que las fechas clínicas quedan. Con VELO_INFORME=informe.md escribe el texto anonimizado final de cada uno. Las consultas a la IA se interceptan: nada sale a internet.
+- Exámenes sintéticos (pruebas/sinteticos.mjs): hemograma, perfil bioquímico, orina completa, PSA, informe de imagen y epicrisis, probados como texto, PDF y foto. Nombres, RUT (con dígito verificador válido) y fechas son inventados.
 - Para la prueba de punta a punta en el navegador con una epicrisis FICTICIA "fotografiada" (4 páginas en ángulo, con sombras y sobre alfombra, madera y tela): npm install y npx playwright install chromium. Falla si algún dato identificable queda a la vista en lo que se enviaría (por la comprobación, por los píxeles o por una lectura aparte). Sin Playwright se salta.
 - Las fotos ficticias se regeneran con: python3 pruebas/generar_epicrisis.py pruebas/epicrisis   (requiere Pillow, numpy y scipy). Todos los datos son inventados.
