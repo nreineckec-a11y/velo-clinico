@@ -67,6 +67,7 @@ Validador final (antes de copiar o enviar):
 
 Pruebas (en un computador con Node 20 o superior):
 - node --test pruebas/*.test.mjs   (anonimizador, hoja, patrones, recuadros, propagación)
+- Modo automático de punta a punta (pruebas/sinteticos-fotos.test.mjs): los 6 exámenes sintéticos se dibujan como fotos y entran por la cámara; comprueba que lo enviado no lleva identificadores, que la fecha de nacimiento pasó a edad y que las fechas clínicas quedan. Con VELO_INFORME=informe.md escribe el texto anonimizado final de cada uno. Las consultas a la IA se interceptan: nada sale a internet.
 - Exámenes sintéticos (pruebas/sinteticos.mjs): hemograma, perfil bioquímico, orina completa, PSA, informe de imagen y epicrisis, probados como texto, PDF y foto. Nombres, RUT (con dígito verificador válido) y fechas son inventados.
 - Para la prueba de punta a punta en el navegador con una epicrisis FICTICIA "fotografiada" (4 páginas en ángulo, con sombras y sobre alfombra, madera y tela): npm install y npx playwright install chromium. Falla si algún dato identificable queda a la vista en lo que se enviaría (por la comprobación, por los píxeles o por una lectura aparte). Sin Playwright se salta.
 - Las fotos ficticias se regeneran con: python3 pruebas/generar_epicrisis.py pruebas/epicrisis   (requiere Pillow, numpy y scipy). Todos los datos son inventados.

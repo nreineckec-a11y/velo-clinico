@@ -115,3 +115,19 @@ test("protegerAuto: los sintéticos llegan con lo clínico y las fechas clínica
     assert.ok(s.includes("edad: " + d.nacimiento.edad + " años"), d.nombre);
   }
 });
+
+test("correo con la «@» mal leída por el lector: el anonimizador (en fotos) y el validador lo ocultan", () => {
+  for (const t of ["Correo de contacto: lgonzalez.ficticioecorreo.cl", "Escribir a juan.perez©correo.cl hoy", "Mail: jperez.gmail.com"]){
+    const p = Anon.protegerAuto(t, {});
+    assert.ok(p.ok && !/gonzalez|perez/i.test(p.cons.salida), p.cons.salida);
+  }
+  assert.deepEqual(residuos("contacto lgonzalez.ficticioecorreo.cl"), [], "en texto escrito se exige la «@»");
+  assert.deepEqual([...Anon.validar("contacto lgonzalez.ficticioecorreo.cl", {aproximado: true})].map(r => r.texto), ["lgonzalez.ficticioecorreo.cl"]);
+  // lo clínico no tiene forma de dominio
+  assert.deepEqual([...Anon.validar("E. coli; 1.020; HbA1c 6,9 %; 12,5 mg/dL; Na 140 mEq/L; 0.5 mg c/12 h", {aproximado: true})], []);
+});
+
+test("protegerAuto: en el texto que se envía, la edad reemplaza también el rótulo de la fecha de nacimiento", () => {
+  assert.equal(Anon.protegerAuto("Fecha de Nacimiento: 14/07/1958   Edad: 66 años\nFecha de toma: 12/03/2025", {}).cons.salida,
+    "edad: 66 años   Edad: 66 años\nFecha de toma: 12/03/2025");
+});

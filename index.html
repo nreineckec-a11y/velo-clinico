@@ -479,7 +479,7 @@ const ROTULOS = [
   {tipo:"FECHA", rx:"fecha\\s+(?:de\\s+)?nacimiento(?:\\s*[-–/]\\s*edad)?|f\\.?\\s*(?:de\\s+)?nac(?:imiento)?\\.?|nacimiento|fecha\\s+nac\\.?"},
   {tipo:"DIRECCION", rx:"domicilio(?:\\s+particular)?|direcci[oó]n(?:\\s+particular)?|calle|villa|poblaci[oó]n|comuna(?:\\s+de\\s+residencia)?"},
   {tipo:"TELEFONO", rx:"tel[eé]fonos?(?:\\s+(?:de\\s+)?contacto)?|fonos?|celular|m[oó]vil|whatsapp"},
-  {tipo:"CORREO", rx:"correo(?:\\s+electr[oó]nico)?|e-?mail"}
+  {tipo:"CORREO", rx:"correo(?:\\s+electr[oó]nico)?(?:\\s+(?:de\\s+)?(?:contacto|paciente))?|e-?mail"}
 ];
 // Palabras con mayúscula que suelen ir tras "Paciente:" o "Médico:" y no son nombres
 const NO_NOMBRE = set(`
@@ -630,7 +630,12 @@ function analizar(texto, opcIn){
   } }
 
   // 1. Correos
-  if (o.correos) porRegex(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/gd, "CORREO");
+  if (o.correos){
+    porRegex(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/gd, "CORREO");
+    // En fotos el lector puede leer la «@» como otra letra ("juan.perezecorreo.cl"): una palabra con forma de
+    // dominio también se oculta (una dirección web también: no hace falta para el caso)
+    if (o.foto) porRegex(RX_DOMINIO, "CORREO", 1);
+  }
 
   // 2. RUT
   if (o.rut){
@@ -741,8 +746,8 @@ function analizar(texto, opcIn){
       if (c.tipo !== "nac"){ add(c.s, c.e, "FECHA"); continue; }
       const edad = c.y ? edadTexto(c, delDoc) : null;
       // En el texto el rótulo va dentro del reemplazo: "Fecha de nacimiento: 14/07/1958" → "edad: 66 años". En una
-      // foto se tapa solo la fecha (el rótulo no es un dato)
-      const s = !o.foto && edad && RX_ENTRE_ROTULO_Y_FECHA.test(ft.slice(c.re, c.s)) ? c.rs : c.s;
+      // foto se tapa solo la fecha (el rótulo no es un dato), salvo que lo que se envíe sea el texto leído (enviaTexto)
+      const s = (!o.foto || o.enviaTexto) && edad && RX_ENTRE_ROTULO_Y_FECHA.test(ft.slice(c.re, c.s)) ? c.rs : c.s;
       add(s, c.e, "FECHA", null, edad);
     }
   }
@@ -1170,6 +1175,9 @@ function visibleRiesgoso(t, tipo){
 }
 
 /* ---------- validador final: lo que se va a enviar, revisado con reglas propias ---------- */
+// Palabra con forma de dominio de internet ("juan.perezecorreo.cl", "www.clinica.com"): un correo cuya «@» el lector
+// leyó como otra letra, o una dirección web
+const RX_DOMINIO = /(?<![\w.@©®-])([\w+-][\w.+©®-]{2,}\.(?:cl|com|net|org|es|edu|gob|gov|info|io|co|ar|pe|mx|uk|br)(?:\.[a-z]{2})?)(?![\w.-]|\.\w)/gdi;
 // Dígito verificador de un RUT (módulo 11)
 function dvRut(cuerpo){
   let suma = 0, m = 2;
@@ -1211,6 +1219,8 @@ function validar(salida, opc){
     poner("RUT", m.index + m[0].length - m[1].length, m.index + m[0].length);
   });
   cada(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, t, m => poner("CORREO", m.index, m.index + m[0].length));
+  // En texto leído de fotos, un correo con la «@» mal leída: una palabra con forma de dominio
+  if (opc && opc.aproximado) cada(RX_DOMINIO, t, m => poner("CORREO", m.index + m[0].length - m[1].length, m.index + m[0].length));
   // Teléfonos chilenos: con +56; móviles (9 XXXX XXXX); fijos de Santiago (2 2XXX XXXX); y tras su rótulo
   for (const rx of [/(?<![\p{N}])\+\s?56[\s\-.]?\(?\d{1,2}\)?(?:[\s\-.]?\d){7,8}(?![\p{N}])/gu,
     /(?<![\p{N}\-\/.,+])(?:56[\s\-.]?)?\(?0?9\)?[\s\-.]?\d{4}[\s\-.]?\d{4}(?![\p{N}]|[.,]\d)/gu,
@@ -1252,7 +1262,7 @@ function validar(salida, opc){
 // vista (revisar, con las reglas de fotos) se oculta, como si tocara «Ocultar todos»; después, el validador
 // (proteger). opc: las de proteger. Devuelve lo de proteger y los avisos que se ocultaron.
 function protegerAuto(texto, opc){
-  const o = Object.assign({}, opc || {}, {foto: true, aproximado: true});
+  const o = Object.assign({}, opc || {}, {foto: true, aproximado: true, enviaTexto: true});
   let p = proteger(texto, o);
   const avisos = revisar(p.res, o.off, {foto: true});
   if (avisos.length){
