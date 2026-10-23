@@ -34,7 +34,7 @@ test("la página solo puede conectarse a las APIs de Claude, OpenAI y Gemini", (
 
 test("el aviso del sistema usa solo textos fijos, sin datos del caso", () => {
   const avisos = HTML.match(/const AVISOS = (\{[^}]+\})/)[1];
-  assert.equal(avisos, '{listo: "Análisis listo", revision: "Un caso requiere revisión", error: "Un caso no se pudo completar"}');
+  assert.equal(avisos, '{listo: "Análisis listo", compartir: "Caso listo para compartir", revision: "Un caso requiere revisión", error: "Un caso no se pudo completar"}');
   // Las dos formas de mostrar el aviso reciben ese título y nada más de texto (sin body)
   const usos = HTML.match(/(?:showNotification|new Notification)\([^)]*\)/g);
   assert.deepEqual(usos, ["showNotification(titulo, op)", "new Notification(titulo, op)"]);

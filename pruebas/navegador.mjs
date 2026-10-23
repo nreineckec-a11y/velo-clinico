@@ -66,7 +66,7 @@ export async function abrir(ajustes, responder, inicio){
   await pg.goto(base + "/index.html?prueba");
   return pg;
 }
-export const AJ_CLAUDE = {auto: true, prov: "claude", claves: {claude: "sk-ant-prueba"}, recordar: true, tarea: "exam"};
+export const AJ_CLAUDE = {auto: true, provV2: true, prov: "claude", claves: {claude: "sk-ant-prueba"}, recordar: true, tarea: "exam"};
 export const archivoTexto = (texto, name = "caso.txt") => ({name, mimeType: "text/plain", buffer: Buffer.from(texto)});
 export const RAIZ_APP = RAIZ;
 // Estado de cada caso en pantalla (del más nuevo al más antiguo)
