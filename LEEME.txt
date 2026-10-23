@@ -37,6 +37,12 @@ Fechas:
 - Formatos: 12/03/2025, 12-03-25, 12.03.2025, 2025-03-12, "12 de marzo de 2025", "12-mar-2025", "mar-2025", "marzo de 2025", con o sin hora.
 - Límite: una fecha de antecedente antigua sin rótulo ("IAM marzo de 2010") también se oculta.
 
+Validador final (antes de copiar o enviar):
+- Revisa el texto ya anonimizado con reglas propias, independientes del anonimizador: RUT (con dígito verificador válido, o con puntos y guion aunque el dígito no calce, o tras "RUT:"), correos, teléfonos chilenos (+56, 9 XXXX XXXX, 2 2XXX XXXX), N° de ficha, episodio, registro o folio, una fecha de nacimiento con su rótulo y las palabras de los nombres detectados (también en las imágenes) que reaparezcan.
+- Lo que encuentra se oculta en todo el caso y se vuelve a validar. Un RUT, teléfono o correo que dejaste visible a propósito también se vuelve a ocultar; un nombre visible a propósito, no.
+- Si aun así queda algo, el caso queda en "Requiere revisión": no se copia ni se envía hasta que lo ocultes a mano o corrijas el texto.
+- Las imágenes no pasan por este validador: las revisa la comprobación de la foto ya tapada.
+
 Pruebas (en un computador con Node 20 o superior):
 - node --test pruebas/*.test.mjs   (anonimizador, hoja, patrones, recuadros, propagación)
 - Exámenes sintéticos (pruebas/sinteticos.mjs): hemograma, perfil bioquímico, orina completa, PSA, informe de imagen y epicrisis, probados como texto, PDF y foto. Nombres, RUT (con dígito verificador válido) y fechas son inventados.
