@@ -125,7 +125,7 @@ test("OpenAI y Gemini: cada uno recibe el texto anonimizado con su clave y su mo
       {choices: [{message: {content: "Respuesta para [NOMBRE_1]."}, finish_reason: "stop"}]}],
     ["gemini", "AIza-prueba", "gemini-prueba", "https://generativelanguage.googleapis.com/v1beta/models/gemini-prueba:generateContent", c => c.contents[0].parts[0].text,
       {candidates: [{content: {parts: [{text: "Respuesta para [NOMBRE_1]."}]}, finishReason: "STOP"}]}]]){
-    const pg = await abrir({auto: true, prov, claves: {[prov]: clave}, modelos: {[prov]: modelo}, recordar: true, tarea: null}, () => ({status: 200, json: respuesta}));
+    const pg = await abrir({auto: true, provV2: true, prov, claves: {[prov]: clave}, modelos: {[prov]: modelo}, recordar: true, tarea: null}, () => ({status: 200, json: respuesta}));
     await pg.setInputFiles("#adjuntoAuto", {name: "caso.txt", mimeType: "text/plain", buffer: Buffer.from("Paciente: Juan Pérez Soto, RUT 12.345.678-5. Creatinina 1,1 mg/dL.")});
     await esperarCaso(pg);
     assert.equal(await estadoCaso(pg), "Listo", prov);

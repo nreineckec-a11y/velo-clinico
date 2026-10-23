@@ -143,7 +143,7 @@ test("«Borrar» (con un segundo toque) quita el caso también del dispositivo; 
 test("sin saldo en la cuenta de API: mensaje claro en español, sin reintentos; «Reintentar» envía lo mismo cuando hay saldo", {skip: saltar}, async () => {
   for (const [prov, aj, sinSaldo, ok] of [
     ["claude", AJ_CLAUDE, {status: 400, json: {type: "error", error: {type: "invalid_request_error", message: "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."}}}, RESPUESTA_CLAUDE],
-    ["openai", {auto: true, prov: "openai", claves: {openai: "sk-prueba"}, recordar: true, tarea: "exam"},
+    ["openai", {auto: true, provV2: true, prov: "openai", claves: {openai: "sk-prueba"}, recordar: true, tarea: "exam"},
       {status: 429, json: {error: {message: "You exceeded your current quota, please check your plan and billing details.", type: "insufficient_quota", code: "insufficient_quota"}}},
       {status: 200, json: {choices: [{message: {content: "Listo."}, finish_reason: "stop"}]}}]]){
     let saldo = false;
