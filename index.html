@@ -326,6 +326,13 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
     <label class="lbl" for="ajTarea">Prompt por defecto</label>
     <select id="ajTarea"></select>
     <label class="check" style="margin-top:10px"><input type="checkbox" id="ajAvisar"><span><b>Avisarme cuando termine cada caso</b><br><span class="nota">Un aviso del teléfono que dice solo «Análisis listo» (o «Un caso requiere revisión»): se ve en la pantalla bloqueada, así que nunca lleva datos del paciente ni clínicos. En iPhone funciona con la app instalada en la pantalla de inicio.</span></span></label>
+    <label class="lbl" for="ajFechas">Fechas sueltas (sin «fecha de…» antes)</label>
+    <select id="ajFechas">
+      <option value="edad">Ocultar solo si coinciden con la edad del paciente (recomendado)</option>
+      <option value="visibles">Dejarlas siempre visibles</option>
+      <option value="antiguas">Ocultar las de 10 o más años antes del documento</option>
+    </select>
+    <p class="nota">La fecha de nacimiento con su rótulo siempre se oculta (pasa a «edad: X años»). Las fechas de la hospitalización, los exámenes y los procedimientos siempre quedan. Cada caso lista las fechas que se ocultaron y por qué.</p>
     <label class="lbl" for="ajPlazo">Borrar los casos terminados del teléfono</label>
     <select id="ajPlazo"><option value="1">Después de 1 hora</option><option value="24">Después de 24 horas</option><option value="168">Después de 7 días</option><option value="0">No borrarlos (los borro yo)</option></select>
     <p class="nota">Se borra todo el caso: lo enviado, la respuesta y los datos reales para mostrarla.</p>
@@ -474,6 +481,8 @@ const OPC_DEF = {nombres:true,rut:true,telefonos:true,correos:true,direcciones:t
 
 // Unidades: un número largo seguido de una unidad es un resultado, no un identificador
 const RX_UNIDAD = /^\s*(?:x\s*10|×|\/|ufc|copias|cop\b|u\.?i\.?\b|u\/|m?u\/|mg|g\/|gr\b|ml|cc\b|mm|cm|cel|el\/|%|mui|ng|pg|µ|μ|mcg|ug|iu\b|mmol|meq|kg|g\b|l\b|ms\b|hz)/i;
+// Un valor que es solo una fecha (también con el mes en letras: "12-nov-2025"): no es un folio ("Biopsia 12-nov-2025")
+const RX_SOLO_FECHA = /^(?:\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}|\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}|\d{1,2}[\/.\-](?:ene|feb|mar|abr|may|jun|jul|ago|sep|set|oct|nov|dic)[a-z]*\.?[\/.\-]\d{2,4})$/i;
 const cuentaDigitos = s => (String(s).match(/\d/g) || []).length;
 // Rótulos de campos con datos personales: si su valor queda visible, la app avisa antes de enviar
 const ROTULOS = [
@@ -664,7 +673,7 @@ function analizar(texto, opcIn){
   // 4. N° de ficha / folio / episodio
   if (o.fichas){
     porRegex(/(?:\bficha(?:\s+cl[ií]nica)?|\bfolio|\bepisodio|\bn[°º*]\s*(?:de\s+)?(?:atenci[oó]n|solicitud|orden|interconsulta|ficha|registro|biopsia)|\bhistoria\s+cl[ií]nica|\bHC\b|\bSIC\b|\bID\s*(?:del?\s+)?paciente|\bbiopsia)\s*(?:n[°º.]?|nro\.?|n[uú]mero|#)?\s*[:.]?\s*(?=[A-Z0-9\-\/.]*\d)([A-Z0-9][A-Z0-9\-\/.]{2,}[A-Z0-9])/giud, "FICHA", 1,
-      m => !/^(?:\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}|\d{4}-\d{2}-\d{2})$/.test(m[1]));
+      m => !RX_SOLO_FECHA.test(m[1]));
   }
 
   // 5. Direcciones
@@ -697,12 +706,15 @@ function analizar(texto, opcIn){
     const MES3 = "ene|feb|mar|abr|may|jun|jul|ago|sept?|set|oct|nov|dic";
     const mesDe = t => ({ene:1, feb:2, mar:3, abr:4, may:5, jun:6, jul:7, ago:8, sep:9, set:9, oct:10, nov:11, dic:12})[plegar(t).slice(0, 3)];
     let m, rx;
-    // 12/03/2025, 12-03-25, 12.03.2025
-    rx = new RegExp("(?<![\\p{N}.,\\/\\-])(\\d{1,2})([\\/.\\-])(\\d{1,2})\\2(\\d{4}|\\d{2})(?![\\p{N}]|[.,]\\d)" + HORA, "gu");
-    while ((m = rx.exec(texto))) if (valida(+m[1], +m[3])) poner(m, ano4(m[4]), +m[3], +m[1]);
-    // 2025-03-12
-    rx = new RegExp("(?<![\\p{N}])(\\d{4})-(\\d{2})-(\\d{2})(?![\\p{N}])" + HORA, "gu");
-    while ((m = rx.exec(texto))) if (valida(+m[3], +m[2])) poner(m, +m[1], +m[2], +m[3]);
+    // 12/03/2025, 12-03-25, 12.03.2025; también con separadores distintos ("07-11/2025", "08.11/25", típico de una foto
+    // leída en el teléfono) o con espacios y año de 4 cifras ("6 / 11 / 2025")
+    rx = new RegExp("(?<![\\p{N}.,\\/\\-])(\\d{1,2})([\\/.\\-])(\\d{1,2})([\\/.\\-])(\\d{4}|\\d{2})(?![\\p{N}]|[.,]\\d)" + HORA, "gu");
+    while ((m = rx.exec(texto))) if (valida(+m[1], +m[3])) poner(m, ano4(m[5]), +m[3], +m[1]);
+    rx = new RegExp("(?<![\\p{N}.,\\/\\-])(\\d{1,2})[ \\t]*([\\/.\\-])[ \\t]*(\\d{1,2})[ \\t]*([\\/.\\-])[ \\t]*(\\d{4})(?![\\p{N}]|[.,]\\d)" + HORA, "gu");
+    while ((m = rx.exec(texto))) if (valida(+m[1], +m[3])) poner(m, +m[5], +m[3], +m[1]);
+    // 2025-03-12, 2025/03/12, 2025.3.12 (el año primero)
+    rx = new RegExp("(?<![\\p{N}])(\\d{4})([\\/.\\-])(\\d{1,2})([\\/.\\-])(\\d{1,2})(?![\\p{N}]|[.,]\\d)" + HORA, "gu");
+    while ((m = rx.exec(texto))) if (valida(+m[5], +m[3]) && +m[1] >= 1900 && +m[1] <= 2100) poner(m, +m[1], +m[3], +m[5]);
     // 12 de marzo de 2025, 12 de marzo 2025, 12 de marzo
     rx = new RegExp(`(?<![\\p{N}])(\\d{1,2})\\s+de\\s+(${MESES})(?![\\p{L}])(?:\\s+(?:de|del)?\\s*(\\d{4})(?![\\p{N}]))?` + HORA, "giu");
     while ((m = rx.exec(texto))) if (valida(+m[1], mesDe(m[2]))) poner(m, m[3] ? +m[3] : null, mesDe(m[2]), +m[1]);
@@ -715,6 +727,16 @@ function analizar(texto, opcIn){
     // Solo en fotos: una fecha que el lector cortó o leyó a medias ("03/11/2", "03/11/20"): día, mes y el comienzo
     // del año (con puntos, solo con día y mes de dos cifras: "1.5.2" es un número de sección; "1-1-1" es una dosis)
     if (o.foto){
+      // (con las cifras que el lector pone por letras: "O3/11/2O25", "l2/03/2025", "03/11/2O25")
+      const conf = {O: "0", o: "0", I: "1", l: "1", S: "5", B: "8"};
+      rx = new RegExp("(?<![\\p{N}\\p{L}])([\\dOoIlSB]{1,2})([\\/.\\-])([\\dOoIlSB]{1,2})([\\/.\\-])([\\dOoIlSB]{2,4})(?![\\p{N}\\p{L}])" + HORA, "gu");
+      while ((m = rx.exec(texto))){
+        const t = m[1] + m[3] + m[5];
+        if (!/[OoIlSB]/.test(t) || (t.match(/\d/g) || []).length < 3) continue;   // sin letras: ya es una fecha de las de arriba
+        const n = x => x.replace(/[OoIlSB]/g, c => conf[c]);
+        const a = n(m[5]);
+        if ((a.length === 4 || a.length === 2) && valida(+n(m[1]), +n(m[3]))) poner(m, ano4(a), +n(m[3]), +n(m[1]));
+      }
       rx = /(?<![\p{N}\/.\-])(\d{1,2}([\/\-])\d{1,2}\2\d{1,3}|\d{2}\.\d{2}\.\d{1,3})(?![\p{N}]|[.,]\d)/gu;
       while ((m = rx.exec(texto))){
         const [d, me, a] = m[1].split(/[\/\-.]/);
@@ -740,19 +762,34 @@ function analizar(texto, opcIn){
     }
     const num = c => c.y * 10000 + (c.m || 1) * 100 + (c.d || 1);
     const mayor = xs => xs.reduce((a, c) => !a || num(c) > num(a) ? c : a, null);
-    const completas = lista.filter(c => c.y && c.tipo !== "nac" && c.tipo !== "dudosa");
+    // (una fecha a más de un año en el futuro es un año mal leído: no sirve de referencia, o todo lo demás parecería antiguo)
+    const tope = num({y: anoHoy + 1, m: hoy.getMonth() + 1, d: hoy.getDate()});
+    const completas = lista.filter(c => c.y && c.tipo !== "nac" && c.tipo !== "dudosa" && num(c) <= tope);
+    // Las edades que dice el documento ("Edad: 66 años", "66a 4m"): una fecha sin rótulo solo es un posible nacimiento si
+    // coincide con ellas (o, si el documento no dice la edad, si es antigua)
+    const edades = [...ft.matchAll(/(?<![\p{N}.,\/\-])(\d{1,3})[ \t]*(?:anos|ano|a)(?![a-z\p{N}])|edad[ \t]*[:\-]?[ \t]*(\d{1,3})(?![\p{N}\/.,])/gu)]
+      .map(x => +(x[1] || x[2])).filter(n => n >= 0 && n <= 120);
+    const modo = ["visibles", "antiguas"].includes(o.fechasSinRotulo) ? o.fechasSinRotulo : "edad";
+    const ocultarFecha = (c, s, e, repl, motivo) => { if (add(s, e, "FECHA", null, repl)){ const d = dets[dets.length - 1]; d.motivo = motivo; d.fecha = texto.slice(c.s, c.e); } };
     const masReciente = mayor(completas);
     const delDoc = mayor(completas.filter(c => !RX_FECHA_FUTURA.test(c.rotulo))) || masReciente ||
       {y: anoHoy, m: hoy.getMonth() + 1, d: hoy.getDate()};
     for (const c of lista){
-      const antigua = c.y && masReciente && aniosEntre(c, masReciente) >= 10;
-      if (c.tipo === "clinica" || (!c.tipo && !c.parcial && !antigua)){ reservar(c.s, c.e); continue; }
-      if (c.tipo !== "nac"){ add(c.s, c.e, "FECHA"); continue; }
+      let motivo = c.tipo === "dudosa" ? "tiene «nacimiento» antes, sin ser claro" : c.parcial ? "leída a medias en la foto" : "";
+      if (!c.tipo && !c.parcial && c.y && masReciente && modo !== "visibles"){
+        if (modo === "antiguas"){ if (aniosEntre(c, masReciente) >= 10) motivo = "sin rótulo y 10 o más años anterior al documento"; }
+        else if (c.d != null){
+          if (edades.length){ if (edades.some(a => Math.abs(aniosEntre(c, delDoc) - a) <= 1)) motivo = "sin rótulo y coincide con la edad del paciente (posible nacimiento)"; }
+          else if (aniosEntre(c, masReciente) >= 10) motivo = "sin rótulo y 10 o más años anterior al documento";
+        }
+      }
+      if (c.tipo === "clinica" || (!c.tipo && !motivo)){ reservar(c.s, c.e); continue; }
+      if (c.tipo !== "nac"){ ocultarFecha(c, c.s, c.e, null, motivo || "sin rótulo claro"); continue; }
       const edad = c.y ? edadTexto(c, delDoc) : null;
       // En el texto el rótulo va dentro del reemplazo: "Fecha de nacimiento: 14/07/1958" → "edad: 66 años". En una
       // foto se tapa solo la fecha (el rótulo no es un dato), salvo que lo que se envíe sea el texto leído (enviaTexto)
       const s = (!o.foto || o.enviaTexto) && edad && RX_ENTRE_ROTULO_Y_FECHA.test(ft.slice(c.re, c.s)) ? c.rs : c.s;
-      add(s, c.e, "FECHA", null, edad);
+      ocultarFecha(c, s, c.e, edad, "fecha de nacimiento" + (edad ? " (queda como «" + edad + "»)" : ""));
     }
   }
   // Una fecha clínica queda a la vista: se reserva para que ninguna regla posterior la tome por folio o número
@@ -1276,7 +1313,9 @@ function protegerAuto(texto, opc){
     const ocultar = (o.ocultar || []).concat(avisos.map(a => ({texto: a.texto, tipo: a.tipo})));
     p = proteger(texto, Object.assign({}, o, {ocultar}));
   }
-  return Object.assign(p, {avisos});
+  // Las fechas que se ocultaron, con el motivo (para que el médico vea qué pasó)
+  const fechasOcultas = p.res.dets.filter(d => d.tipo === "FECHA" && !(o.off && o.off.has(d.k))).map(d => ({fecha: d.fecha || p.res.texto.slice(d.s, d.e), motivo: d.motivo || "sin rótulo claro"}));
+  return Object.assign(p, {avisos, fechasOcultas});
 }
 // Palabras de los nombres detectados (sin los que el médico dejó visibles a propósito)
 function nombresDe(res, deshabilitadas){
@@ -2741,7 +2780,7 @@ function fijarTokens(res, reg, cont){
 // requiere revisión y no se envía ni se copia.
 function calcular(texto, reg, cont){
   // (window.__velo.rondas: solo en las pruebas automáticas, para simular que volver a ocultar no basta)
-  const p = Anon.proteger(texto, {ocultar: caso.ocultar, off: caso.off, nombres: nombresDeFotos(), fijar: res => fijarTokens(res, reg, cont),
+  const p = Anon.proteger(texto, {fechasSinRotulo: aj.fechasSinRotulo, ocultar: caso.ocultar, off: caso.off, nombres: nombresDeFotos(), fijar: res => fijarTokens(res, reg, cont),
     rondas: window.__velo ? window.__velo.rondas : undefined});
   const nuevos = p.agregados.filter(it => agregarOculto(it.texto, it.tipo, it.tarde));
   if (nuevos.length) toast("El validador ocultó también: " + nuevos.map(it => "«" + recortar(it.texto, 24) + "»").join(", "));
@@ -4099,7 +4138,7 @@ const PROV = {
 };
 const LS_AJ = "velo_ajustes";
 const ajustesBase = () => ({auto: true, prov: enMarco ? "claude-app" : "compartir", modelos: {}, claves: {}, recordar: true, tarea: "exam",
-  avisar: true, plazoBorrado: 24, conservarFotos: false, camaraAlIniciar: false, usos: {}});
+  avisar: true, plazoBorrado: 24, conservarFotos: false, camaraAlIniciar: false, fechasSinRotulo: "edad", usos: {}});
 function leerAjustes(){
   let g = null;
   try { g = JSON.parse(localStorage.getItem(LS_AJ) || "null"); } catch(e){}
@@ -4112,6 +4151,7 @@ function leerAjustes(){
   if (a.tarea && !TAREAS.some(t => t.id === a.tarea)) a.tarea = null;
   a.auto = a.auto !== false; a.avisar = a.avisar !== false; a.conservarFotos = a.conservarFotos === true; a.camaraAlIniciar = a.camaraAlIniciar === true;
   if (![0, 1, 24, 168].includes(a.plazoBorrado)) a.plazoBorrado = 24;
+  if (!["edad", "visibles", "antiguas"].includes(a.fechasSinRotulo)) a.fechasSinRotulo = "edad";
   return a;
 }
 let aj = leerAjustes();
@@ -4140,7 +4180,7 @@ function pintarAjustes(){
     $("ajClaveLink").href = P.claveUrl; $("ajRecordar").checked = aj.recordar;
     $("ajProvNota").hidden = !P.aviso; $("ajProvNota").textContent = P.aviso || "";
   }
-  $("ajAvisar").checked = aj.avisar; $("ajPlazo").value = String(aj.plazoBorrado); $("ajFotos").checked = aj.conservarFotos;
+  $("ajFechas").value = aj.fechasSinRotulo; $("ajAvisar").checked = aj.avisar; $("ajPlazo").value = String(aj.plazoBorrado); $("ajFotos").checked = aj.conservarFotos;
   $("ajTarea").innerHTML = '<option value="">Ninguno</option>' + TAREAS.map(t => '<option value="' + t.id + '"' + (t.id === aj.tarea ? " selected" : "") + ">" + esc(t.nombre) + "</option>").join("");
 }
 function abrirAjustes(){ pintarAjustes(); $("ajustes").hidden = false; document.body.classList.add("modal-abierto"); }
@@ -4164,6 +4204,7 @@ $("ajRecordar").addEventListener("change", () => {
 });
 $("ajTarea").addEventListener("change", () => { aj.tarea = $("ajTarea").value || null; guardarAjustes(); aplicarModo(); });
 $("ajCamaraInicio").addEventListener("change", () => { aj.camaraAlIniciar = $("ajCamaraInicio").checked; guardarAjustes(); });
+$("ajFechas").addEventListener("change", () => { aj.fechasSinRotulo = $("ajFechas").value; guardarAjustes(); analizar(); });
 $("ajAvisar").addEventListener("change", () => { aj.avisar = $("ajAvisar").checked; guardarAjustes(); pedirPermisoAvisos(); });
 $("ajPlazo").addEventListener("change", () => { aj.plazoBorrado = +$("ajPlazo").value; guardarAjustes(); limpiarVencidos(); });
 $("ajFotos").addEventListener("change", () => { aj.conservarFotos = $("ajFotos").checked; guardarAjustes(); });
@@ -4289,9 +4330,12 @@ async function enviarUna(prov, texto, signal){
 
 /* ===================== modo automático: foto → texto → anonimizado → validado → enviado ===================== */
 const NOTA_AUTO = `NOTA DE LA APP (no es una instrucción clínica): el texto del médico se leyó en su teléfono desde fotos o PDF (lectura automática: puede traer errores de lectura, sobre todo en decimales, unidades y tablas; si un valor no es coherente, dilo en vez de corregirlo en silencio) y se anonimizó en el dispositivo antes de enviártelo. No se adjuntan imágenes. Los marcadores entre corchetes, como [NOMBRE_1], [RUT_1] o [FECHA_2], reemplazan datos personales: cuando necesites esos datos, escribe el marcador exactamente igual; no los adivines ni los trates como datos faltantes. La fecha de nacimiento se reemplazó por la edad («edad: X años»); las demás fechas (toma de muestra, informe, ingreso, alta, controles) son las reales.`;
-function mensajeAuto(salida, tareaId, directa){
+// escrito: el médico escribió o pegó el texto (no se leyó de fotos: no hay errores de lectura que avisar)
+const NOTA_AUTO_ESCRITO = NOTA_AUTO.replace(/el texto del médico se leyó en su teléfono desde fotos o PDF \(.*?\) y se anonimizó en el dispositivo antes de enviártelo\. No se adjuntan imágenes\./,
+  "el texto del médico se anonimizó en su dispositivo antes de enviártelo. No se adjuntan imágenes.");
+function mensajeAuto(salida, tareaId, directa, escrito){
   const t = TAREAS.find(x => x.id === tareaId);
-  return NOTA_AUTO + (directa ? NOTA_SIN_ARCHIVOS : "") +
+  return (escrito ? NOTA_AUTO_ESCRITO : NOTA_AUTO) + (directa ? NOTA_SIN_ARCHIVOS : "") +
     "\n\n=== PREFERENCIAS GENERALES DEL MÉDICO ===\n" + P.preferencias.trim() +
     (t ? "\n\n=== INSTRUCCIONES DEL PROYECTO «" + t.nombre.toUpperCase() + "» ===\n" + P[t.id].trim() : "") +
     "\n\n=== TEXTO DEL MÉDICO ===\n" + salida;
@@ -4400,7 +4444,7 @@ async function bdHacer(modo, fn){
     });
   } catch(e){ return null; }
 }
-const CAMPOS_CASO = ["id", "n", "creado", "terminado", "estado", "prov", "modelo", "tarea", "archivos", "enviado", "respuesta", "truncado", "mapa", "residuos", "error"];
+const CAMPOS_CASO = ["id", "n", "creado", "terminado", "estado", "prov", "modelo", "tarea", "archivos", "enviado", "respuesta", "truncado", "mapa", "fechasOcultas", "residuos", "error"];
 function guardarCaso(c){ const r = {}; for (const k of CAMPOS_CASO) r[k] = c[k]; return bdHacer("readwrite", st => st.put(r)); }
 const borrarCasoBD = id => bdHacer("readwrite", st => st.delete(id));
 const leerCasosBD = () => bdHacer("readonly", st => st.getAll());
@@ -4445,12 +4489,13 @@ async function procesarCaso(c){
       const lect = await leerArchivosAuto(c.archivos, i => { c.paso = "Leyendo " + (n > 1 ? "la página " + Math.min(i, n) + " de " + n : "la página") + " en el teléfono…"; pintarCasos(); });
       if (!lect.texto.replace(/[-\s]|Página \d+/g, "")) throw {mensaje: "No se pudo leer texto en las fotos. Prueba con más luz y la hoja completa en la foto.", final: true};
       c.paso = "Ocultando datos personales y validando…"; pintarCasos();
-      const p = Anon.protegerAuto(lect.texto, {escrito: lect.escrito, nombres: lect.nombres, ocultar: lect.ocultar, rondas: window.__velo ? window.__velo.rondas : undefined});
+      const p = Anon.protegerAuto(lect.texto, {fechasSinRotulo: aj.fechasSinRotulo, escrito: lect.escrito, nombres: lect.nombres, ocultar: lect.ocultar, rondas: window.__velo ? window.__velo.rondas : undefined});
       // Los originales ya no se usan: se borran del teléfono. Con «Conservar las fotos originales» (Ajustes) quedan solo
       // las imágenes; el texto escrito y los archivos de texto, PDF o Word se borran siempre
       c.archivos = aj.conservarFotos ? c.archivos.filter(a => /^image\//.test(a.type || "")) : null;
       if (c.archivos && !c.archivos.length) c.archivos = null;
-      if (p.ok){ c.mapa = Object.assign({}, p.cons.mapa); c.enviado = mensajeAuto(p.cons.salida, c.tarea, c.prov !== "compartir"); }
+      c.fechasOcultas = [...p.fechasOcultas];
+      if (p.ok){ c.mapa = Object.assign({}, p.cons.mapa); c.enviado = mensajeAuto(p.cons.salida, c.tarea, c.prov !== "compartir", lect.escrito); }
       else { c.estado = "revision"; c.residuos = [...p.residuos].map(r => ({tipo: r.tipo, texto: r.texto})); c.paso = ""; }
     }
     // Compartir: el caso queda listo para que el médico lo comparta con su app de IA (la app no envía nada)
@@ -4585,6 +4630,10 @@ function pintarCasos(){
         (c.estado === "error" ? boton("reintentar", c, "Reintentar") : "") + borrar(c) + "</div>";
     if (c.estado === "listo" && c.pegando) h += '<textarea data-pegada="' + esc(c.id) + '" rows="4" placeholder="Pega aquí la respuesta de la IA">' + esc(c.borrador || "") + '</textarea><div class="fila">' + boton("ver-respuesta", c, "Ver con los datos reales") + "</div>";
     if (c.enviado) h += '<details data-ver="' + esc(c.id) + '"' + (c.verEnviado ? " open" : "") + '><summary>Ver lo enviado</summary><pre class="out">' + esc(c.enviado) + "</pre></details>";
+    // Las fechas que se ocultaron y por qué (solo aquí, en este teléfono)
+    const fo = c.fechasOcultas || [];
+    if (fo.length && c.enviado) h += '<details><summary>Fechas ocultas (' + fo.length + ')</summary><ul class="nota" style="margin:0; padding-left:18px">' +
+      fo.map(f => "<li><b>" + esc(f.fecha) + "</b> — " + esc(f.motivo) + "</li>").join("") + "</ul></details>";
     // Fotos originales conservadas (Ajustes): solo en este teléfono; nunca se envían
     if (c.archivos && c.archivos.length && !["capturando", "procesando"].includes(c.estado)){
       if (!c.urls) c.urls = c.archivos.filter(a => /^image\//.test(a.type || "")).map(a => URL.createObjectURL(a));

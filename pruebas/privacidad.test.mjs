@@ -95,7 +95,7 @@ test("lo guardado en el teléfono: lo enviado y la respuesta van anonimizados; l
     const rq = indexedDB.open("velo", 1);
     rq.onsuccess = () => { const g = rq.result.transaction("casos").objectStore("casos").getAll(); g.onsuccess = () => ok(g.result[0]); };
   }));
-  const {mapa, ...resto} = registro;
+  const {mapa, fechasOcultas, ...resto} = registro;   // (los datos reales quedan solo en los marcadores y en la lista de fechas ocultas, que se ve en el teléfono)
   assert.deepEqual(conDatos(JSON.stringify(resto)), [], "fuera de los marcadores no debe quedar ningún dato real");
   assert.equal(resto.archivos, null, "sin fotos");
   assert.ok(Object.values(mapa).some(v => /Juan Pérez Soto/.test(v)), "los marcadores permiten mostrar la respuesta con los datos reales");

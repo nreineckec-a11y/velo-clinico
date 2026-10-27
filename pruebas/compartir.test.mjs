@@ -194,3 +194,46 @@ test("pantalla angosta o ancha: todos los botones de prompt quedan dentro de la 
     await pg.context().close();
   }
 });
+
+/* ---------- fechas ocultas: se ven en el caso, con su motivo, y el ajuste manda ---------- */
+const EPI_ESCRITA = "Paciente de 69 años, 17/05/1956. IAM el 15/03/2014. Ingreso 03/11/2025, alta 11/11/2025.\nBiopsia 12-nov-2025 pendiente. Laboratorio 2025/11/05: PCR 148 mg/dL.";
+
+test("cada caso lista las fechas que se ocultaron y por qué; las de la hospitalización llegan completas", {skip: saltar}, async () => {
+  const pg = await abrir({auto: true, tarea: "epi"}, null, SIMULAR);
+  await pg.fill("#entradaAuto", EPI_ESCRITA);
+  await pg.click("#btnProcesarTexto");
+  await esperarEstado(pg, "Listo para compartir");
+  const enviado = await pg.evaluate(() => document.querySelector(".caso-auto details pre").textContent);
+  for (const f of ["03/11/2025", "11/11/2025", "12-nov-2025", "2025/11/05", "15/03/2014"]) assert.ok(enviado.includes(f), "se perdió " + f);
+  assert.ok(!enviado.includes("17/05/1956"));
+  const lista = await pg.evaluate(() => [...document.querySelectorAll(".caso-auto details")].find(d => /Fechas ocultas/.test(d.textContent)).textContent);
+  assert.match(lista, /Fechas ocultas \(1\)/);
+  assert.match(lista, /17\/05\/1956 — sin rótulo y coincide con la edad del paciente \(posible nacimiento\)/);
+  await pg.context().close();
+});
+
+test("Ajustes → «Dejarlas siempre visibles»: la fecha suelta de nacimiento queda (la rotulada, nunca)", {skip: saltar}, async () => {
+  const pg = await abrir({auto: true, tarea: "epi", fechasSinRotulo: "visibles"}, null, SIMULAR);
+  await pg.fill("#entradaAuto", EPI_ESCRITA + "\nF. Nac: 17/05/1956");
+  await pg.click("#btnProcesarTexto");
+  await esperarEstado(pg, "Listo para compartir");
+  const enviado = await pg.evaluate(() => document.querySelector(".caso-auto details pre").textContent);
+  assert.match(enviado, /Paciente de 69 años, 17\/05\/1956\./, "la suelta queda visible");
+  assert.ok(!/F\. Nac: 17\/05\/1956/.test(enviado) && /edad: 69 años/.test(enviado), "la rotulada se oculta siempre");
+  await pg.click("#btnAjustes");
+  assert.equal(await pg.inputValue("#ajFechas"), "visibles");
+  await pg.selectOption("#ajFechas", "edad");
+  assert.equal(await pg.evaluate(() => JSON.parse(localStorage.getItem("velo_ajustes")).fechasSinRotulo), "edad");
+  await pg.context().close();
+});
+
+test("texto escrito: la nota a la IA no habla de fotos ni de errores de lectura; con fotos sí", {skip: saltar}, async () => {
+  const pg = await abrir({auto: true, tarea: "exam"}, null, SIMULAR);
+  await pg.fill("#entradaAuto", "Hemoglobina 12,8 g/dL.");
+  await pg.click("#btnProcesarTexto");
+  await esperarEstado(pg, "Listo para compartir");
+  const escrito = await pg.evaluate(() => document.querySelector(".caso-auto details pre").textContent);
+  assert.match(escrito, /el texto del médico se anonimizó en su dispositivo antes de enviártelo\. No se adjuntan imágenes\./);
+  assert.doesNotMatch(escrito, /desde fotos o PDF|errores de lectura/);
+  await pg.context().close();
+});

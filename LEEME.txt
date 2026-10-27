@@ -57,7 +57,9 @@ La página solo se conecta a la IA que elijas en Ajustes (api.anthropic.com, api
 Fechas:
 - Fecha de nacimiento ("Fecha de nacimiento", "F. Nac", "FN", "F.N.", "Nacimiento", "nacido el"…): se oculta. En el texto, el rótulo y la fecha pasan a "edad: X años", calculada respecto de la fecha del documento (la más reciente, sin contar próximos controles ni vigencias); en lactantes, en meses. En una foto se tapa la fecha y la edad va escrita junto a las imágenes.
 - Fechas clínicas (toma o muestra, recepción, validación, emisión, informe, resultado, control, ingreso, alta, procedimiento, cirugía, impresión…): quedan a la vista, aunque sean antiguas.
-- Fecha sin rótulo: queda, salvo que sea 10 o más años anterior a la más reciente del documento; entonces se trata como posible nacimiento y se oculta (sin calcular edad). En una foto, una fecha que el lector leyó a medias se tapa salvo que vaya tras un rótulo clínico.
+- Fecha sin rótulo: queda, salvo que pueda ser el nacimiento con el rótulo perdido: si el documento dice la edad («69 años»), solo se oculta una fecha de hace unos 69 años; si no la dice, una de 10 o más años antes del documento. No se calcula edad. En Ajustes se puede cambiar («Fechas sueltas»: coinciden con la edad, siempre visibles, o las de 10 o más años). Un antecedente con solo mes y año («marzo de 2010») nunca se oculta. En una foto, una fecha que el lector leyó a medias se tapa salvo que vaya tras un rótulo clínico.
+- Cada caso del modo automático lista las «Fechas ocultas» con el motivo (solo en este teléfono), para que veas qué pasó.
+- Una fecha mal leída por el lector sigue siendo fecha (separadores mezclados «07-11/2025», año primero «2025/11/05», letras por cifras «O3/11/2O25»); no pasa a folio. Una fecha con año a más de un año en el futuro (un año mal leído) no sirve de referencia.
 - Formatos: 12/03/2025, 12-03-25, 12.03.2025, 2025-03-12, "12 de marzo de 2025", "12-mar-2025", "mar-2025", "marzo de 2025", con o sin hora.
 - Límite: una fecha de antecedente antigua sin rótulo ("IAM marzo de 2010") también se oculta.
 
