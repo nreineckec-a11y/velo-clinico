@@ -3,7 +3,8 @@
 // Requiere Playwright y Chromium (npm install); sin ellos se saltan. Todos los datos son ficticios.
 import test from "node:test";
 import assert from "node:assert/strict";
-import {saltar, abrir, AJ_CLAUDE, archivoTexto, esperar, esperarCasos, estados, guardados} from "./navegador.mjs";
+import {readFileSync} from "node:fs";
+import {saltar, abrir, AJ_CLAUDE, archivoTexto, esperar, esperarCasos, estados, guardados, RAIZ_APP} from "./navegador.mjs";
 
 const CASO = "Paciente: Juan Pérez Soto, RUT 12.345.678-5. Fecha de nacimiento: 14/07/1958. Creatinina 1,1 mg/dL. Fecha de toma: 12/03/2025.";
 const DATOS = ["Juan", "Pérez", "Soto", "12.345.678", "14/07/1958"];
@@ -112,4 +113,84 @@ test("modo manual: «Compartir .txt» comparte el texto anonimizado con el promp
   assert.deepEqual(DATOS.filter(d => c.texto.includes(d)), []);
   assert.doesNotMatch(c.texto, /no puedes crear archivos/);
   await pg.context().close();
+});
+
+/* ---------- caso escrito, pegado o dictado ---------- */
+const ESCRITO = "Hazme una interconsulta a urología.\nPaciente Juan Pérez Soto, RUT 12.345.678-5, F. Nac 14/07/1958, fono +56 9 8765 4321.\nAPE 6,4 ng/ml (12/02/2026). Creatinina 1,1 mg/dL. Orden 4471208.";
+
+test("escribir el caso en la pantalla principal: mismo flujo (ocultar, validar, compartir), sin fotos", {skip: saltar}, async () => {
+  const pg = await abrir({auto: true, tarea: "ic"}, null, SIMULAR);
+  assert.equal(await pg.isDisabled("#btnProcesarTexto"), true, "sin texto no hay nada que procesar");
+  await pg.fill("#entradaAuto", ESCRITO);
+  assert.equal(await pg.isDisabled("#btnProcesarTexto"), false);
+  await pg.click("#btnProcesarTexto");
+  assert.equal(await pg.inputValue("#entradaAuto"), "", "el cuadro se vacía: el texto no queda a la vista");
+  await esperarEstado(pg, "Listo para compartir");
+  assert.equal(pg.envios.length, 0);
+  await pg.click("[data-compartir]");
+  await esperarEstado(pg, "Compartido");
+  const [c] = await pg.evaluate(() => window.__compartido);
+  assert.equal(c.nombre, "velo-interconsulta.txt");
+  assert.match(c.texto, /INSTRUCCIONES DEL PROYECTO «INTERCONSULTA»/);
+  // Lo que pidió el médico viaja; lo personal no; las fechas clínicas y los valores quedan
+  assert.match(c.texto, /Hazme una interconsulta a urología\./);
+  assert.match(c.texto, /Paciente \[NOMBRE_1\], RUT \[RUT_1\], edad: 67 años, fono \[TELEFONO_1\]\./);
+  assert.match(c.texto, /APE 6,4 ng\/ml \(12\/02\/2026\)\. Creatinina 1,1 mg\/dL\. Orden \[FICHA_1\]\./);
+  assert.deepEqual([...DATOS, "8765", "4471208"].filter(d => c.texto.includes(d)), []);
+  // La respuesta vuelve con los datos reales
+  await pg.evaluate(() => { window.__portapapeles = "Se deriva a [NOMBRE_1] (RUT [RUT_1])."; });
+  await pg.click("[data-pegar]");
+  await esperarEstado(pg, "Listo");
+  assert.match(await pg.textContent(".caso-auto .resp"), /Se deriva a Juan Pérez Soto \(RUT 12\.345\.678-5\)\./);
+  // El texto original no queda guardado en el teléfono
+  const [g] = await guardados(pg);
+  assert.equal(g.fotos, 0);
+  await pg.context().close();
+});
+
+test("texto escrito con un dato que no se puede ocultar: «Requiere revisión» y no se envía", {skip: saltar}, async () => {
+  const pg = await abrir(AJ_CLAUDE, null, SIMULAR);
+  await pg.evaluate(() => { window.__velo.rondas = 0; });
+  await pg.fill("#entradaAuto", "Documento del paciente 12 345 678-5. Creatinina 1,1 mg/dL.");
+  await pg.click("#btnProcesarTexto");
+  await esperarEstado(pg, "Requiere revisión");
+  assert.equal(pg.envios.length, 0);
+  await pg.context().close();
+});
+
+test("«Conservar las fotos originales» guarda solo imágenes: el texto escrito y los archivos de texto se borran siempre", {skip: saltar}, async () => {
+  const pg = await abrir({auto: true, tarea: "exam", conservarFotos: true}, null, SIMULAR);
+  await pg.fill("#entradaAuto", ESCRITO);
+  await pg.click("#btnProcesarTexto");
+  await esperarEstado(pg, "Listo para compartir");
+  assert.equal((await guardados(pg))[0].fotos, 0, "el texto escrito no se conserva");
+  // (un caso con un .txt y una foto: el lector de fotos pone el texto de la foto y el archivo de texto va aparte)
+  await pg.setInputFiles("#adjuntoAuto", [{name: "caso.txt", mimeType: "text/plain", buffer: Buffer.from(ESCRITO)},
+    {name: "p.jpg", mimeType: "image/jpeg", buffer: readFileSync(RAIZ_APP + "pruebas/epicrisis/pagina2.jpg")}]);
+  await esperar(pg, () => [...document.querySelectorAll(".caso-auto .insignia")].filter(e => /compartir/.test(e.textContent)).length === 2);
+  const casos = await guardados(pg);
+  assert.deepEqual(casos.map(c => c.fotos).sort(), [0, 1], "del caso con un .txt y una foto, solo queda la foto");
+  await pg.context().close();
+});
+
+/* ---------- los prompts siempre se alcanzan (sin desplazar de lado) ---------- */
+test("pantalla angosta o ancha: todos los botones de prompt quedan dentro de la página, en ambos modos", {skip: saltar}, async () => {
+  for (const ancho of [320, 390, 700, 1280]){
+    const pg = await abrir({auto: true, tarea: "ic"}, null, SIMULAR);
+    await pg.setViewportSize({width: ancho, height: 800});
+    for (const [modo, fila] of [["auto", "#tareasAuto"], ["manual", "#tareas"]]){
+      if (modo === "manual"){ await pg.click("#btnManual"); }
+      const r = await pg.evaluate(f => {
+        const fila = document.querySelector(f), caja = fila.getBoundingClientRect();
+        return {n: fila.querySelectorAll(".chip").length, desborda: fila.scrollWidth > fila.clientWidth + 1,
+          fuera: [...fila.querySelectorAll(".chip")].filter(c => { const b = c.getBoundingClientRect(); return b.right > innerWidth + 1 || b.left < -1 || b.right > caja.right + 1; }).length,
+          pagina: document.documentElement.scrollWidth > innerWidth + 1};
+      }, fila);
+      assert.equal(r.n, 7);
+      assert.deepEqual([r.desborda, r.fuera, r.pagina], [false, 0, false], `${modo} a ${ancho} px: ${JSON.stringify(r)}`);
+    }
+    // El último prompt se puede tocar con un clic normal
+    await pg.click('#tareas [data-t="cert"]');
+    await pg.context().close();
+  }
 });

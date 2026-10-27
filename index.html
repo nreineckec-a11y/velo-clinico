@@ -52,7 +52,7 @@
 html{-webkit-text-size-adjust:100%}
 body{margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 var(--f-body)}
 body.modal-abierto{overflow:hidden}
-.app{max-width:680px; margin:0 auto; display:grid; gap:14px; padding-block:14px 32px;
+.app{max-width:min(780px, 100%); margin:0 auto; display:grid; gap:14px; padding-block:14px 32px;
   padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
 .app > *{min-width:0}
 .top{display:grid; gap:2px}
@@ -75,9 +75,9 @@ textarea:focus{outline:2px solid var(--accent); outline-offset:1px}
 .btn.chico{min-height:36px; padding:6px 12px; font-size:14px}
 .btn:disabled{opacity:.42; pointer-events:none}
 .btn-texto{background:none; border:0; color:var(--accent); font:600 15px var(--f-body); padding:4px 0; cursor:pointer; text-decoration:underline; text-underline-offset:3px}
-.chips{display:flex; gap:8px; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px; scrollbar-width:none}
-.chips::-webkit-scrollbar{display:none}
-.chip{flex:none; border:1px solid var(--line); background:var(--bg); color:var(--ink); border-radius:999px; padding:8px 14px; min-height:40px; font:500 15px/1.2 var(--f-body); cursor:pointer; white-space:nowrap}
+/* Los prompts pasan a la línea siguiente (una fila que se desplaza de lado deja los últimos fuera de alcance con el mouse) */
+.chips{display:flex; flex-wrap:wrap; gap:8px}
+.chip{flex:0 1 auto; max-width:100%; border:1px solid var(--line); background:var(--bg); color:var(--ink); border-radius:999px; padding:8px 14px; min-height:40px; font:500 15px/1.2 var(--f-body); cursor:pointer}
 .chip[aria-pressed="true"]{background:var(--accent); color:var(--accent-ink); border-color:var(--accent)}
 .resumen{font-weight:600; font-size:15px}
 .out{font:14px/1.6 var(--f-mono); white-space:pre-wrap; overflow-wrap:anywhere; background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:12px; max-height:40vh; overflow:auto}
@@ -194,6 +194,9 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
       <button class="btn sec" id="btnElegirAuto" type="button">Elegir fotos o PDF</button>
       <button class="btn-texto" id="btnManual" type="button">Usar el modo manual</button>
     </div>
+    <label class="lbl" for="entradaAuto" style="margin-top:0">O escribe o pega el caso</label>
+    <textarea id="entradaAuto" rows="4" placeholder="Escribe, pega o dicta el caso y lo que necesitas (por ejemplo: «Hazme una interconsulta a urología. Paciente…»). Se oculta lo personal igual que en una foto."></textarea>
+    <button class="btn sec" id="btnProcesarTexto" type="button" disabled>Procesar el texto</button>
     <input type="file" id="adjuntoAuto" accept="image/*,.pdf,application/pdf,.docx,.txt" multiple hidden>
     <input type="file" id="camaraNativa" accept="image/*" capture="environment" multiple hidden>
     <p class="nota" id="autoInfo"></p>
@@ -1262,10 +1265,13 @@ function validar(salida, opc){
 // Modo automático (texto leído de fotos, sin que el médico revise): todo campo rotulado que quedó con su valor a la
 // vista (revisar, con las reglas de fotos) se oculta, como si tocara «Ocultar todos»; después, el validador
 // (proteger). opc: las de proteger. Devuelve lo de proteger y los avisos que se ocultaron.
+// opc.escrito: el texto lo escribió o pegó el médico (no es una lectura de fotos): sin las reglas ni la comparación
+// aproximada que corrigen los errores del lector (ocultaría números clínicos de más)
 function protegerAuto(texto, opc){
-  const o = Object.assign({}, opc || {}, {foto: true, aproximado: true, enviaTexto: true});
+  const escrito = !!(opc && opc.escrito);
+  const o = Object.assign({}, opc || {}, {foto: !escrito, aproximado: !escrito, enviaTexto: true});
   let p = proteger(texto, o);
-  const avisos = revisar(p.res, o.off, {foto: true});
+  const avisos = revisar(p.res, o.off, {foto: !escrito});
   if (avisos.length){
     const ocultar = (o.ocultar || []).concat(avisos.map(a => ({texto: a.texto, tipo: a.tipo})));
     p = proteger(texto, Object.assign({}, o, {ocultar}));
@@ -4333,8 +4339,8 @@ async function leerFotoTexto(blob){
 const MODO_TEXTO = "6";
 // Fotos, PDF o Word de un caso → texto por página, más lo que la lectura doble encontró para ocultar
 async function leerArchivosAuto(archivos, avance){
-  const paginas = [], analisis = [];
-  const deFoto = async b => { avance(paginas.length + 1); const r = await leerFotoAuto(b); paginas.push(r.texto); if (r.analisis) analisis.push(r.analisis); };
+  const paginas = [], analisis = []; let fotos = 0;
+  const deFoto = async b => { fotos++; avance(paginas.length + 1); const r = await leerFotoAuto(b); paginas.push(r.texto); if (r.analisis) analisis.push(r.analisis); };
   for (const f of archivos){
     const n = (f.name || "").toLowerCase(), tipo = f.type || "";
     if (tipo === "application/pdf" || n.endsWith(".pdf")){
@@ -4361,7 +4367,8 @@ async function leerArchivosAuto(archivos, avance){
     for (const e of Anon.entidadesDe(an)) if (e.tipo === "NOMBRE") nombres.add(e.token);
   }
   const texto = paginas.map((t, i) => (paginas.length > 1 ? "--- Página " + (i + 1) + " ---\n" : "") + String(t || "").trim()).join("\n\n");
-  return {texto, ocultar, nombres: [...nombres]};
+  // (escrito: nada se leyó de una foto; si hubo alguna, rigen las reglas de fotos)
+  return {texto, ocultar, nombres: [...nombres], escrito: fotos === 0};
 }
 /* ---------- la cola de casos, guardada en el dispositivo (IndexedDB) ---------- */
 // Si iOS cierra la app (al bloquear el teléfono o al pasar a otra), cada caso sigue donde quedó al volver a abrirla.
@@ -4438,9 +4445,11 @@ async function procesarCaso(c){
       const lect = await leerArchivosAuto(c.archivos, i => { c.paso = "Leyendo " + (n > 1 ? "la página " + Math.min(i, n) + " de " + n : "la página") + " en el teléfono…"; pintarCasos(); });
       if (!lect.texto.replace(/[-\s]|Página \d+/g, "")) throw {mensaje: "No se pudo leer texto en las fotos. Prueba con más luz y la hoja completa en la foto.", final: true};
       c.paso = "Ocultando datos personales y validando…"; pintarCasos();
-      const p = Anon.protegerAuto(lect.texto, {nombres: lect.nombres, ocultar: lect.ocultar, rondas: window.__velo ? window.__velo.rondas : undefined});
-      // Las fotos ya no se usan: se borran del teléfono (salvo que el médico pida conservarlas en Ajustes)
-      if (!aj.conservarFotos) c.archivos = null;
+      const p = Anon.protegerAuto(lect.texto, {escrito: lect.escrito, nombres: lect.nombres, ocultar: lect.ocultar, rondas: window.__velo ? window.__velo.rondas : undefined});
+      // Los originales ya no se usan: se borran del teléfono. Con «Conservar las fotos originales» (Ajustes) quedan solo
+      // las imágenes; el texto escrito y los archivos de texto, PDF o Word se borran siempre
+      c.archivos = aj.conservarFotos ? c.archivos.filter(a => /^image\//.test(a.type || "")) : null;
+      if (c.archivos && !c.archivos.length) c.archivos = null;
       if (p.ok){ c.mapa = Object.assign({}, p.cons.mapa); c.enviado = mensajeAuto(p.cons.salida, c.tarea, c.prov !== "compartir"); }
       else { c.estado = "revision"; c.residuos = [...p.residuos].map(r => ({tipo: r.tipo, texto: r.texto})); c.paso = ""; }
     }
@@ -4689,6 +4698,14 @@ $("camaraNativa").addEventListener("change", e => {
   else nuevoCasoAuto(l);
 });
 $("btnElegirAuto").addEventListener("click", () => { pedirPermisoAvisos(); $("adjuntoAuto").click(); });
+// El caso escrito o pegado entra al mismo flujo que una foto: se procesa como un archivo de texto
+$("entradaAuto").addEventListener("input", () => { $("btnProcesarTexto").disabled = !$("entradaAuto").value.trim(); });
+$("btnProcesarTexto").addEventListener("click", () => {
+  const t = $("entradaAuto").value.trim(); if (!t) return;
+  pedirPermisoAvisos();
+  $("entradaAuto").value = ""; $("btnProcesarTexto").disabled = true;
+  nuevoCasoAuto([new File([t], "caso.txt", {type: "text/plain"})]);
+});
 $("adjuntoAuto").addEventListener("change", e => { const l = [...(e.target.files || [])]; e.target.value = ""; nuevoCasoAuto(l); });
 
 /* ===================== nuevo caso y borrado automático ===================== */
