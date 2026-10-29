@@ -54,12 +54,12 @@ Dg: HTA (I10), DM2 (E11.9). GES problema 32. Densidad 1.020. HbA1c 6,9 %.`);
 });
 
 test("proteger: lo que el anonimizador dejó pasar se oculta, se valida de nuevo y la respuesta lo repone", () => {
-  const t = "Documento del paciente 12 345 678-5, viene a control el 12/03/2025.";
-  assert.ok(Anon.construir(Anon.analizar(t, {})).salida.includes("12 345 678-5"), "el anonimizador ya no deja pasar este RUT: cambiar el ejemplo");
+  const t = "Documento del paciente 09 8765 4321, viene a control el 12/03/2025.";
+  assert.ok(Anon.construir(Anon.analizar(t, {})).salida.includes("09 8765 4321"), "el anonimizador ya no deja pasar este teléfono: cambiar el ejemplo");
   const p = Anon.proteger(t, {});
   assert.equal(p.ok, true);
-  assert.equal(p.cons.salida, "Documento del paciente [RUT_1], viene a control el 12/03/2025.");
-  assert.deepEqual([...p.agregados].map(a => a.tipo + ":" + a.texto), ["RUT:12 345 678-5"]);
+  assert.equal(p.cons.salida, "Documento del paciente [TELEFONO_1], viene a control el 12/03/2025.");
+  assert.deepEqual([...p.agregados].map(a => a.tipo + ":" + a.texto), ["TELEFONO:09 8765 4321"]);
   assert.equal(Anon.restaurar(p.cons.salida, p.cons.mapa).salida, t);
 });
 
@@ -79,9 +79,9 @@ test("proteger: un RUT o teléfono que el médico dejó visible se vuelve a ocul
 
 test("proteger: si el residuo persiste, el caso requiere revisión (no se envía)", () => {
   // rondas: 0 simula que volver a ocultar no resolvió el residuo
-  const p = Anon.proteger("Documento 12 345 678-5 y contacto juan@correo.cl", {rondas: 0});
+  const p = Anon.proteger("Documento 09 8765 4321 y contacto juan@correo.cl", {rondas: 0});
   assert.equal(p.ok, false);
-  assert.deepEqual([...p.residuos].map(r => r.tipo + ":" + r.texto), ["RUT:12 345 678-5"]);
+  assert.deepEqual([...p.residuos].map(r => r.tipo + ":" + r.texto), ["TELEFONO:09 8765 4321"]);
 });
 
 test("los sintéticos pasan el validador sin tener que volver a ocultar nada", () => {

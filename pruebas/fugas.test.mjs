@@ -94,6 +94,11 @@ test("fugas: tras RUT/RUN/Pasaporte/C.I. se oculta el valor completo aunque no t
     assert.equal(auto(t).cons.salida, esp);
 });
 
+test("fugas: un RUT con puntos y guion se oculta aunque el lector le pegue una letra delante", () => {
+  assert.equal(auto("Documento x12.345.678-5 adjunto").cons.salida, "Documento x[RUT_1] adjunto");
+  assert.ok(Anon.validar("Documento x12.345.678-5", {}).some(r => r.tipo === "RUT"));
+});
+
 test("fugas: el validador encuentra los RUT con OCR malo que se le escapen al anonimizador", () => {
   for (const t of ["4.567,890-1", "4,567890-1", "3.141.5O9-2", "I2.3A5.6T8-5", "RUT 4I7T2SI8", "[NOMBRE_1] 17.333."]){
     const r = Anon.validar(t, {aproximado: true});
@@ -105,8 +110,8 @@ test("fugas: el validador marca una palabra con mayúscula desconocida pegada a 
   const r = Anon.validar("Validador: Yanara [NOMBRE_2]", {aproximado: true});
   assert.ok(r.some(x => x.tipo === "NOMBRE" && x.texto === "Yanara"), JSON.stringify(r));
   // (no un cargo ni una palabra de uso común)
-  assert.deepEqual(Anon.validar("[NOMBRE_1]\nTecnólogo Médico", {aproximado: true}), []);
-  assert.deepEqual(Anon.validar("Médico Radiólogo [NOMBRE_1] Informe", {aproximado: true}), []);
+  for (const t of ["[NOMBRE_1]\nTecnólogo Médico", "Médico Radiólogo [NOMBRE_1] Informe"])
+    assert.equal(Anon.validar(t, {aproximado: true}).length, 0, t);
 });
 
 // ---------- no sobre-ocultar ----------

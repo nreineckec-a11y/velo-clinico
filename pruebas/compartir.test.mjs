@@ -151,7 +151,7 @@ test("escribir el caso en la pantalla principal: mismo flujo (ocultar, validar, 
 test("texto escrito con un dato que no se puede ocultar: «Requiere revisión» y no se envía", {skip: saltar}, async () => {
   const pg = await abrir(AJ_CLAUDE, null, SIMULAR);
   await pg.evaluate(() => { window.__velo.rondas = 0; });
-  await pg.fill("#entradaAuto", "Documento del paciente 12 345 678-5. Creatinina 1,1 mg/dL.");
+  await pg.fill("#entradaAuto", "Documento del paciente 09 8765 4321. Creatinina 1,1 mg/dL.");
   await pg.click("#btnProcesarTexto");
   await esperarEstado(pg, "Requiere revisión");
   assert.equal(pg.envios.length, 0);

@@ -83,11 +83,11 @@ for (const d of DOCUMENTOS){
   });
 }
 
-test("un caso con un RUT que no se puede ocultar queda en «Requiere revisión» y no se envía", {skip: saltar}, async () => {
+test("un caso con un dato que no se puede ocultar queda en «Requiere revisión» y no se envía", {skip: saltar}, async () => {
   const pg = await abrir(AJ_CLAUDE);
   // (simula que volver a ocultar no bastó: en la práctica, el validador lo oculta y el caso sigue)
   await pg.evaluate(() => { window.__velo.rondas = 0; });
-  const texto = "ORINA COMPLETA\nDocumento del paciente 12 345 678-5\nFecha de toma de muestra: 28/04/2025\nNitritos: positivo";
+  const texto = "ORINA COMPLETA\nDocumento del paciente 09 8765 4321\nFecha de toma de muestra: 28/04/2025\nNitritos: positivo";
   const foto = await pg.evaluate(FOTOGRAFIAR, texto);
   await pg.evaluate(u => window.__foto(u), foto);
   await pg.click("#btnCamara");
@@ -98,7 +98,7 @@ test("un caso con un RUT que no se puede ocultar queda en «Requiere revisión»
   await esperarCasos(pg);
   assert.deepEqual(await estados(pg), ["Requiere revisión"]);
   const msg = await pg.textContent(".caso-auto");
-  assert.match(msg, /quedó a la vista RUT «12 345 678-5»/);
+  assert.match(msg, /quedó a la vista Teléfono «09 8765 4321»/);
   assert.equal(pg.envios.length, 0, "no debe salir nada");
   informe.push({revision: msg.replace(/\s+/g, " ").trim()});
   await pg.context().close();

@@ -397,6 +397,7 @@ emperatriz ercilia flora francia georgina guadalupe herminia iris jazmin jeannet
 marlene mireya natividad nayadet orfelina pascale pia ruby scarlett silvana tatiana uberlinda valeska wilma xiomara yanina
 yaritza yarela millaray ayelen aylin anahi maite scarlet jocelyn jennifer jenifer yennifer marjorie marisel ninoska
 yesenia zoila
+cristina nayadeth yanara yeimy yeimi daisy deisy brisa yaritza yasna yocelyn yohana yuliana
 `);
 const APELLIDOS = set(`
 gonzalez munoz rojas diaz perez soto contreras silva martinez sepulveda morales rodriguez lopez araya fuentes hernandez
@@ -423,6 +424,7 @@ lobos lorca loyola lucero macaya manriquez marambio mejias melo mena merino mons
 ocampo olea orrego ortega osses pardo pastene pereira pinochet plaza puga quinteros riffo rivas robles roco rosas
 saez salamanca sagredo sanmartin sarmiento segura serrano sobarzo tamayo tejos ugarte urbina uribe valderrama vallejos
 varas vejar veliz vicencio vilches villagra villanueva yevenes zarate
+fuica mellado ortuzar
 `);
 // Nombres/apellidos que también son palabras comunes: solo cuentan junto a otro nombre o tras "Sr./Paciente:", etc.
 const DEBILES = set(`
@@ -431,7 +433,7 @@ paz soledad victoria esperanza amparo almendra loreto segundo salvador domingo f
 castillo bravo vega campos gallardo pena lagos moreno palma rios cerda pino guerrero mora salas caro rubio barra leon alegria
 cabello cabezas catalan concha delgado fierro huerta llanos luna oliva palacios pinto sierra toro valencia montt plaza guerra
 rosas encina serrano segura lobos varas pardo nova robles rivas melo mena merino tamayo lara roco sanmartin canales arenas
-marco marcos dina flora francia iris ruby celeste natividad emperatriz pascual simon
+marco marcos dina flora francia iris ruby celeste natividad emperatriz pascual simon brisa
 `);
 const PARTICULAS = set(`de del la las los y e van von da di`);
 const STOP = set(`
@@ -486,7 +488,7 @@ const RX_SOLO_FECHA = /^(?:\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}|\d{4}[\/.\-]\d{1,
 const cuentaDigitos = s => (String(s).match(/\d/g) || []).length;
 // Rótulos de campos con datos personales: si su valor queda visible, la app avisa antes de enviar
 const ROTULOS = [
-  {tipo:"NOMBRE", rx:"usuari[oa]\\s+(?:de\\s+)?impresi[oó]n|registrad[oa]\\s+por|impres[oa]\\s+por|emitid[oa]\\s+por|nombres?(?:\\s+(?:completo|social))?(?:\\s+del?)?(?:\\s+(?:paciente|usuari[oa]|apoderad[oa]|tutora?|madre|padre|m[eé]dico|profesional))?|apellidos?(?:\\s+(?:paterno|materno))?|paciente|pcte|usuari[oa]|beneficiari[oa]|titular|apoderad[oa]|tutora?|madre|padre|acompa[nñ]ante|cuidador[a]?|contacto|m[eé]dico(?:\\s+(?:tratante|solicitante|derivador|responsable))?|profesional(?:\\s+(?:tratante|solicitante|responsable))?|solicitante|tratante|derivad[oa]\\s+por|atendid[oa]\\s+por|firma"},
+  {tipo:"NOMBRE", rx:"usuari[oa]\\s+(?:de\\s+)?impresi[oó]n|registrad[oa]\\s+por|impres[oa]\\s+por|emitid[oa]\\s+por|nombres?(?:\\s+(?:completo|social))?(?:\\s+del?)?(?:\\s+(?:paciente|usuari[oa]|apoderad[oa]|tutora?|madre|padre|m[eé]dico|profesional))?|apellidos?(?:\\s+(?:paterno|materno))?|paciente|pcte|usuari[oa]|beneficiari[oa]|titular|apoderad[oa]|tutora?|madre|padre|acompa[nñ]ante|cuidador[a]?|contacto|m[eé]dico(?:\\s+(?:tratante|solicitante|derivador|responsable|radi[oó]log[oa]|informante))?|validad[oa]\\s+por|validador[a]?|analista|informad[oa]\\s+por|procesad[oa]\\s+por|responsable|tecn[oó]log[oa]\\s+m[eé]dic[oa]|enfermer[oa]|matron[a]?|kinesi[oó]log[oa]|profesional(?:\\s+(?:tratante|solicitante|responsable))?|solicitante|tratante|derivad[oa]\\s+por|atendid[oa]\\s+por|firma"},
   {tipo:"RUT", rx:"ru[tn](?:\\s+(?:del?\\s+)?(?:paciente|usuari[oa]))?|r\\.u\\.[tn]\\.?|c[eé]dula(?:\\s+de\\s+identidad)?|c\\.i\\.|dni|pasaporte"},
   {tipo:"FICHA", rx:"ficha(?:\\s+cl[ií]nica)?|folio|episodio|historia\\s+cl[ií]nica|(?:n[°º*]|n[uú]mero|nro\\.?)\\s*(?:de(?:l|\\s+la)?\\s+)?(?:orden|solicitud|muestra|examen|atenci[oó]n|ficha|folio|episodio|registro|ingreso|admisi[oó]n|cuenta|bono|boleta|documento|caso|paciente|cita|reserva)(?:\\s+de\\s+(?:pago|atenci[oó]n|examen))?|orden\\s+de\\s+(?:pago|atenci[oó]n)|id(?:\\s+(?:del?\\s+)?paciente)?"},
   {tipo:"FECHA", rx:"fecha\\s+(?:de\\s+)?nacimiento(?:\\s*[-–/]\\s*edad)?|f\\.?\\s*(?:de\\s+)?nac(?:imiento)?\\.?|nacimiento|fecha\\s+nac\\.?"},
@@ -528,6 +530,110 @@ ldh got gpt ggt bun inr ttpa ttpk vcm hcm chcm apb hbp ges sapu sar cesfam cosam
 oms aps hbsag vdrl rpr ana anca ena fan crp tfg vfg rac mau hdl ldl vldl trg col ast alt ck cpk tni bnp nt vmh bpd lpm rpm
 mmhg kg cm mm ml mg ui dl sat fio2 peep ecmo ecog nyha gold cie cie10 dsm mmse moca phq gad audit
 `);
+
+/* ---------- RUT leídos con errores del lector ---------- */
+// Letras que el lector pone por cifras: I/l→1, O→0, S→5, B→8, Z→2, G→6, T→7
+const CONF_RUT = {I: "1", l: "1", "|": "1", O: "0", S: "5", B: "8", Z: "2", G: "6", T: "7"};
+// Las cifras (y la K final) de un RUT con letras por cifras. Solo si tiene 5 o más caracteres y al menos 60 % de cifras;
+// null si no cumple o si queda una letra que no se sabe qué cifra es ("3A5": no se normaliza con seguridad)
+function normalizarRut(t){
+  const an = String(t).replace(/[^\p{L}\p{N}|]/gu, "");
+  if (an.length < 5 || cuentaDigitos(an) < 0.6 * an.length) return null;
+  const cuerpo = an.slice(0, -1).replace(/[IlOSBZGT|]/g, c => CONF_RUT[c]), dv = an.slice(-1).toUpperCase();
+  const dvN = dv === "K" ? "K" : CONF_RUT[dv] || dv;
+  return /^\d+$/.test(cuerpo) && /^[\dK]$/.test(dvN) ? cuerpo + dvN : null;
+}
+// Forma de RUT con separadores de miles (punto, coma o espacio) y guion, con letras en lugar de cifras
+const RX_RUT_LETRAS = /(?<![\p{L}\p{N}.,])([\dA-Za-z|]{1,2}[.,][\dA-Za-z]{3}[.,]?[\dA-Za-z]{3}[ \t]?-[ \t]?[\dkK]|[\dIlOSBZGT]{7,8}[ \t]?-[ \t]?[\dkK])(?![\p{L}\p{N}])/gdu;
+// ¿El candidato es un RUT con letras por cifras? (al menos una letra fuera del dígito verificador y 60 % de cifras)
+function rutConLetras(t){
+  const an = t.replace(/[^\p{L}\p{N}|]/gu, "");
+  return /[\p{L}|]/u.test(an.slice(0, -1)) && an.length >= 5 && cuentaDigitos(an) >= 0.6 * an.length;
+}
+// Rótulos tras los que todo el valor es el RUN o un documento de identidad ("RUT - Pasaporte  4I7T2SI8")
+const ROT_RUT = "RU[TN]|R\\.U\\.[TN]\\.?|pasaporte|C\\.[ \\t]?I\\.|c[eé]dula(?:[ \\t]+de[ \\t]+identidad)?|DNI";
+const RX_ROTULO_RUT = new RegExp("(?<![\\p{L}\\p{N}])(?:" + ROT_RUT + ")(?:(?:[ \\t]*[:.\\-–—|\\/#][ \\t]*|[ \\t]+)(?:" + ROT_RUT + "|N[°º]\\.?)(?![\\p{L}]))*" +
+  "(?:[ \\t]*[:.\\-–—|\\/#][ \\t]*|[ \\t]+)(?=[^\\s]*\\p{N})", "giu");
+// El valor tras el rótulo: palabras con cifras separadas por un espacio (dos o más espacios separan otro campo),
+// hasta completar un RUT ("9.882 8484", "12.345.678 - 9")
+function valorRut(texto, ini){
+  const rx = /[^\s]+/gy; let fin = ini, p = ini, m, dig = 0;
+  while (p < texto.length){
+    rx.lastIndex = p; m = rx.exec(texto); if (!m) break;
+    const w = m[0], pieza = /^[-–]$|^[kK]$/.test(w);
+    if (!/\p{N}/u.test(w) && !(pieza && fin > ini)) break;
+    if (fin > ini && (dig >= 8 || /\d[ \t]?[-–][ \t]?[\dkK][.,]?$/.test(texto.slice(ini, fin)))) break;
+    fin = p + w.length; dig += cuentaDigitos(w);
+    const sp = texto.slice(fin).match(/^[ \t]/);
+    if (!sp) break;
+    p = fin + 1;
+  }
+  return cuentaDigitos(texto.slice(ini, fin)) >= 3 ? fin : ini;
+}
+
+// "rn" leída como "m" y al revés: las variantes de una palabra con un solo cambio ("bemardo" → "bernardo")
+function variantesRn(f){
+  const out = [];
+  for (let i = f.indexOf("m"); i >= 0; i = f.indexOf("m", i + 1)) out.push(f.slice(0, i) + "rn" + f.slice(i + 1));
+  for (let i = f.indexOf("rn"); i >= 0; i = f.indexOf("rn", i + 1)) out.push(f.slice(0, i) + "m" + f.slice(i + 2));
+  return out;
+}
+
+/* ---------- códigos de acceso al informe ---------- */
+// Términos clínicos con letras y cifras que no son códigos (minúscula, sin tildes)
+const LISTA_BLANCA = set(`
+hba1c hb-a1c ckd-epi t10 l1 b12 25-oh 25-oh-d iddsi sars-cov-2 sars-cov2 covid-19 covid19 vih-1 vih-2 hiv-1 hiv-2 htlv-1
+vph-16 vph-18 hpv-16 hpv-18 h1n1 h3n2 hla-b27 hla-b51 ca-125 ca125 ca19-9 ca-19-9 ca15-3 ca-15-3 ca72-4 cyfra21-1 5-hiaa
+17-ohp 17-oh pd-l1 ki-67 ki67 her2 brca1 brca2 jak2 jak2-v617f mthfr-c677t flt3-itd npm1 iief-5 cie-10 icd-10 dsm-5 phq-9
+gad-7 sf-36 eq-5d curb-65 crb-65 cha2ds2-vasc chads2 news2 apache-ii g6pd s1q3t3 il-6 igg4 t3 t4 t4l b1 b6 b9 d3 c3 c4
+spo2 fio2 pao2 paco2 etco2 hco3 h2o o2 co2 pm10 omega-3 vitd3 hba2 mdrd-4
+`);
+// Formas clínicas: TNM ("pT3aN1M0"), niveles de columna ("T12-L1"), fórmula obstétrica ("G3P2A1"), BI-RADS y sus
+// parientes ("PI-RADS-5"), escalas y grados ("Grado3", "GOLD-4")
+const RX_BLANCA = [/^[cpyr]?t[0-4x](?:is)?[a-d]?n[0-3x][a-c]?(?:m[01x][a-c]?)?$/, /^[ctlsd]\d{1,2}(?:-[ctlsd]?\d{1,2})+$/,
+  /^g\d{1,2}p\d{1,2}(?:a\d{1,2})?(?:c\d{1,2})?(?:v\d{1,2})?$/, /^(?:bi|ti|pi|li|o|c)-?rads-?\d[abc]?$/, /^\p{L}{3,8}-?\d[a-c]?$/u];
+// Un número con su unidad ("500mg", "10x12mm", "x7dias"), un ordinal ("12avo") o una hora ("14h30")
+const RX_NUMERO_UNIDAD = /^(?:x|c)?\d+(?:[.,]\d+)?(?:x\d+(?:[.,]\d+)?)*(?:mg|g|gr|grs|mcg|ug|kg|kgs|ml|cc|l|lt|lts|dl|mm|mms|cm|cms|m|mts|mmhg|cmh2o|ui|u|meq|mmol|umol|nmol|mosm|ng|pg|mui|uui|h|hr|hrs|hs|horas|min|seg|s|d|dia|dias|sem|semanas|mes|meses|a|ano|anos|lpm|rpm|cpm|kcal|ppm|ufc|pts|puntos|veces|comp|cp|caps|tab|gts|gotas|puff|amp|fco|sobres|fl)$|^\d+(?:er|ero|era|do|da|ro|ra|to|ta|vo|va|mo|ma|no|na|avo|ava)$|^\d{1,2}h\d{2}$/;
+// ¿Un token de 6 a 12 caracteres que mezcla letras y cifras, y no es un término clínico? (posible código de acceso)
+function esCodigo(tok){
+  if (tok.length < 6 || tok.length > 12 || !/\p{L}/u.test(tok) || !/\p{N}/u.test(tok)) return false;
+  const f = plegar(tok);
+  if (LISTA_BLANCA.has(f) || RX_BLANCA.some(rx => rx.test(f)) || RX_NUMERO_UNIDAD.test(f)) return false;
+  // Una palabra conocida pegada a un número ("Glucosa92", "2do-control"): el lector juntó dos palabras
+  const pegada = f.match(/^(\p{L}{3,})-?\d{1,4}$/u) || f.match(/^\d{1,4}-?(\p{L}{3,})$/u);
+  if (pegada && (palabraComun(pegada[1]) || MEDIDAS.has(pegada[1]))) return false;
+  return !RX_SOLO_FECHA.test(tok);
+}
+// Un token (letras y cifras, con guiones internos) en el texto
+const RX_TOKEN_COD = /(?<![\p{L}\p{N}\-\/@_.])([\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*)(?![\p{L}\p{N}\/@_]|[.,\-][\p{L}\p{N}])/gdu;
+// Rótulos de un código: su valor se oculta ("código de acceso: 4821KXPT", "Clave web 5531ABCD", "Accession 4821KXPT")
+const RX_ROTULO_CODIGO = /(?<![\p{L}\p{N}])(?<!palabras?[ \t]+)(c[oó]digo|clave|contrase[nñ]a|PIN|accession|(?:n[°º*]\.?|n[uú]mero|nro\.?)[ \t]*(?:de(?:l)?[ \t]+)?(?:ex[aá]men|atenci[oó]n)|I[Dd])(?:[ \t]+(?:de[ \t]+)?(?:acceso|web|internet|en[ \t]+l[ií]nea|verificaci[oó]n|validaci[oó]n|seguridad|ex[aá]men(?:es)?|atenci[oó]n|paciente|barras|reserva|solicitud|consulta|resultados?|descarga|retiro|informe|n[°º]\.?))*[ \t]*[:.#]?[ \t]*([A-Za-z0-9][A-Za-z0-9\-]{3,19})(?![\p{L}\p{N}])/gdiu;
+
+/* ---------- personal que firma o valida ---------- */
+// Rótulos del personal: el nombre que sigue (o, si no hay, el de la línea de arriba o de abajo) es de una persona
+// aunque sea poco común ("Validado por Nayadeth Ulloa M.", "Tecnólogo Médico Daisy Mellado"); el cargo queda a la vista
+const RX_PERSONAL = /(?<![\p{L}])(?:validad[oa][ \t]+por|validador[a]?|analista|informad[oa][ \t]+por|procesad[oa][ \t]+por|responsable|firmad[oa][ \t]+por|firma|t\.[ \t]?m\.|tm|tecnolog[oa][ \t]+medic[oa]|enfermer[oa](?:[ \t]+universitari[oa])?|e\.[ \t]?u\.|eu|matron[a]?|kinesiolog[oa]|medic[oa][ \t]+(?:radiolog[oa]|tratante|informante)|profesional(?:[ \t]+responsable)?)(?![\p{L}])/gu;
+// Palabras de un cargo: una línea hecha solo de ellas es la de la firma ("Tecnólogo Médico", "Médico Radiólogo")
+const CARGO = set(`
+tecnologo tecnologa medico medica radiologo radiologa enfermero enfermera universitario universitaria matrona matron
+kinesiologo kinesiologa tratante informante cirujano cirujana internista profesional responsable tm eu t.m. e.u.
+nutricionista psicologo psicologa quimico farmaceutico farmaceutica qf tens tecnico tecnica paramedico paramedica
+fonoaudiologo fonoaudiologa terapeuta ocupacional odontologo odontologa dentista urologo urologa cardiologo cardiologa
+anatomopatologo anatomopatologa patologo patologa bioquimico bioquimica laboratorista validador validadora analista
+`);
+// Palabras de los documentos que se escriben con mayúscula y no son nombres (para no tomar una línea de título por firma)
+const COMUNES_DOC = set(`
+informe final conclusion conclusiones impresion diagnostica hallazgos principales resultado resultados observacion
+observaciones comentario comentarios tecnica metodo metodologia nota notas pagina hoja original copia valido validado
+validada timbre atentamente saludos laboratorio clinico clinica central red salud norte sur oriente poniente centro
+departamento seccion area suero plasma sangre valores referencia rango anormal equipo analizador quimica hematologia
+inmunologia microbiologia bioquimica neurocirugia anatomia patologica imagenologia radiologia ecografia tomografia
+resonancia densitometria mamografia endoscopia urgencias urgencia ambulatorio electronica firma digital
+sistema sistemas software interfaz automatico automatica lis ris his pacs
+`);
+const esCargo = f => CARGO.has(f) || /^(?:t\.?m|e\.?u)\.?$/.test(f);
+// ¿Una palabra (plegada) puede ser parte de un nombre? (no si es de uso común, clínica, un cargo o un rótulo)
+const noEsNombre = f => palabraComun(f) || MEDIDAS.has(f) || esCargo(f) || COMUNES_DOC.has(f);
 
 /* ---------- PDF: líneas como se ven, aunque el rótulo y su valor estén a alturas levemente distintas ---------- */
 // items: [{x, y, s, w, h}] en coordenadas del PDF (y hacia arriba). Devuelve el texto de la página.
@@ -606,7 +712,8 @@ function analizar(texto, opcIn){
   function libre(s,e){ for (let i=s;i<e;i++) if (ocupado[i]) return false; return true; }
   function add(s, e, tipo, clave, repl){
     while (s < e && /\s/.test(texto[s])) s++;
-    while (e > s && /[\s,;.]/.test(texto[e-1]) && !(tipo==="NOMBRE" && texto[e-1]==="." && e-s<=2)) e--;
+    // (un nombre que termina en una inicial lleva su punto: "Nayadeth Ulloa M.")
+    while (e > s && /[\s,;.]/.test(texto[e-1]) && !(tipo==="NOMBRE" && texto[e-1]==="." && (e-s<=2 || (esMayus(texto[e-2]) && /\s/.test(texto[e-3]||""))))) e--;
     if (e <= s || !libre(s,e)) return false;
     const norm = ft.slice(s,e).trim().replace(/\s+/g," ");
     if (nunca.has(norm)) return false;
@@ -652,15 +759,31 @@ function analizar(texto, opcIn){
 
   // 2. RUT
   if (o.rut){
-    const claveRut = m => m[1].replace(/[^\dkK]/g,"").toUpperCase();
+    const claveRut = m => normalizarRut(m[1]) || m[1].replace(/[^\dkK]/g,"").toUpperCase();
+    // Tras RUT/RUN/Pasaporte/C.I. todo el valor es el RUN, aunque el lector lo haya leído sin forma de RUT
+    // ("RUT - Pasaporte  4I7T2SI8", "RUN 17.333."): se oculta entero hasta el fin del campo
+    {
+      RX_ROTULO_RUT.lastIndex = 0; let m;
+      while ((m = RX_ROTULO_RUT.exec(texto))){
+        const ini = m.index + m[0].length, fin = valorRut(texto, ini);
+        if (fin > ini){ const v = texto.slice(ini, fin); add(ini, fin, "RUT", normalizarRut(v) || plegar(v).replace(/[^\p{L}\p{N}]/gu, "").toUpperCase()); }
+      }
+    }
+    // Separadores de miles con punto, coma o espacio ("4.567,890-1", "4,567890-1", "12 345 678-5")
+    porRegex(/(?<![\p{L}\p{N}.,])(\d{1,2}(?:[.,]|[ ](?=\d{3}))\d{3}(?:[.,]|[ ](?=\d{3}))?\d{3}[ \t]?-[ \t]?[\dkK])(?![\p{L}\p{N}])/gud, "RUT", 1, null, claveRut);
+    // Con letras por cifras ("3.141.5O9-2", "I2.3A5.6T8-5"): se oculta entero, normalizado si se puede
+    porRegex(RX_RUT_LETRAS, "RUT", 1, m => rutConLetras(m[1]), claveRut);
     porRegex(/(?<![\p{L}\p{N}.])(\d{1,2}\.\d{3}\.\d{3}\s?-\s?[\dkK]|\d{7,8}\s?-\s?[\dkK])(?![\p{L}\p{N}])/gud, "RUT", 1, null, claveRut);
+    // (con puntos y guion, aunque el lector le haya pegado una letra delante: "x12.345.678-5")
+    porRegex(/(?<![\p{N}.,])(\d{1,2}\.\d{3}\.\d{3}[ \t]?-[ \t]?[\dkK])(?![\p{L}\p{N}])/gud, "RUT", 1, null, claveRut);
     // (tras el rótulo, el lector puede leer los dos puntos como raya y un punto del número como espacio: "RUN - 9.882 8484")
     porRegex(/(?:\bRU[TN]|\bR\.U\.[TN]\.?)\s*[:.\-–—|]?\s*(?:N[°º]\s*)?(\d{1,2}[.\s]?\d{3}[.\s]?\d{3}\s?-?\s?[\dkK]?)(?![\p{N}])/giud, "RUT", 1, null, claveRut);
     // Con puntos de miles el número ya es un RUN aunque falte el guion o el dígito verificador quede pegado
     // ("9.882.8484", "12.345.678" o "12.345.678 K", típico de una foto leída en el teléfono)
     // (no si lleva unidad, como "4.500.000 /mm3", ni si es una cifra redonda sin dígito verificador)
-    porRegex(/(?<![\p{L}\p{N}.,])(\d{1,2}\.\d{3}\.(?:\d{3}(?:\s?[\dkK])?|\d{3}[\dkK]))(?![\p{L}\p{N}]|[.,]\d)/gud, "RUT", 1,
-      m => !RX_UNIDAD.test(texto.slice(m.index + m[0].length)) && !/\.000$/.test(m[1]), claveRut);
+    // (también con coma: "4.567,890")
+    porRegex(/(?<![\p{L}\p{N}.,])(\d{1,2}[.,]\d{3}[.,](?:\d{3}(?:\s?[\dkK])?|\d{3}[\dkK]))(?![\p{L}\p{N}]|[.,]\d)/gud, "RUT", 1,
+      m => !RX_UNIDAD.test(texto.slice(m.index + m[0].length)) && !/[.,]000$/.test(m[1]), claveRut);
   }
 
   // 3. Teléfonos
@@ -674,6 +797,18 @@ function analizar(texto, opcIn){
   if (o.fichas){
     porRegex(/(?:\bficha(?:\s+cl[ií]nica)?|\bfolio|\bepisodio|\bn[°º*]\s*(?:de\s+)?(?:atenci[oó]n|solicitud|orden|interconsulta|ficha|registro|biopsia)|\bhistoria\s+cl[ií]nica|\bHC\b|\bSIC\b|\bID\s*(?:del?\s+)?paciente|\bbiopsia)\s*(?:n[°º.]?|nro\.?|n[uú]mero|#)?\s*[:.]?\s*(?=[A-Z0-9\-\/.]*\d)([A-Z0-9][A-Z0-9\-\/.]{2,}[A-Z0-9])/giud, "FICHA", 1,
       m => !RX_SOLO_FECHA.test(m[1]));
+    // Códigos con rótulo: con ese código cualquiera abre el examen ("código de acceso: 4821KXPT", "Clave web 5531ABCD")
+    porRegex(RX_ROTULO_CODIGO, "FICHA", 2, m => {
+      const rot = m[1], v = m[2];
+      if (/^id$/i.test(rot) && !/^I[Dd]$/.test(rot)) return false;
+      if (/^pin$/i.test(rot) && rot !== "PIN") return false;
+      const fuerte = /^(?:clave|contrase|pin|accession)/i.test(plegar(rot)) || /acceso|web|internet|l[ií]nea|seguridad/i.test(m[0]);
+      if (!/\d/.test(v) && !(fuerte && /^[A-Z0-9]{5,}$/.test(v))) return false;
+      if (RX_SOLO_FECHA.test(v) || LISTA_BLANCA.has(plegar(v)) || RX_BLANCA.some(rx => rx.test(plegar(v)))) return false;
+      return !RX_UNIDAD.test(texto.slice(m.indices[2][1], m.indices[2][1] + 14));
+    });
+    // Una línea que es solo un código de letras y cifras ("4821KXPT" al pie del informe)
+    porRegex(/^[ \t]*([\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*)[ \t\r]*$/gmud, "FICHA", 1, m => esCodigo(m[1]));
   }
 
   // 5. Direcciones
@@ -855,6 +990,9 @@ function analizar(texto, opcIn){
       return !/^[ \t]+[-–][ \t]*\d/.test(texto.slice(fin, fin + 6)) && !/\d[ \t]+[-–][ \t]*$/.test(antes);
     });
   }
+  // 6e. Modo automático: un token de 6 a 12 caracteres que mezcla letras y cifras, sin rótulo, puede ser un código de
+  // acceso al informe; se oculta salvo que sea un término clínico (LISTA_BLANCA, RX_BLANCA) o un número con su unidad
+  if (o.codigos && o.fichas) porRegex(RX_TOKEN_COD, "FICHA", 1, m => esCodigo(m[1]));
 
   // 7. Edad exacta ("79a 4m 25d", "77 años 2 meses 11 días"): quedan los años; meses y días van con marcador
   {
@@ -903,8 +1041,30 @@ function analizar(texto, opcIn){
     }
   }
 
+  // 9b. "N° 245" o "#245" junto a una comuna, o al comienzo de la línea que sigue al domicilio: es parte de la dirección
+  if (o.direcciones){
+    const comunas = COMUNAS.map(plegar);
+    const borde = c => !c || !(esLetra(c) || esDigito(c));
+    porRegex(/(?<![\p{L}\p{N}])((?:N[°º]|#)[ \t]*\.?[ \t]*\d{1,5}[A-Za-z]?)(?![\p{L}\p{N}])/gud, "DIRECCION", 1, m => {
+      const ini = m.index, fin = m.index + m[0].length;
+      if (RX_UNIDAD.test(texto.slice(fin, fin + 12))) return false;
+      const despues = ft.slice(fin, fin + 40).replace(/^[ \t]*,?[ \t]*/, ""), antes = ft.slice(Math.max(0, ini - 40), ini).replace(/[ \t]*,?[ \t]*$/, "");
+      if (comunas.some(c => (despues.startsWith(c) && borde(despues[c.length])) || (antes.endsWith(c) && borde(antes[antes.length - c.length - 1])))) return true;
+      const iniLinea = ft.lastIndexOf("\n", ini - 1) + 1;
+      if (!iniLinea || ft.slice(iniLinea, ini).trim()) return false;
+      const ant = ft.slice(ft.lastIndexOf("\n", iniLinea - 2) + 1, iniLinea - 1);
+      return /(?<![a-z])(?:domicilio|direccion)(?:\s+particular)?\s*:/.test(ant);
+    });
+  }
+
   // 10. Nombres
   if (o.nombres) detectarNombres();
+  // 10c. Un trozo de RUT cortado al final de la línea, tras un nombre ("Brisa Vergara 17.333."): es el RUT
+  if (o.rut) for (const d of dets.slice()){
+    if (d.tipo !== "NOMBRE") continue;
+    const mR = texto.slice(d.e).match(/^[ \t]*,?[ \t]*(\d{1,2}[.,]\d{3}[.,]?)(?=[ \t]*(?:\r?\n|$)|[ \t]{2,}|\t|[ \t]\|)/u);
+    if (mR){ const s = d.e + mR[0].length - mR[1].length; add(s, s + mR[1].length, "RUT", mR[1].replace(/\D/g, "")); }
+  }
   // 10b. Lo que el validador encontró a la vista de un nombre ya detectado: un apellido suelto recibe el marcador de su
   // nombre completo (más abajo)
   ocultarTextos(ocultarLista.filter(it => it && it.tarde));
@@ -917,6 +1077,10 @@ function analizar(texto, opcIn){
       // nombre o apellido conocido, cuenta como si empezara con mayúscula
       let cap = esMayus(w[0]), fd = f;
       if (!cap && o.foto && w.length >= 4 && /^[il]/.test(w)){ const fi = "i" + f.slice(1); if (NOMBRES.has(fi) || APELLIDOS.has(fi)){ cap = true; fd = fi; } }
+      // También lee "rn" como "m" y al revés ("Bemardo" es "Bernardo")
+      if (cap && o.foto && f.length >= 5 && !NOMBRES.has(fd) && !APELLIDOS.has(fd)){
+        const alt = variantesRn(f).find(v => NOMBRES.has(v) || APELLIDOS.has(v)); if (alt) fd = alt;
+      }
       T.push({s, e, w, f, cap, allCaps: w === w.toUpperCase() && w !== w.toLowerCase(),
         dict: NOMBRES.has(fd) || APELLIDOS.has(fd), given: NOMBRES.has(fd), weak: DEBILES.has(fd)});
     }
@@ -926,7 +1090,88 @@ function analizar(texto, opcIn){
     const cortaMayus = t => t.cap && t.allCaps && t.w.length >= 3 && t.w.length <= 4 && !t.dict && !STOP.has(t.f) && !NO_NOMBRE.has(t.f)
       && !SIGLAS.has(t.f) && !nunca.has(t.f) && !esDigito(texto[t.e]) && libre(t.s, t.e);
     const gapOk = (a, b) => { const g = texto.slice(a.e, b.s); return /^ {1,2}$/.test(g) || (a.w.length === 1 && /^\. ?$/.test(g)); };
-    const entidades = []; // {toks, clave}
+    const entidades = []; // {toks, clave, d}
+
+    // Personal que firma o valida (RX_PERSONAL): el nombre que sigue al rótulo, aunque sea poco común. Si en la línea no
+    // hay nada más, el de la línea de arriba (o el de abajo, si tiene un nombre o apellido conocido)
+    const TITULO = /^(?:dra?|sra?|srta|don|dona|doctora?)$/;
+    // (una palabra en mayúsculas de 4 o menos letras que no es un nombre conocido suele ser una sigla: "TM", "EPID")
+    const palabraNombre = t => t.cap && t.f.length >= 2 && !noEsNombre(t.f) && !nunca.has(t.f) && !PARTICULAS.has(t.f) && !TITULO.test(t.f)
+      && (t.dict || !(t.allCaps && t.w.length <= 4)) && !esDigito(texto[t.e]) && !esDigito(texto[t.s - 1]);
+    const inicial = t => t.w.length === 1 && esMayus(t.w) && !esLetra(texto[t.e]);
+    const junto = (a, b) => { const g = texto.slice(a.e, b.s); return g === " " || (inicial(a) && /^\. ?$/.test(g)); };
+    const finNombre = t => t.e + (inicial(t) && texto[t.e] === "." ? 1 : 0);
+    function ponerNombre(toks){
+      while (toks.length && PARTICULAS.has(toks[toks.length - 1].f)) toks = toks.slice(0, -1);
+      const ns = toks.filter(t => !PARTICULAS.has(t.f));
+      if (!ns.some(t => t.w.length >= 2)) return false;
+      const clave = ns.filter(t => t.w.length >= 2).map(t => t.f).join(" ");
+      if (!add(toks[0].s, finNombre(toks[toks.length - 1]), "NOMBRE", clave)) return false;
+      entidades.push({toks: ns, clave, d: dets[dets.length - 1]});
+      return true;
+    }
+    // Desde T[k]: palabras de un nombre seguidas, con una inicial suelta ("P.") y partículas entre ellas. minus: la primera
+    // puede ser un trozo en minúscula pegado al nombre ("ristina Rojas": el lector cortó la C)
+    function tomar(k, minus){
+      const out = [];
+      for (let q = k; q < T.length && out.length < 6; q++){
+        const t = T[q], prev = out[out.length - 1], sig = T[q + 1];
+        if ((prev && !junto(prev, t)) || !libre(t.s, t.e)) break;
+        const sigNombre = sig && junto(t, sig) && palabraNombre(sig);
+        if (palabraNombre(t) || (inicial(t) && (prev || sigNombre))) out.push(t);
+        else if (!prev && minus && !t.cap && t.f.length >= 3 && !noEsNombre(t.f) && sigNombre) out.push(t);
+        else if (prev && PARTICULAS.has(t.f) && sigNombre) out.push(t);
+        else break;
+      }
+      return out.some(t => t.w.length >= 2 && t.cap) ? out : [];
+    }
+    // Una línea que es solo un cargo ("Tecnólogo Médico", "Médico Radiólogo", "Enfermera")
+    const lineaCargo = (a, b) => {
+      const l = ft.slice(a, b);
+      if (/\d/.test(l) || /[^\p{L}\s.:\-()\/]/u.test(l)) return false;
+      const ws = l.match(/\p{L}[\p{L}.]*/gu) || [];
+      return ws.length > 0 && ws.length <= 5 && ws.every(w => esCargo(w) || esCargo(w.replace(/\.$/, "")) || NO_NOMBRE.has(w.replace(/\.$/, "")) || PARTICULAS.has(w) || TITULO.test(w.replace(/\.$/, "")))
+        && ws.some(w => esCargo(w) || esCargo(w.replace(/\.$/, "")));
+    };
+    // Línea de firma: de 2 a 4 palabras con mayúscula, sin cifras ni unidades ni rótulos; se oculta completa (sin el título)
+    function lineaNombre(a, b, exigeDict){
+      if (a < 0 || b <= a) return false;
+      const l = texto.slice(a, b);
+      if (/[\p{N}:]/u.test(l) || l.replace(/[\p{L}'’]+/gu, "").replace(/[ \t.,\-]/g, "")) return false;
+      if (COMUNAS.some(c => plegar(c) === plegar(l).trim())) return false;
+      let ts = T.filter(t => t.s >= a && t.e <= b);
+      while (ts.length && TITULO.test(ts[0].f)) ts = ts.slice(1);
+      const ns = ts.filter(t => !PARTICULAS.has(t.f));
+      if (ns.length < 2 || ns.length > 4 || !ns.every(t => palabraNombre(t) || inicial(t))) return false;
+      if (exigeDict && !ns.some(t => t.dict)) return false;
+      return ponerNombre(ts);
+    }
+    const lineaDe = p => { const a = ft.lastIndexOf("\n", p - 1) + 1, b = ft.indexOf("\n", p); return [a, b < 0 ? ft.length : b]; };
+    function vecinas(a, b, arribaSinDict){
+      const arriba = a > 0 ? lineaDe(a - 1) : null, abajo = b < ft.length ? lineaDe(b + 1) : null;
+      return (arriba && lineaNombre(arriba[0], arriba[1], !arribaSinDict)) || (abajo && lineaNombre(abajo[0], abajo[1], true));
+    }
+    {
+      RX_PERSONAL.lastIndex = 0; let mp;
+      while ((mp = RX_PERSONAL.exec(ft))){
+        const rs = mp.index, re = rs + mp[0].length, orig = texto.slice(rs, re);
+        // ("TM" y "EU" solo en mayúsculas; "Tipo de Profesional:" lleva una profesión, no una persona)
+        if (/^(?:tm|eu|t\.[ \t]?m\.|e\.[ \t]?u\.)$/.test(mp[0]) && orig !== orig.toUpperCase()) continue;
+        if (/tipo\s+(?:de\s+)?$/.test(ft.slice(Math.max(0, rs - 12), rs))) continue;
+        const [la, lb] = lineaDe(rs);
+        const sep = texto.slice(re, lb).match(/^[ \t]*[:.\-]?[ \t]*(?:(?:dra?|sra?|srta|don|doña|doctora?)\.?[ \t]+)?/iu);
+        const p0 = re + sep[0].length, k = T.findIndex(t => t.s >= p0);
+        const toks = k >= 0 && T[k].s === p0 && T[k].e <= lb ? tomar(k, /:/.test(sep[0])) : [];
+        if (toks.length){ ponerNombre(toks); continue; }
+        if (!/[\p{L}\p{N}]/u.test(texto.slice(p0, lb))) vecinas(la, lb, lineaCargo(la, lb));
+      }
+      // Una línea de cargo sin rótulo de personal ("Químico Farmacéutico"): su línea de firma también
+      for (let a = 0; a < ft.length; ){
+        let b = ft.indexOf("\n", a); if (b < 0) b = ft.length;
+        if (lineaCargo(a, b)) vecinas(a, b, true);
+        a = b + 1;
+      }
+    }
 
     let i = 0;
     while (i < T.length){
@@ -1001,7 +1246,7 @@ function analizar(texto, opcIn){
       const s = acept[0].s, e = acept[acept.length-1].e;
       const clave = acept.map(t => t.f).join(" ");
       if (!add(s, e, "NOMBRE", clave)) return;
-      entidades.push({toks: acept, clave});
+      entidades.push({toks: acept, clave, d: dets[dets.length-1]});
       // "ÑANCUPIL HUENCHUMIL, XIOMARITA": tras un rótulo, lo que sigue a la coma es la misma persona
       if (ctx !== "fuerte") return;
       const mC = texto.slice(e).match(/^[ \t]*\.?[ \t]*,[ \t]*(\p{Lu}[\p{L}'’-]*(?:[ \t]+\p{Lu}[\p{L}'’-]*){0,3})/u);
@@ -1016,7 +1261,39 @@ function analizar(texto, opcIn){
       if (fin <= ini) return;
       const toks2 = T.filter(t => t.s >= ini && t.e <= fin && !PARTICULAS.has(t.f));
       const clave2 = toks2.map(t => t.f).join(" ");
-      if (toks2.length && add(ini, fin, "NOMBRE", clave2)) entidades.push({toks: toks2, clave: clave2});
+      if (toks2.length && add(ini, fin, "NOMBRE", clave2)) entidades.push({toks: toks2, clave: clave2, d: dets[dets.length-1]});
+    }
+
+    // Expansión: a cada nombre detectado se suman las palabras vecinas de la misma línea que pueden ser parte de él
+    // (con mayúscula y fuera del vocabulario clínico o común, una inicial suelta, o un trozo en minúscula pegado al
+    // nombre al comienzo del campo): "Nayadeth Ulloa M.", "Fuica Aravena", "ristina Rojas"
+    for (const en of entidades){
+      const d = en.d; if (!d || d.repl) continue;
+      let i0 = T.findIndex(t => t.s >= d.s), i1 = i0;
+      if (i0 < 0) continue;
+      while (T[i1 + 1] && T[i1 + 1].e <= d.e) i1++;
+      let mov = false;
+      for (;;){
+        const a = T[i1], b = T[i1 + 1], c = T[i1 + 2];
+        if (!b || !junto(a, b) || !libre(b.s, b.e)) break;
+        if (palabraNombre(b) || inicial(b)){ i1++; mov = true; continue; }
+        if (PARTICULAS.has(b.f) && c && junto(b, c) && libre(c.s, c.e) && palabraNombre(c)){ i1 += 2; mov = true; continue; }
+        break;
+      }
+      for (;;){
+        const a = T[i0 - 1], b = T[i0];
+        if (!a || !junto(a, b) || !libre(a.s, a.e)) break;
+        if (palabraNombre(a) || inicial(a)){ i0--; mov = true; continue; }
+        // (un trozo en minúscula solo al comienzo de la línea o del campo, y solo uno)
+        if (!a.cap && a.f.length >= 3 && !noEsNombre(a.f) && !nunca.has(a.f) && /(?:^|:)[ \t]*$/.test(ft.slice(ft.lastIndexOf("\n", a.s - 1) + 1, a.s))){ i0--; mov = true; }
+        break;
+      }
+      if (!mov) continue;
+      const toks = T.slice(i0, i1 + 1), s0 = toks[0].s, e0 = finNombre(toks[toks.length - 1]);
+      for (let x = s0; x < e0; x++) ocupado[x] = 1;
+      d.s = s0; d.e = e0;
+      en.toks = toks.filter(t => !PARTICULAS.has(t.f) && t.w.length >= 2);
+      d.clave = en.clave = en.toks.map(t => t.f).join(" ");
     }
 
     // Segunda pasada: apellidos o nombres sueltos de personas ya detectadas ("Sr. Pérez" → mismo marcador)
@@ -1211,7 +1488,8 @@ function visibleRiesgoso(t, tipo){
   // NOMBRE: alguna palabra con mayúscula inicial que no sea de uso común en fichas
   return (t.match(/\p{L}[\p{L}'’-]*/gu) || []).some(w => {
     const f = plegar(w);
-    return w.length >= 3 && esMayus(w[0]) && !STOP.has(f) && !NO_NOMBRE.has(f) && !PARTICULAS.has(f);
+    // (ni una palabra de los documentos que no es un nombre: "Informado por: Sistema RIS")
+    return w.length >= 3 && esMayus(w[0]) && !STOP.has(f) && !NO_NOMBRE.has(f) && !PARTICULAS.has(f) && (!noEsNombre(f) || NOMBRES.has(f) || APELLIDOS.has(f));
   });
 }
 
@@ -1259,6 +1537,16 @@ function validar(salida, opc){
   cada(/(?<![a-z])(?:ru[tn]|r\.u\.[tn]\.?|cedula(?:\s+de\s+identidad)?|c\.i\.)\s*[:.\-#]?\s*(?:n[°º]\s*)?(\d{1,2}[.\s]?\d{3}[.\s]?\d{3}(?:\s?-?\s?[\dk])?)(?![\p{N}])/gu, ft, m => {
     poner("RUT", m.index + m[0].length - m[1].length, m.index + m[0].length);
   });
+  // Con coma o separadores mezclados y guion ("4.567,890-1", "4,567890-1")
+  cada(/(?<![\p{N}.,])(\d{1,2}[.,]\d{3}[.,]?\d{3})[ \t]?-[ \t]?[\dkK](?![\p{L}\p{N}])/gu, t, m => poner("RUT", m.index, m.index + m[0].length));
+  // Con letras por cifras ("3.141.5O9-2", "I2.3A5.6T8-5")
+  cada(RX_RUT_LETRAS, t, m => { if (rutConLetras(m[1])) poner("RUT", m.index, m.index + m[0].length); });
+  // Tras RUT/RUN/Pasaporte/C.I., cualquier valor con 3 o más cifras ("RUT 4I7T2SI8", "RUN 17.333.")
+  cada(RX_ROTULO_RUT, t, m => { const ini = m.index + m[0].length, fin = valorRut(t, ini); if (fin > ini) poner("RUT", ini, fin); });
+  // Un trozo de RUT al final de la línea, tras un nombre oculto ("[NOMBRE_1] 17.333.")
+  cada(/\[NOMBRE_\d+\][ \t]*,?[ \t]*(\d{1,2}[.,]\d{3}[.,]?)(?=[ \t]*(?:\r?\n|$)|[ \t]{2,}|\t)/gu, String(salida || ""), m => poner("RUT", m.index + m[0].length - m[1].length, m.index + m[0].length));
+  // En el modo automático, un código de letras y cifras sin rótulo (fuera de la lista blanca clínica)
+  if (opc && opc.codigos) cada(RX_TOKEN_COD, t, m => { if (esCodigo(m[1])) poner("FICHA", m.index, m.index + m[0].length); });
   cada(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, t, m => poner("CORREO", m.index, m.index + m[0].length));
   // En texto leído de fotos, un correo con la «@» mal leída: una palabra con forma de dominio
   if (opc && opc.aproximado) cada(RX_DOMINIO, t, m => poner("CORREO", m.index + m[0].length - m[1].length, m.index + m[0].length));
@@ -1296,6 +1584,12 @@ function validar(salida, opc){
       const tol = tolerancia(f.length);
       if (largos.some(w => Math.abs(w.length - f.length) <= tol && distancia(f, w, tol) <= tol)) poner("NOMBRE", m.index, m.index + m[0].length);
     });
+    // Una palabra con mayúscula desconocida pegada a un nombre oculto es lo que quedó de él ("Yanara [NOMBRE_2]")
+    // (no una sigla: 4 o menos letras en mayúsculas que no son un nombre conocido, "RIS", "LIS")
+    const sal = String(salida || ""), desconocida = w => { const f = plegar(w);
+      return !noEsNombre(f) && !LAB.has(f) && (w.length > 4 || w !== w.toUpperCase() || NOMBRES.has(f) || APELLIDOS.has(f)); };
+    cada(/(?<![\p{L}\p{N}])(\p{Lu}[\p{L}'’-]{2,}) \[NOMBRE_\d+\]/gu, sal, m => { if (desconocida(m[1])) poner("NOMBRE", m.index, m.index + m[1].length); });
+    cada(/\[NOMBRE_\d+\] (\p{Lu}[\p{L}'’-]{2,})(?![\p{L}\p{N}])/gu, sal, m => { if (desconocida(m[1])) poner("NOMBRE", m.index + m[0].length - m[1].length, m.index + m[0].length); });
   }
   return out.sort((a, b) => a.s - b.s);
 }
@@ -1306,7 +1600,7 @@ function validar(salida, opc){
 // aproximada que corrigen los errores del lector (ocultaría números clínicos de más)
 function protegerAuto(texto, opc){
   const escrito = !!(opc && opc.escrito);
-  const o = Object.assign({}, opc || {}, {foto: !escrito, aproximado: !escrito, enviaTexto: true});
+  const o = Object.assign({}, opc || {}, {foto: !escrito, aproximado: !escrito, enviaTexto: true, codigos: true});
   let p = proteger(texto, o);
   const avisos = revisar(p.res, o.off, {foto: !escrito});
   if (avisos.length){
@@ -1338,7 +1632,7 @@ function proteger(texto, opc){
     const res = analizar(texto, Object.assign({}, o, {ocultar}));
     if (o.fijar) o.fijar(res);
     const cons = construir(res, off);
-    const residuos = validar(cons.salida, {nombres: nombresDe(res, off).concat(o.nombres || []), aproximado: o.aproximado});
+    const residuos = validar(cons.salida, {nombres: nombresDe(res, off).concat(o.nombres || []), aproximado: o.aproximado, codigos: o.codigos});
     if (!residuos.length || ronda >= rondas) return {res, cons, residuos, agregados, ok: !residuos.length};
     for (const r of residuos){
       if (ocultar.some(x => plegar(x.texto) === plegar(r.texto))) continue;
@@ -2677,7 +2971,7 @@ async function leerDocx(buf, DOMParserImpl){
   return lineas.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-root.Anon = {analizar, construir, restaurar, revisar, validar, proteger, protegerAuto, nombresDe, dvRut, pendienteTexto, filasOcr, zonasATapar, margenesCajas, codigosEnImagen, analizarHoja, detectarHoja, contornoHoja, blanquearFuera, curvaContraste, homografia, aplicarH, tamanoCuad, rectificar, lecturaDeHoja, contornoCaja, ajustarAltoPalabras, unirLecturas, reducir, entidadesDe, coincidencias, distancia, fusionarCajas, dentroCuad, agrandarCuad, aplanarLuz, blanquearFondo, pendienteEn, enderezar, cajaOriginal, textoItemsPdf, leerDocx, plegar, cuentaDigitos, TIPOS, ETIQUETA, OPC_DEF};
+root.Anon = {analizar, construir, restaurar, revisar, validar, proteger, protegerAuto, nombresDe, dvRut, pendienteTexto, filasOcr, zonasATapar, margenesCajas, codigosEnImagen, analizarHoja, detectarHoja, contornoHoja, blanquearFuera, curvaContraste, homografia, aplicarH, tamanoCuad, rectificar, lecturaDeHoja, contornoCaja, ajustarAltoPalabras, unirLecturas, reducir, entidadesDe, coincidencias, distancia, fusionarCajas, dentroCuad, agrandarCuad, aplanarLuz, blanquearFondo, pendienteEn, enderezar, cajaOriginal, textoItemsPdf, leerDocx, plegar, cuentaDigitos, normalizarRut, esCodigo, LISTA_BLANCA, TIPOS, ETIQUETA, OPC_DEF};
 })(typeof window !== "undefined" ? window : globalThis);
 </script>
 <script>

@@ -84,10 +84,10 @@ test("cámara con 2 páginas → «Listo» → lectura, anonimizado, validador, 
 test("con un residuo que no se puede ocultar, el caso queda en «Requiere revisión» y no se envía", {skip: saltar}, async () => {
   const pg = await abrir(AJ_CLAUDE);
   await pg.evaluate(() => { window.__velo.rondas = 0; });   // simula que volver a ocultar no bastó
-  await pg.setInputFiles("#adjuntoAuto", {name: "caso.txt", mimeType: "text/plain", buffer: Buffer.from("Documento del paciente 12 345 678-5, control el 12/03/2025.")});
+  await pg.setInputFiles("#adjuntoAuto", {name: "caso.txt", mimeType: "text/plain", buffer: Buffer.from("Documento del paciente 09 8765 4321, control el 12/03/2025.")});
   await esperarCaso(pg);
   assert.equal(await estadoCaso(pg), "Requiere revisión");
-  assert.match(await pg.textContent("#casos"), /quedó a la vista RUT «12 345 678-5»/);
+  assert.match(await pg.textContent("#casos"), /quedó a la vista Teléfono «09 8765 4321»/);
   assert.equal(pg.envios.length, 0, "no debe salir nada");
   assert.equal(await pg.$(".caso-auto details"), null, "no hay nada enviado que ver");
   await pg.context().close();
@@ -95,11 +95,11 @@ test("con un residuo que no se puede ocultar, el caso queda en «Requiere revisi
 
 test("lo que el anonimizador deja pasar lo oculta el validador y el caso se envía", {skip: saltar}, async () => {
   const pg = await abrir(AJ_CLAUDE);
-  await pg.setInputFiles("#adjuntoAuto", {name: "caso.txt", mimeType: "text/plain", buffer: Buffer.from("Documento del paciente 12 345 678-5, control el 12/03/2025.")});
+  await pg.setInputFiles("#adjuntoAuto", {name: "caso.txt", mimeType: "text/plain", buffer: Buffer.from("Documento del paciente 09 8765 4321, control el 12/03/2025.")});
   await esperarCaso(pg);
   assert.equal(await estadoCaso(pg), "Listo");
   const enviado = pg.envios[0].cuerpo.messages[0].content;
-  assert.ok(enviado.includes("Documento del paciente [RUT_1], control el 12/03/2025.") && !enviado.includes("345 678"), enviado);
+  assert.ok(enviado.includes("Documento del paciente [TELEFONO_1], control el 12/03/2025.") && !enviado.includes("8765 4321"), enviado);
   await pg.context().close();
 });
 

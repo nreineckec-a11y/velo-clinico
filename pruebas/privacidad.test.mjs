@@ -79,7 +79,7 @@ test("«Requiere revisión» también avisa, con su texto fijo; con la app a la 
   await esperarCasos(pg);
   assert.deepEqual(await avisos(pg), [], "a la vista basta el mensaje en pantalla");
   await pg.evaluate(() => { window.__velo.rondas = 0; window.__ocultar(); });
-  await pg.setInputFiles("#adjuntoAuto", archivoTexto("Documento 12 345 678-5 de Juan Pérez Soto."));
+  await pg.setInputFiles("#adjuntoAuto", archivoTexto("Documento 09 8765 4321 de Juan Pérez Soto."));
   await esperarCasos(pg, 2);
   const vs = await avisos(pg);
   assert.deepEqual(vs.map(v => v.titulo), ["Un caso requiere revisión"]);
