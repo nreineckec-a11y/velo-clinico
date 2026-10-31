@@ -52,9 +52,9 @@ test("formatos: dd/mm/aaaa, dd-mm-aa, dd.mm.aaaa, aaaa-mm-dd, «12 de marzo de 2
   for (const [f, edad] of [["14/07/1958", 66], ["14-07-58", 66], ["14.07.1958", 66], ["1958-07-14", 66], ["14 de julio de 1958", 66],
     ["14-jul-1958", 66], ["jul-1958", 66], ["julio de 1958", 66], ["14/07/1958 00:00", 66], ["21/03/1958", 66], ["20/03/1958", 67]])
     igual("Fecha de nacimiento: " + f + fin, "edad: " + edad + " años" + fin);
-  // Las formas nuevas sin rótulo y antiguas también se ocultan
-  igual("Colecistectomía en marzo de 2010." + fin, "Colecistectomía en [FECHA_1]." + fin);
-  igual("IAM (mar-2011)." + fin, "IAM ([FECHA_1])." + fin);
+  // Un antecedente con solo mes y año ("marzo de 2010", "mar-2011") no es un posible nacimiento: queda
+  queda("Colecistectomía en marzo de 2010." + fin);
+  queda("IAM (mar-2011)." + fin);
 });
 
 test("tabla de exámenes seriados con varias fechas: todas quedan; el nacimiento pasa a edad", () => {
@@ -115,4 +115,69 @@ test("en fotos: se tapa solo la fecha de nacimiento (no su rótulo); las clínic
   assert.deepEqual(foto("Fecha de toma: 03/11/2 08:15"), []);
   assert.deepEqual(foto("Fecha 03/11/2 Hora 09:41"), ["FECHA:03/11/2"]);
   assert.deepEqual(foto("F. Nac: 03/11/19"), ["FECHA:03/11/19"]);
+});
+
+/* ---------- epicrisis: las fechas de la hospitalización no se pierden ---------- */
+const EPI = `Fecha de Nacimiento - Edad   17/05/1956 - 69a 5m 10d   Sexo Hombre
+Fecha de Ingreso   03/11/2025   Fecha de Egreso   11/11/2025
+Antecedentes: HTA desde 2012. IAM el 15/03/2014 con stent. Colecistectomía en marzo de 2010.
+03/11: ingresa por disnea y fiebre. Rx de tórax (03/11/2025): consolidación basal derecha.
+04-11-25 hemocultivos negativos. 05.11.2025 TAC de tórax sin TEP.
+Laboratorio 2025/11/05: PCR 148 mg/dL, Hb 10,2 g/dL.
+Urocultivo tomado el 6 / 11 / 2025: negativo.
+Interconsulta a cardiología el 07-11/2025. Ecocardiograma 08.11/25: FEVI 35 %.
+Se inicia ceftriaxona el 3 de noviembre de 2025 por 7 días; cambio a amoxicilina el 9 de noviembre.
+Control en policlínico el 25/11/2025. Biopsia 12-nov-2025 pendiente.
+Fecha de Alta Médica   11/11/2025`;
+const FECHAS_EPI = ["03/11/2025", "11/11/2025", "15/03/2014", "marzo de 2010", "03/11:", "04-11-25", "05.11.2025", "2025/11/05", "6 / 11 / 2025",
+  "07-11/2025", "08.11/25", "3 de noviembre de 2025", "9 de noviembre", "25/11/2025", "12-nov-2025"];
+
+test("epicrisis: solo se oculta la fecha de nacimiento; las de la hospitalización y los antecedentes llegan completas (texto y foto)", () => {
+  for (const escrito of [true, false]){
+    const p = Anon.protegerAuto(EPI, {escrito}), sal = p.cons.salida;
+    for (const f of FECHAS_EPI) assert.ok(sal.includes(f), `${escrito ? "escrito" : "foto"}: se perdió «${f}»:\n${sal}`);
+    assert.ok(!sal.includes("17/05/1956") && sal.includes("edad: 69 años"), sal);
+    assert.doesNotMatch(sal, /\[FICHA_\d+\]|\[FECHA_\d+\]/, "ninguna fecha pasó a folio ni a marcador");
+    assert.deepEqual([...p.fechasOcultas].map(f => f.fecha), ["17/05/1956"]);
+    assert.match(p.fechasOcultas[0].motivo, /fecha de nacimiento \(queda como «edad: 69 años»\)/);
+  }
+});
+
+test("el año primero y los separadores mezclados son fechas; «Biopsia 12-nov-2025» no es un folio", () => {
+  for (const f of ["2025/11/05", "2025.11.5", "07-11/2025", "08.11/25", "6 / 11 / 2025", "12-nov-2025", "12 nov 2025"])
+    assert.equal(anon("Control: " + f + " sin novedad.", {foto: true}), "Control: " + f + " sin novedad.", f);
+  for (const t of ["Biopsia 12-nov-2025 pendiente", "Biopsia 12/05/2026: adenocarcinoma", "Episodio 2025/11/03 en urgencia"]) queda(t);
+  // el año mal leído de otra fecha (2085) no vuelve «antiguas» a las demás
+  igual("Edad: 69 años. Control 12/03/2085. Rx 03/11/2025. TAC 05/11/2025.", "Edad: 69 años. Control 12/03/2085. Rx 03/11/2025. TAC 05/11/2025.");
+});
+
+test("fotos: letras que el lector pone por cifras («O3/11/2O25», «l1/11/2025») siguen siendo fechas y no folios", () => {
+  assert.deepEqual(foto("Ingreso O3/11/2O25 y alta l1/11/2025."), []);
+  // un RUN o folio roto sigue tapándose
+  assert.ok(foto("RUN 8.765.4321 y folio 1210/2028").some(d => d.startsWith("FICHA:")));
+});
+
+test("fecha suelta sin rótulo: por omisión solo se oculta si coincide con la edad del paciente", () => {
+  // con la edad dicha ("69 años"), una fecha de hace ~69 años es el nacimiento; un antecedente de hace 11 años no
+  igual("Hombre de 69 años, 17/05/1956. IAM el 15/03/2014. Ingreso 03/11/2025.", "Hombre de 69 años, [FECHA_1]. IAM el 15/03/2014. Ingreso 03/11/2025.");
+  // sin edad en el documento, una fecha antigua sigue ocultándose por seguridad
+  igual("Paciente 17/05/1956. Ingreso 03/11/2025.", "Paciente [FECHA_1]. Ingreso 03/11/2025.");
+  // «Edad: 69» sin unidad también cuenta
+  igual("Edad: 69. Visto 17/05/1956. Ingreso 03/11/2025.", "Edad: 69. Visto [FECHA_1]. Ingreso 03/11/2025.");
+});
+
+test("ajuste de fechas sueltas: «visibles» no oculta ninguna; «antiguas» oculta las de 10 o más años", () => {
+  const t = "Hombre de 69 años, 17/05/1956. IAM el 15/03/2014. Ingreso 03/11/2025.";
+  igual(t, "Hombre de 69 años, [FECHA_1]. IAM el 15/03/2014. Ingreso 03/11/2025.");
+  igual(t, t, {fechasSinRotulo: "visibles"});
+  igual(t, "Hombre de 69 años, [FECHA_1]. IAM el [FECHA_2]. Ingreso 03/11/2025.", {fechasSinRotulo: "antiguas"});
+  // la fecha de nacimiento con su rótulo se oculta siempre
+  igual("Fecha de nacimiento: 17/05/1956. Ingreso 03/11/2025.", "edad: 69 años. Ingreso 03/11/2025.", {fechasSinRotulo: "visibles"});
+});
+
+test("protegerAuto lista las fechas ocultas con su motivo", () => {
+  const p = Anon.protegerAuto("Edad: 69 años. F. Nac: 17/05/1956. Paciente de 01/02/1957. Ingreso 03/11/2025.", {escrito: true});
+  assert.deepEqual([...p.fechasOcultas].map(f => f.fecha + " · " + f.motivo), [
+    "17/05/1956 · fecha de nacimiento (queda como «edad: 69 años»)",
+    "01/02/1957 · sin rótulo y coincide con la edad del paciente (posible nacimiento)"]);
 });

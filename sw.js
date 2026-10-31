@@ -1,6 +1,6 @@
 // Guarda la app en el dispositivo para que abra sin conexión. Nunca guarda casos ni respuestas.
 // El lector de fotos (carpeta ocr/) se guarda la primera vez que se usa, no al instalar, porque pesa unos 7 MB.
-const CACHE = "velo-v7";
+const CACHE = "velo-v8";
 const ARCHIVOS = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
   "./icon-maskable-512.png", "./apple-touch-icon.png", "./pdf.min.js", "./pdf.worker.min.js"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARCHIVOS)).then(() => self.skipWaiting())); });
