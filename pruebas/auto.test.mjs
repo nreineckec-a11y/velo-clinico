@@ -214,3 +214,41 @@ test("el orden por uso se recalcula con cada caso; el modo manual muestra el mis
   assert.deepEqual((await chips(pg, "tareas")).slice(0, 2), ["Interconsulta", "Transcriptor de exámenes"]);
   await pg.context().close();
 });
+
+/* ---------- Adjuntar PDF arrastrando ---------- */
+// Suelta archivos sobre un elemento como lo haría el navegador al arrastrarlos desde el escritorio
+async function soltar(pg, selector, archivos){
+  await pg.evaluate(([sel, as]) => {
+    const dt = new DataTransfer();
+    for (const a of as) dt.items.add(new File([a.texto], a.nombre, {type: a.tipo}));
+    const el = document.querySelector(sel);
+    for (const tipo of ["dragenter", "dragover"]) el.dispatchEvent(new DragEvent(tipo, {bubbles: true, cancelable: true, dataTransfer: dt}));
+    window.__arrastrando = document.body.classList.contains("arrastrando");
+    el.dispatchEvent(new DragEvent("drop", {bubbles: true, cancelable: true, dataTransfer: dt}));
+  }, [selector, archivos]);
+}
+
+test("la zona «Adjuntar PDF» es grande y «Tomar foto» es chico", {skip: saltar}, async () => {
+  const pg = await abrir(AJ_CLAUDE);
+  const zona = await pg.locator("#btnElegirAuto").boundingBox(), foto = await pg.locator("#btnCamara").boundingBox();
+  assert.match(await pg.textContent("#btnElegirAuto"), /Adjuntar PDF/);
+  assert.match(await pg.textContent("#btnCamara"), /Tomar foto/);
+  assert.ok(zona.height > 2.5 * foto.height && zona.width > foto.width, JSON.stringify({zona, foto}));
+  await pg.context().close();
+});
+
+test("arrastrar un archivo a la página crea un caso del modo automático, sin abrir los archivos del computador", {skip: saltar}, async () => {
+  const pg = await abrir(AJ_CLAUDE);
+  await soltar(pg, "#btnElegirAuto", [{nombre: "caso.txt", tipo: "text/plain", texto: "Paciente: Juan Pérez Soto. Creatinina 1,1 mg/dL. Fecha de toma: 12/03/2025."}]);
+  assert.equal(await pg.evaluate(() => window.__arrastrando), true, "la zona se destaca mientras se arrastra");
+  assert.equal(await pg.evaluate(() => document.body.classList.contains("arrastrando")), false, "al soltar deja de destacarse");
+  await esperarCaso(pg);
+  assert.equal(await estadoCaso(pg), "Listo");
+  const enviado = pg.envios[0].cuerpo.messages[0].content;
+  assert.ok(enviado.includes("Creatinina 1,1 mg/dL") && !enviado.includes("Pérez"), enviado);
+  // Un archivo que no se puede adjuntar no crea un caso
+  await soltar(pg, "body", [{nombre: "planilla.xlsx", tipo: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", texto: "x"}]);
+  await pg.waitForTimeout(300);
+  assert.equal(await pg.locator(".caso-auto").count(), 1);
+  await pg.context().close();
+});

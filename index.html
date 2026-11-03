@@ -74,6 +74,14 @@ textarea:focus{outline:2px solid var(--accent); outline-offset:1px}
 .btn.grande{width:100%; min-height:54px; font-size:17px}
 .btn.chico{min-height:36px; padding:6px 12px; font-size:14px}
 .btn:disabled{opacity:.42; pointer-events:none}
+/* Zona para adjuntar: se toca para elegir archivos o se arrastran encima (también a cualquier parte de la página) */
+.zona-pdf{appearance:none; width:100%; min-height:150px; display:grid; place-items:center; gap:4px; padding:22px 16px; border:2px dashed var(--accent); border-radius:16px; background:var(--accent-soft); color:var(--ink); font:inherit; text-align:center; cursor:pointer; transition:background .15s, border-color .15s}
+.zona-pdf:hover{border-style:solid}
+.zona-pdf svg{color:var(--accent)}
+.zona-titulo{font:600 20px/1.2 var(--f-display)}
+.zona-sub{color:var(--muted); font-size:14px; max-width:34ch}
+body.arrastrando .zona-pdf{border-style:solid; background:var(--accent); color:var(--accent-ink)}
+body.arrastrando .zona-pdf svg, body.arrastrando .zona-pdf .zona-sub{color:var(--accent-ink)}
 .btn-texto{background:none; border:0; color:var(--accent); font:600 15px var(--f-body); padding:4px 0; cursor:pointer; text-decoration:underline; text-underline-offset:3px}
 /* Los prompts pasan a la línea siguiente (una fila que se desplaza de lado deja los últimos fuera de alcance con el mouse) */
 .chips{display:flex; flex-wrap:wrap; gap:8px}
@@ -189,9 +197,13 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
 
   <section class="bloque" id="bloqueAuto" aria-label="Modo automático" hidden>
     <div class="chips" id="tareasAuto" role="group" aria-label="Prompt para los próximos casos"></div>
-    <button class="btn grande" id="btnCamara" type="button">Fotografiar examen</button>
+    <button class="zona-pdf" id="btnElegirAuto" type="button">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 17v-6"/><path d="m9.5 13.5 2.5-2.5 2.5 2.5"/></svg>
+      <span class="zona-titulo">Adjuntar PDF</span>
+      <span class="zona-sub" id="zonaSub">Arrastra aquí el PDF (o fotos, Word) o haz clic para elegirlo. Varios archivos juntos son un solo caso.</span>
+    </button>
     <div class="fila">
-      <button class="btn sec" id="btnElegirAuto" type="button">Elegir fotos o PDF</button>
+      <button class="btn sec chico" id="btnCamara" type="button">Tomar foto</button>
       <button class="btn-texto" id="btnManual" type="button">Usar el modo manual</button>
     </div>
     <label class="lbl" for="entradaAuto" style="margin-top:0">O escribe o pega el caso</label>
@@ -3976,11 +3988,23 @@ async function procesarArchivos(lista){
 }
 $("btnAdjuntar").addEventListener("click", () => $("adjunto").click());
 $("adjunto").addEventListener("change", e => { const l = [...(e.target.files || [])]; e.target.value = ""; procesarArchivos(l); });
-document.addEventListener("dragover", e => { if ($("editor").hidden) e.preventDefault(); });
+// Arrastrar archivos a cualquier parte de la página: en el modo automático, lo soltado es un caso nuevo (como «Adjuntar
+// PDF»); en el manual, se adjunta al caso. Mientras se arrastra, la zona de adjuntar se destaca.
+const conArchivos = e => !!(e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files"));
+let arrastres = 0;
+const finArrastre = () => { arrastres = 0; document.body.classList.remove("arrastrando"); };
+document.addEventListener("dragenter", e => { if (!conArchivos(e) || !$("editor").hidden) return; arrastres++; document.body.classList.add("arrastrando"); });
+document.addEventListener("dragleave", e => { if (!conArchivos(e)) return; if (--arrastres <= 0) finArrastre(); });
+document.addEventListener("dragover", e => { if ($("editor").hidden && conArchivos(e)){ e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } });
 document.addEventListener("drop", e => {
-  if (!$("editor").hidden) return;
+  finArrastre();
+  if (!$("editor").hidden || !conArchivos(e)) return;
   e.preventDefault();
-  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) procesarArchivos(e.dataTransfer.files);
+  // (solo lo que acepta «Adjuntar»: imágenes, PDF, Word y texto)
+  const l = [...e.dataTransfer.files].filter(f => /^image\/|pdf|text\/plain|wordprocessingml/.test(f.type || "") || /\.(pdf|docx|txt|jpe?g|png|heic|webp)$/i.test(f.name || ""));
+  if (!l.length){ toast("Solo se pueden adjuntar PDF, fotos, Word (.docx) o texto (.txt)."); return; }
+  if (aj.auto && $("camara").hidden){ pedirPermisoAvisos(); nuevoCasoAuto(l); }
+  else procesarArchivos(l);
 });
 
 function pintarFotos(){
@@ -5000,7 +5024,7 @@ async function abrirCamara(){
   } catch(e){
     camStream = null;
     // Sin permiso de cámara aquí (por ejemplo, dentro de otra app): la cámara del sistema, una foto por vez
-    $("camInfo").textContent = "No se pudo abrir la cámara en la app. Usa la cámara del sistema o «Elegir fotos o PDF».";
+    $("camInfo").textContent = "No se pudo abrir la cámara en la app. Usa la cámara del sistema o «Adjuntar PDF».";
     $("camSistema").hidden = false;
   }
   pintarCam();
@@ -5041,6 +5065,9 @@ $("camaraNativa").addEventListener("change", e => {
   else nuevoCasoAuto(l);
 });
 $("btnElegirAuto").addEventListener("click", () => { pedirPermisoAvisos(); $("adjuntoAuto").click(); });
+// En una pantalla táctil no se arrastra: se toca
+if (matchMedia("(pointer: coarse)").matches && !matchMedia("(pointer: fine)").matches)
+  $("zonaSub").textContent = "Toca para elegir el PDF (o fotos, Word). Varios archivos juntos son un solo caso.";
 // El caso escrito o pegado entra al mismo flujo que una foto: se procesa como un archivo de texto
 $("entradaAuto").addEventListener("input", () => { $("btnProcesarTexto").disabled = !$("entradaAuto").value.trim(); });
 $("btnProcesarTexto").addEventListener("click", () => {
