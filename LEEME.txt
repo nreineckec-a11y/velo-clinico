@@ -75,6 +75,30 @@ Validador final (antes de copiar o enviar):
 - Si aun así queda algo, el caso queda en "Requiere revisión": no se copia ni se envía hasta que lo ocultes a mano o corrijas el texto.
 - Las imágenes no pasan por este validador: las revisa la comprobación de la foto ya tapada.
 
+Protección de datos (Ley 19.628 vigente; Ley 21.719 desde el 1 de diciembre de 2026, con un proyecto en el Senado para postergarla a 2027; Ley 20.584 para la ficha clínica):
+- Lo que hace la app (medidas técnicas):
+  - Minimización: anonimiza en el dispositivo y envía solo el texto anonimizado y el prompt. En el modo manual con Claude también van los recortes de imagen, con los datos tapados.
+  - Validación: un validador independiente revisa el texto antes de enviarlo; si algo no se puede ocultar, el caso no sale («Requiere revisión»).
+  - Seudonimización: la relación entre los marcadores y los datos reales nunca sale del dispositivo.
+  - Plazo de conservación: los casos se borran solos (24 h por omisión). Las fotos originales se borran al anonimizarlas. Hay borrado inmediato de los casos y de los ajustes.
+  - Seguridad: sin servidores, cuentas, analítica ni registros en la consola. La política de seguridad de la página solo permite conectarse a las APIs de Anthropic, OpenAI y Google.
+  - Transparencia: «Aviso de privacidad y tratamiento de datos» (en Ajustes y al pie de la página) dice qué se procesa, qué sale, a quién y dónde (fuera de Chile, principalmente en Estados Unidos), cuánto se guarda y qué hacer si un dato identificable llega a la IA.
+  - Proveedores: Ajustes muestra qué hace cada uno con lo enviado. Con cuentas personales hay que desactivar el uso para entrenar; en Gemini hay que usar una clave con facturación activa.
+  - Responsabilidad proactiva: el registro de envíos anota la fecha, el modo, el destino, el prompt y cuántos datos de cada tipo se ocultaron, sin ningún dato del paciente. Se descarga como CSV desde Ajustes.
+  - Cifrado (art. 14 quinquies a): los casos guardados en el dispositivo (lo enviado, la respuesta, los marcadores con los datos reales, las fechas ocultas y las fotos) van cifrados con AES-GCM de 256 bits. La llave se crea en el dispositivo y no se puede exportar. Sin cifrado disponible, los casos viven solo en memoria.
+  - Modo institucional (arts. 15 bis y 27 b): en Ajustes se marcan las vías que el establecimiento tiene contratadas con el proveedor (API de Claude, OpenAI o Gemini; cuenta de Claude de empresa; app de IA con cuenta de empresa). Las demás quedan bloqueadas: un caso por una vía sin contrato no se envía, y «Enviar», «Copiar», «Compartir» y «Guardar los recortes» se niegan.
+  - Registro de incidentes (art. 14 sexies): fecha, tipo, categorías de datos, número aproximado de pacientes afectados, descripción, medidas y si se reportó a la Agencia y a los pacientes. No se guarda si el texto trae datos del paciente. Se descarga como CSV.
+  - Aviso con versión y fecha, y con el responsable y el contacto que se escriben en Ajustes (art. 14 ter a, b y c). Dice que no hay decisiones automatizadas: el médico revisa todo (arts. 8 bis y 14 ter l).
+  - Respaldo de las medidas (art. 14 quinquies d): un .txt con la configuración, las medidas técnicas, una comprobación del anonimizador hecha en el dispositivo con casos ficticios (Anon.autoprueba) y el resumen de los registros. Sirve para adjuntarlo a la evaluación de impacto. No lleva datos de pacientes.
+- Lo que no depende de la app (responsable: el médico y el establecimiento):
+  - Autorización institucional para usar la herramienta, y su inclusión en el registro de actividades de tratamiento.
+  - Evaluación de impacto en protección de datos: es tratamiento de datos sensibles con un proveedor externo.
+  - Base de licitud del tratamiento y de la transferencia internacional al proveedor de IA (contrato o DPA con garantías, o la vía que defina la asesoría jurídica).
+  - Configuración de la cuenta de IA para que no use los datos para entrenar.
+  - Protocolo de vulneraciones (borrar, registrar, informar y, si corresponde, reportar a la Agencia).
+  - Atención de los derechos de los pacientes.
+- La anonimización automática reduce el riesgo, pero no lo elimina: la revisión final es del médico. Esto no es asesoría legal: valídalo con el encargado de protección de datos o la asesoría jurídica del establecimiento.
+
 Pruebas (en un computador con Node 20 o superior):
 - node --test pruebas/*.test.mjs   (anonimizador, hoja, patrones, recuadros, propagación)
 - Fugas reales (pruebas/fugas.test.mjs): cada fuga que se reporte entra ahí como caso ficticio del mismo formato antes de corregirla, junto con lo que no debe ocultarse (Fazekas 2, IDDSI 4, HbA1c, "Médico Radiólogo"…).

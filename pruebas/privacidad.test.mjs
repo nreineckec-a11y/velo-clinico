@@ -87,18 +87,30 @@ test("«Requiere revisión» también avisa, con su texto fijo; con la app a la 
   await pg.context().close();
 });
 
-test("lo guardado en el teléfono: lo enviado y la respuesta van anonimizados; los datos reales solo en los marcadores", {skip: saltar}, async () => {
+test("lo guardado en el teléfono va cifrado: ningún dato ni texto a la vista; la app lo descifra al volver a abrirse", {skip: saltar}, async () => {
   const pg = await abrir(AJ_CLAUDE);
   await pg.setInputFiles("#adjuntoAuto", archivoTexto(CASO));
   await esperarCasos(pg);
-  const registro = await pg.evaluate(() => new Promise(ok => {
-    const rq = indexedDB.open("velo", 1);
-    rq.onsuccess = () => { const g = rq.result.transaction("casos").objectStore("casos").getAll(); g.onsuccess = () => ok(g.result[0]); };
+  const [crudo] = await pg.evaluate(() => window.__velo.crudos());
+  // En IndexedDB no queda ni lo enviado, ni la respuesta, ni los marcadores con los datos reales: solo bytes cifrados
+  assert.equal(crudo.cifrado, true);
+  for (const k of ["enviado", "respuesta", "mapa", "fechasOcultas", "residuos"]) assert.equal(crudo[k], undefined, k);
+  assert.deepEqual(conDatos(JSON.stringify(crudo)), []);
+  assert.doesNotMatch(JSON.stringify(crudo), /Creatinina|NOMBRE_1/);
+  assert.equal(crudo.archivos, null, "sin fotos");
+  // La llave no se puede exportar (ni la propia página puede leerla)
+  const exportable = await pg.evaluate(() => new Promise(ok => {
+    const rq = indexedDB.open("velo");
+    rq.onsuccess = () => { const g = rq.result.transaction("llaves").objectStore("llaves").get("casos"); g.onsuccess = () => crypto.subtle.exportKey("raw", g.result.llave).then(() => ok(true), () => ok(false)); };
   }));
-  const {mapa, fechasOcultas, ...resto} = registro;   // (los datos reales quedan solo en los marcadores y en la lista de fechas ocultas, que se ve en el teléfono)
-  assert.deepEqual(conDatos(JSON.stringify(resto)), [], "fuera de los marcadores no debe quedar ningún dato real");
-  assert.equal(resto.archivos, null, "sin fotos");
-  assert.ok(Object.values(mapa).some(v => /Juan Pérez Soto/.test(v)), "los marcadores permiten mostrar la respuesta con los datos reales");
+  assert.equal(exportable, false);
+  // Al volver a abrir la app, el caso se descifra y la respuesta se ve con los datos reales
+  const [c] = await pg.evaluate(() => window.__velo.guardados());
+  assert.ok(Object.values(c.mapa).some(v => /Juan Pérez Soto/.test(v)), JSON.stringify(c.mapa));
+  await pg.reload();
+  await esperarCasos(pg);
+  assert.deepEqual(await estados(pg), ["Listo"]);
+  assert.deepEqual(pg.errores, []);
   await pg.context().close();
 });
 
@@ -134,6 +146,140 @@ test("fotos originales: por omisión se borran al anonimizar; con «Conservar» 
   await pg.click("#btnAjustes"); await pg.click("#ajBorrarCasos"); await pg.click("#ajBorrarCasos"); await pg.click("#ajCerrar");
   for (let i = 0; i < 50 && (await guardados(pg)).length; i++) await pg.waitForTimeout(50);
   assert.deepEqual(await guardados(pg), []);
+  assert.deepEqual(pg.errores, []);
+  await pg.context().close();
+});
+
+/* ---------- protección de datos: aviso, avisos de cada proveedor y registro de envíos ---------- */
+test("registro de envíos: anota fecha, destino, prompt y cuántos datos se ocultaron, sin ningún dato del paciente", {skip: saltar}, async () => {
+  const pg = await abrir(AJ_CLAUDE);
+  await pg.setInputFiles("#adjuntoAuto", archivoTexto(CASO));
+  await esperarCasos(pg);
+  const reg = await pg.evaluate(() => JSON.parse(localStorage.getItem("velo_registro") || "[]"));
+  assert.equal(reg.length, 1);
+  assert.deepEqual(conDatos(JSON.stringify(reg)), [], JSON.stringify(reg));
+  assert.equal(reg[0].modo, "automático");
+  assert.equal(reg[0].destino, "Claude (API)");
+  assert.equal(reg[0].prompt, "Transcriptor de exámenes");
+  assert.ok(reg[0].ocultos.NOMBRE >= 1 && reg[0].ocultos.RUT === 1 && reg[0].ocultos.TELEFONO === 1, JSON.stringify(reg[0].ocultos));
+  // En Ajustes se ve y se descarga como CSV (también sin datos)
+  await pg.click("#btnAjustes");
+  assert.match(await pg.textContent("#ajRegistroInfo"), /1 envío/);
+  const [descarga] = await Promise.all([pg.waitForEvent("download"), pg.click("#ajRegistroBajar")]);
+  const csv = fs.readFileSync(await descarga.path(), "utf8");
+  assert.match(csv, /"fecha";"modo";"destino";"prompt";"imagenes";"ocultos_nombre"/);
+  assert.match(csv, /"automático";"Claude \(API\)";"Transcriptor de exámenes";"0"/);
+  assert.deepEqual(conDatos(csv), []);
+  // Borrar pide un segundo toque
+  await pg.click("#ajRegistroBorrar"); await pg.click("#ajRegistroBorrar");
+  assert.equal(await pg.evaluate(() => localStorage.getItem("velo_registro")), null);
+  assert.deepEqual(pg.errores, []);
+  await pg.context().close();
+});
+
+test("aviso de privacidad: se abre desde el pie y desde Ajustes, con el marco legal y qué sale del dispositivo", {skip: saltar}, async () => {
+  const pg = await abrir(AJ_CLAUDE);
+  await pg.click("#pieAutoPrivacidad");
+  assert.equal(await pg.isVisible("#privacidad"), true);
+  const t = await pg.textContent("#privacidad");
+  for (const x of ["Ley 21.719", "Ley 19.628", "Ley 20.584", "Estados Unidos", "Requiere revisión", "no es asesoría legal"]) assert.ok(t.includes(x), x);
+  await pg.click("#pvCerrar");
+  assert.equal(await pg.isVisible("#privacidad"), false);
+  await pg.click("#btnAjustes"); await pg.click("#ajPrivacidad");
+  assert.equal(await pg.isVisible("#privacidad"), true);
+  assert.deepEqual(pg.errores, []);
+  await pg.context().close();
+});
+
+test("cada proveedor avisa qué hace con lo enviado, también los que no usan clave", {skip: saltar}, async () => {
+  const pg = await abrir({auto: true, provV2: true, prov: "compartir", tarea: "exam"});
+  await pg.click("#btnAjustes");
+  assert.match(await pg.textContent("#ajProvNota"), /no use tus conversaciones para entrenar/);
+  assert.equal(await pg.isVisible("#ajProvNota"), true);
+  for (const [p, rx] of [["claude", /no se usa para entrenar/], ["openai", /no usa lo enviado para entrenar/], ["gemini", /nivel gratuito/]]){
+    await pg.selectOption("#ajProv", p);
+    assert.match(await pg.textContent("#ajProvNota"), rx, p);
+  }
+  await pg.context().close();
+});
+
+test("la versión de la app en el aviso es la del service worker", () => {
+  assert.equal(HTML.match(/const VERSION_APP = "([^"]+)"/)[1], SW.match(/const CACHE = "([^"]+)"/)[1]);
+});
+
+test("un caso guardado antes del cifrado se vuelve a guardar cifrado al abrir la app", {skip: saltar}, async () => {
+  const pg = await abrir(AJ_CLAUDE);
+  await pg.evaluate(() => new Promise(ok => {
+    const rq = indexedDB.open("velo");
+    rq.onsuccess = () => { const tx = rq.result.transaction("casos", "readwrite");
+      tx.objectStore("casos").put({id: "viejo-1", n: 1, creado: Date.now(), terminado: Date.now(), estado: "listo", prov: "claude", tarea: "exam",
+        enviado: "Resumen de [NOMBRE_1]", respuesta: "Ok [NOMBRE_1]", mapa: {"[NOMBRE_1]": "Juan Pérez Soto"}, residuos: [], error: "", archivos: null});
+      tx.oncomplete = () => { rq.result.close(); ok(); }; };
+  }));
+  await pg.reload();
+  await esperarCasos(pg);
+  await pg.waitForFunction(async () => (await window.__velo.crudos()).every(c => c.cifrado));
+  const crudos = await pg.evaluate(() => window.__velo.crudos());
+  assert.equal(crudos.length, 1);
+  assert.deepEqual(conDatos(JSON.stringify(crudos)), []);
+  await pg.context().close();
+});
+
+test("modo institucional: una vía sin contrato no envía nada; con contrato, el caso sigue", {skip: saltar}, async () => {
+  const pg = await abrir(Object.assign({}, AJ_CLAUDE, {inst: true, vias: []}));
+  assert.match(await pg.textContent("#autoInfo"), /no está entre las vías contratadas/);
+  await pg.setInputFiles("#adjuntoAuto", archivoTexto(CASO));
+  await esperarCasos(pg);
+  assert.deepEqual(await estados(pg), ["Error"]);
+  assert.match(await pg.textContent(".caso-auto"), /Modo institucional/);
+  assert.equal(pg.envios.length, 0, "no debe salir nada");
+  // Se marca la vía como contratada en Ajustes: el siguiente caso se envía
+  await pg.click("#btnAjustes");
+  await pg.check('#ajInstVias [data-via="claude"]');
+  await pg.click("#ajCerrar");
+  await pg.setInputFiles("#adjuntoAuto", archivoTexto(CASO));
+  await esperarCasos(pg, 2);
+  assert.ok((await estados(pg)).includes("Listo"), JSON.stringify(await estados(pg)));
+  assert.equal(pg.envios.length, 1);
+  assert.deepEqual(pg.errores, []);
+  await pg.context().close();
+});
+
+test("registro de incidentes: no guarda un texto con datos del paciente; sin ellos, se guarda y se descarga", {skip: saltar}, async () => {
+  const pg = await abrir(AJ_CLAUDE);
+  await pg.click("#btnAjustes"); await pg.click("#ajIncNuevo");
+  await pg.fill("#incDesc", "Se envió a la IA el informe de Juan Pérez Soto, RUT 12.345.678-5.");
+  await pg.click("#incGuardar");
+  assert.match(await pg.textContent("#incEstado"), /No se guardó: quita los datos del paciente/);
+  assert.equal(await pg.evaluate(() => localStorage.getItem("velo_incidentes")), null);
+  await pg.fill("#incDesc", "En un informe de laboratorio quedó a la vista el apellido del paciente; se envió por API.");
+  await pg.fill("#incMedidas", "Se borró la conversación en el proveedor y se informó a la dirección.");
+  await pg.check('#incDatos input[value="Nombre"]');
+  await pg.click("#incGuardar");
+  assert.equal(await pg.isVisible("#incidente"), false);
+  assert.match(await pg.textContent("#ajIncInfo"), /1 incidente/);
+  const [d] = await Promise.all([pg.waitForEvent("download"), pg.click("#ajIncBajar")]);
+  const csv = fs.readFileSync(await d.path(), "utf8");
+  assert.match(csv, /"Un dato identificable llegó a la IA";"Nombre";"1";"En un informe de laboratorio/);
+  assert.deepEqual(conDatos(csv), []);
+  await pg.context().close();
+});
+
+test("respaldo de las medidas: configuración, cifrado, autoprueba del anonimizador y registros, sin datos", {skip: saltar}, async () => {
+  const pg = await abrir(Object.assign({}, AJ_CLAUDE, {responsable: "CESFAM de prueba", contacto: "delegado@ejemplo.cl", inst: true, vias: ["claude"]}));
+  await pg.setInputFiles("#adjuntoAuto", archivoTexto(CASO));
+  await esperarCasos(pg);
+  await pg.click("#btnAjustes");
+  const [d] = await Promise.all([pg.waitForEvent("download"), pg.click("#ajRespaldo")]);
+  const t = fs.readFileSync(await d.path(), "utf8");
+  for (const x of ["Responsable del tratamiento: CESFAM de prueba", "delegado@ejemplo.cl", "Modo institucional: activo; vías contratadas: Claude por API",
+    "AES-GCM 256", "Resultado: todos correctos", "Claude (API): 1", "15 ter", "VELO CLÍNICO"]) assert.ok(t.includes(x), x + "\n" + t);
+  assert.deepEqual(conDatos(t), []);
+  // El aviso de privacidad muestra versión, fecha y el responsable configurado
+  await pg.click("#ajPrivacidad");
+  const av = await pg.textContent("#privacidad");
+  assert.match(av, /Versión 2\.0 del 4 de noviembre de 2026/);
+  assert.ok(av.includes("CESFAM de prueba") && av.includes("delegado@ejemplo.cl") && av.includes("Decisiones automatizadas"));
   assert.deepEqual(pg.errores, []);
   await pg.context().close();
 });

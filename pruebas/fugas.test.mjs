@@ -174,3 +174,9 @@ for (const [t, esp] of REGRESION){
     assert.equal(p.cons.salida, esp);
   });
 }
+
+test("autoprueba del motor: los casos ficticios que la app corre en el dispositivo pasan", () => {
+  const r = Anon.autoprueba();
+  assert.ok(r.total >= 15);
+  assert.equal(r.fallas.length, 0, JSON.stringify(r.fallas));
+});
