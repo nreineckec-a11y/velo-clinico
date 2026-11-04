@@ -82,6 +82,8 @@ textarea:focus{outline:2px solid var(--accent); outline-offset:1px}
 .zona-sub{color:var(--muted); font-size:14px; max-width:34ch}
 body.arrastrando .zona-pdf{border-style:solid; background:var(--accent); color:var(--accent-ink)}
 body.arrastrando .zona-pdf svg, body.arrastrando .zona-pdf .zona-sub{color:var(--accent-ink)}
+.privacidad p{margin:0; max-width:68ch}
+.btn-texto:disabled{opacity:.42; pointer-events:none}
 .btn-texto{background:none; border:0; color:var(--accent); font:600 15px var(--f-body); padding:4px 0; cursor:pointer; text-decoration:underline; text-underline-offset:3px}
 /* Los prompts pasan a la línea siguiente (una fila que se desplaza de lado deja los últimos fuera de alcance con el mouse) */
 .chips{display:flex; flex-wrap:wrap; gap:8px}
@@ -274,8 +276,8 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
   </section>
 
   <button class="btn sec solo-manual" id="nuevo" type="button">Empezar otro caso</button>
-  <p class="pie solo-manual">La IA puede equivocarse: verifica antes de usar. Los casos no se guardan y se borran solos tras 15 minutos sin uso.</p>
-  <p class="pie solo-auto">La IA puede equivocarse: verifica antes de usar, sobre todo los valores leídos de fotos (decimales, unidades, tablas).</p>
+  <p class="pie solo-manual">La IA puede equivocarse: verifica antes de usar. Los casos no se guardan y se borran solos tras 15 minutos sin uso. <button class="btn-texto" id="pieManualPrivacidad" type="button" data-privacidad="1">Privacidad</button></p>
+  <p class="pie solo-auto">La IA puede equivocarse: verifica antes de usar, sobre todo los valores leídos de fotos (decimales, unidades, tablas). <button class="btn-texto" id="pieAutoPrivacidad" type="button" data-privacidad="1">Privacidad</button></p>
 </main>
 
 <div class="modal" id="editor" role="dialog" aria-modal="true" aria-labelledby="edTitulo" hidden>
@@ -333,8 +335,8 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
       <input id="ajClave" type="password" autocomplete="off" spellcheck="false" autocapitalize="off">
       <p class="nota"><a id="ajClaveLink" href="#" target="_blank" rel="noopener noreferrer">Crear una clave</a>. La clave queda solo en este dispositivo y se usa solo para hablar con ese proveedor.</p>
       <label class="check"><input type="checkbox" id="ajRecordar"><span>Recordar la clave en este dispositivo</span></label>
-      <p class="aviso-caja" id="ajProvNota" hidden></p>
     </div>
+    <p class="aviso-caja" id="ajProvNota" hidden></p>
     <label class="lbl" for="ajTarea">Prompt por defecto</label>
     <select id="ajTarea"></select>
     <label class="check" style="margin-top:10px"><input type="checkbox" id="ajAvisar"><span><b>Avisarme cuando termine cada caso</b><br><span class="nota">Un aviso del teléfono que dice solo «Análisis listo» (o «Un caso requiere revisión»): se ve en la pantalla bloqueada, así que nunca lleva datos del paciente ni clínicos. En iPhone funciona con la app instalada en la pantalla de inicio.</span></span></label>
@@ -351,6 +353,31 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
     <label class="check"><input type="checkbox" id="ajFotos"><span><b>Conservar las fotos originales en este teléfono</b><br><span class="nota">Si no, se borran apenas se leen y anonimizan. Si las conservas, quedan con el caso (sin salir del teléfono) hasta que se borre.</span></span></label>
     <button class="btn sec" id="ajBorrarCasos" type="button" style="justify-self:start; margin-top:6px">Borrar todos los casos de este teléfono</button>
     <button class="btn-texto quitar" id="ajBorrar" type="button" style="justify-self:start; margin:12px 0 0">Borrar ajustes y claves de este dispositivo</button>
+    <label class="lbl">Protección de datos</label>
+    <button class="btn sec" id="ajPrivacidad" type="button" style="justify-self:start">Aviso de privacidad y tratamiento de datos</button>
+    <p class="nota" id="ajRegistroInfo"></p>
+    <div class="fila">
+      <button class="btn sec chico" id="ajRegistroBajar" type="button">Descargar el registro de envíos (CSV)</button>
+      <button class="btn-texto quitar" id="ajRegistroBorrar" type="button">Borrar el registro</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="privacidad" role="dialog" aria-modal="true" aria-labelledby="pvTitulo" hidden>
+  <div class="modal-bar">
+    <strong id="pvTitulo" style="font-family:var(--f-display); font-size:18px">Privacidad y tratamiento de datos</strong>
+    <span class="sep"></span>
+    <button class="btn chico" id="pvCerrar" type="button">Listo</button>
+  </div>
+  <div class="ajustes-cuerpo privacidad">
+    <p><b>Quién es responsable.</b> Los datos de tus pacientes los trata el prestador: tú y el establecimiento donde atiendes, que son los responsables del tratamiento. Velo Clínico es una herramienta que usas para hacerlo; no tiene servidores ni cuentas propias y nadie más que tú ve lo que procesas en ella.</p>
+    <p><b>Qué pasa en este dispositivo.</b> El texto, las fotos y los PDF se leen y anonimizan aquí. Nombres, RUT, teléfonos, correos, direcciones, folios, códigos de acceso y la fecha de nacimiento se reemplazan por marcadores ([NOMBRE_1], [RUT_1]…) o por la edad. Antes de enviar, un validador independiente vuelve a revisar el texto; si encuentra un dato que no puede ocultar, el caso queda en «Requiere revisión» y no sale.</p>
+    <p><b>Qué sale y a quién.</b> Solo el texto anonimizado y el prompt (en el modo manual con Claude, también los recortes de imagen con los datos tapados en negro). Va únicamente al proveedor de IA que eliges en Ajustes (Anthropic, OpenAI o Google), cuyos servidores están fuera de Chile, principalmente en Estados Unidos; o, con «Compartir», a la app que tú elijas. La relación entre los marcadores y los datos reales nunca sale del dispositivo: la IA no puede revertirla.</p>
+    <p><b>Qué queda aquí y por cuánto tiempo.</b> Cada caso (lo enviado, la respuesta y los datos reales para mostrarla) se borra solo según el plazo de Ajustes (24 horas por omisión), o cuando tocas «Borrar». Las fotos originales se borran al anonimizarlas, salvo que elijas conservarlas. El registro de envíos guarda solo fecha, modo, destino, prompt y cuántos datos de cada tipo se ocultaron: ningún nombre, RUT, texto ni valor clínico. No hay analítica, cookies de terceros ni otros envíos.</p>
+    <p><b>Lo que la app no puede garantizar.</b> La anonimización automática reduce el riesgo, pero no lo elimina: el lector de fotos puede leer mal un dato y un relato libre puede traer detalles que identifiquen a alguien (un cargo único, un hecho conocido). Revisa lo que envías, en especial en el modo automático.</p>
+    <p><b>Marco legal en Chile.</b> Los datos de salud son datos sensibles. Hoy rige la Ley 19.628; la Ley 21.719, que la reemplaza y crea la Agencia de Protección de Datos Personales, entra en vigencia el 1 de diciembre de 2026 (hay un proyecto en el Senado para postergarla a 2027). La ficha clínica, además, es reservada (Ley 20.584). Cumplirlas no depende solo de la app: también de que tu establecimiento autorice esta herramienta, de cómo configures tu cuenta de IA y de que la usen solo profesionales sujetos a secreto. Esto no es asesoría legal: valídalo con el encargado de protección de datos o la asesoría jurídica de tu establecimiento.</p>
+    <p><b>Si un dato identificable llegó a la IA.</b> Borra esa conversación en el proveedor, anota qué se envió, cuándo y a quién, e infórmalo al responsable de tu establecimiento. Con la Ley 21.719, el responsable debe evaluar si corresponde reportarlo a la Agencia y a las personas afectadas. Si es un formato que la app no detectó, repórtalo para corregirlo.</p>
+    <p><b>Derechos de los pacientes.</b> El acceso, la rectificación, la supresión y la oposición se ejercen ante el establecimiento. Esta app no conserva datos más allá del plazo de borrado; para borrarlos de inmediato, usa «Borrar todos los casos de este teléfono» en Ajustes.</p>
   </div>
 </div>
 
@@ -3169,6 +3196,7 @@ function iniciarConversacion(directa){
   caso.inicialReal = texto;
   caso.fotosEnviadas = fotosListas().map(f => f.blob);
   caso.turnos = [{rol:"user", anon: mensajeInicial(r.cons, directa), real: texto}];
+  caso.conteoEnv = r.cons ? Object.assign({}, r.cons.conteo) : {};
   return true;
 }
 // Las preguntas de seguimiento se anonimizan con los mismos marcadores de la conversación
@@ -3318,6 +3346,7 @@ $("enviar").addEventListener("click", async () => {
   if (frenoAvisos(estado)) return;
   if (!iniciarConversacion(true)){ estado(MSG_REVISION(caso.residuos), "error"); return; }
   contarUso(tareaSel); pintarHilo();
+  registrarEnvio("manual", destinoDe("claude-app"), tareaSel, caso.conteoEnv, caso.fotosEnviadas.length);
   const ok = await pedirRespuesta(estado);
   if (!ok){ caso.turnos = []; pintarHilo(); }
   else desplazar($("bloqueResp"));
@@ -3386,6 +3415,7 @@ $("copiarAnon").addEventListener("click", async () => {
   if (!iniciarConversacion()){ estado(MSG_REVISION(caso.residuos), "error"); return; }
   contarUso(tareaSel); pintarHilo();
   const ok = await copiarTexto(caso.turnos[0].anon);
+  if (ok) registrarEnvio("manual", "Copiado", tareaSel, caso.conteoEnv, 0);
   toast(ok ? "Copiado. Pégalo en la IA que prefieras." : "No se pudo copiar: mantén presionado el texto anonimizado de arriba.");
 });
 // Comparte el mismo texto como archivo .txt (en el iPhone, a la app de Claude, ChatGPT u otra)
@@ -3394,7 +3424,7 @@ $("compartirAnon").addEventListener("click", async () => {
   if (frenoAvisos(estado)) return;
   if (!iniciarConversacion()){ estado(MSG_REVISION(caso.residuos), "error"); return; }
   contarUso(tareaSel); pintarHilo();
-  await compartirTexto(caso.turnos[0].anon, tareaSel);
+  if (await compartirTexto(caso.turnos[0].anon, tareaSel)) registrarEnvio("manual", "Compartido (.txt)", tareaSel, caso.conteoEnv, 0);
 });
 $("agregarResp").addEventListener("click", () => {
   const t = $("pegada").value.trim(); if (!t) return;
@@ -3436,6 +3466,7 @@ $("enviarSeg").addEventListener("click", async () => {
     const anon = anonSeguimiento(t); if (anon === null) return;
     caso.turnos.push({rol:"user", anon, real:t});
     $("seguimiento").value = ""; pintarSeg(); pintarHilo();
+    registrarEnvio("manual (seguimiento)", destinoDe("claude-app"), tareaSel, null, 0);
     const ok = await pedirRespuesta(estadoSeg);
     if (!ok){ caso.turnos.pop(); $("seguimiento").value = t; pintarHilo(); pintarSeg(); }
     return;
@@ -3445,6 +3476,7 @@ $("enviarSeg").addEventListener("click", async () => {
   if (ult.rol === "user" && ult.real === t) anon = ult.anon;
   else { anon = anonSeguimiento(t); if (anon === null) return; caso.turnos.push({rol:"user", anon, real:t}); }
   const ok = await copiarTexto(anon);
+  if (ok) registrarEnvio("manual (seguimiento)", "Copiado", tareaSel, null, 0);
   pintarHilo(); $("segPegar").hidden = false;
   estadoSeg(ok ? "Copiado. Pégalo en la misma conversación de la IA y trae la respuesta aquí." : "No se pudo copiar automáticamente.", ok ? "ok" : "aviso");
 });
@@ -4444,12 +4476,16 @@ async function verificarFoto(f){
 /* ===================== ajustes (solo en este dispositivo) ===================== */
 // Proveedores: Claude con la cuenta del médico (solo dentro de la app de Claude) o con una clave API propia
 const PROV = {
-  compartir: {nombre: "Compartir el texto con la app de IA (sin clave)", corto: "para compartir", sinClave: true, compartir: true},
-  "claude-app": {nombre: "Claude (con tu cuenta, dentro de la app de Claude)", corto: "Claude", sinClave: true},
+  compartir: {nombre: "Compartir el texto con la app de IA (sin clave)", corto: "para compartir", sinClave: true, compartir: true,
+    aviso: "La app no envía nada: tú compartes el .txt con la app de IA que elijas. Revisa que esa app no use tus conversaciones para entrenar sus modelos (Claude: Ajustes → Privacidad → «Ayudar a mejorar Claude»; ChatGPT: Ajustes → Controles de datos → «Mejorar el modelo para todos»; Gemini: «Actividad en las apps de Gemini»)."},
+  "claude-app": {nombre: "Claude (con tu cuenta, dentro de la app de Claude)", corto: "Claude", sinClave: true,
+    aviso: "Se envía con tu cuenta de Claude. En una cuenta personal (Free, Pro o Max), desactiva en Ajustes → Privacidad «Ayudar a mejorar Claude»: si está activo, Anthropic puede usar las conversaciones para entrenar sus modelos y conservarlas por más tiempo. Las cuentas de equipo o empresa no se usan para entrenar."},
   claude: {nombre: "Claude (clave API)", corto: "Claude", modelo: "claude-opus-5-5", clavePh: "sk-ant-…",
-    claveUrl: "https://platform.claude.com/settings/keys", nota: "Más rápido y económico: claude-sonnet-5-5."},
+    claveUrl: "https://platform.claude.com/settings/keys", nota: "Más rápido y económico: claude-sonnet-5-5.",
+    aviso: "Por API rigen los términos comerciales de Anthropic: lo enviado no se usa para entrenar sus modelos y se conserva por un plazo limitado. Revisa los términos vigentes y, si tu establecimiento lo pide, el acuerdo de tratamiento de datos (DPA)."},
   openai: {nombre: "ChatGPT (clave API de OpenAI)", corto: "ChatGPT", modelo: "gpt-6-sol", clavePh: "sk-…",
-    claveUrl: "https://platform.openai.com/api-keys", nota: "Más económico: gpt-6-luna. Si tu clave no tiene ese modelo, escribe aquí el que uses."},
+    claveUrl: "https://platform.openai.com/api-keys", nota: "Más económico: gpt-6-luna. Si tu clave no tiene ese modelo, escribe aquí el que uses.",
+    aviso: "Por API, OpenAI no usa lo enviado para entrenar sus modelos por omisión y lo conserva por un plazo limitado para control de abuso. Revisa los términos vigentes y, si tu establecimiento lo pide, el acuerdo de tratamiento de datos (DPA)."},
   gemini: {nombre: "Gemini (clave API de Google)", corto: "Gemini", modelo: "gemini-3.8-flash", clavePh: "AIza…",
     claveUrl: "https://aistudio.google.com/apikey", nota: "Más capaz: gemini-4-argon.",
     aviso: "Usa una clave con facturación activa: en el nivel gratuito, Google puede usar lo que envías para mejorar sus productos y una persona puede revisarlo."}
@@ -4496,14 +4532,64 @@ function pintarAjustes(){
   if (!P.sinClave){
     $("ajClave").value = claveDe(p); $("ajClave").placeholder = P.clavePh;
     $("ajClaveLink").href = P.claveUrl; $("ajRecordar").checked = aj.recordar;
-    $("ajProvNota").hidden = !P.aviso; $("ajProvNota").textContent = P.aviso || "";
+
   }
   $("ajFechas").value = aj.fechasSinRotulo; $("ajAvisar").checked = aj.avisar; $("ajPlazo").value = String(aj.plazoBorrado); $("ajFotos").checked = aj.conservarFotos;
+  pintarAvisoProv();
   $("ajTarea").innerHTML = '<option value="">Ninguno</option>' + TAREAS.map(t => '<option value="' + t.id + '"' + (t.id === aj.tarea ? " selected" : "") + ">" + esc(t.nombre) + "</option>").join("");
 }
+// (el aviso del proveedor, con o sin clave: qué hace con lo que se le envía)
+function pintarAvisoProv(){ const P = PROV[aj.prov]; $("ajProvNota").hidden = !P.aviso; $("ajProvNota").textContent = P.aviso || ""; pintarRegistro(); }
 function abrirAjustes(){ pintarAjustes(); $("ajustes").hidden = false; document.body.classList.add("modal-abierto"); }
 function cerrarAjustes(){ $("ajustes").hidden = true; document.body.classList.remove("modal-abierto"); aplicarModo(); }
 $("btnAjustes").addEventListener("click", abrirAjustes);
+// Aviso de privacidad (desde Ajustes o desde el pie de la página)
+function abrirPrivacidad(){ $("privacidad").hidden = false; document.body.classList.add("modal-abierto"); }
+function cerrarPrivacidad(){ $("privacidad").hidden = true; if ($("ajustes").hidden) document.body.classList.remove("modal-abierto"); }
+$("ajPrivacidad").addEventListener("click", abrirPrivacidad);
+document.querySelectorAll("[data-privacidad]").forEach(b => b.addEventListener("click", abrirPrivacidad));
+$("pvCerrar").addEventListener("click", cerrarPrivacidad);
+
+/* ===================== registro de envíos (sin datos del paciente) ===================== */
+// Para poder mostrar qué salió del dispositivo y a quién (responsabilidad proactiva): fecha, modo, destino, prompt,
+// imágenes y cuántos datos de cada tipo se ocultaron. Nunca el texto, nombres, RUT ni valores clínicos.
+const LS_REG = "velo_registro", MAX_REG = 2000;
+function leerRegistro(){ try { const r = JSON.parse(localStorage.getItem(LS_REG) || "[]"); return Array.isArray(r) ? r : []; } catch(e){ return []; } }
+const destinoDe = prov => PROV[prov] ? (PROV[prov].compartir ? "Compartido (.txt)" : PROV[prov].corto + (PROV[prov].sinClave ? " (cuenta)" : " (API)")) : String(prov);
+function registrarEnvio(modo, destino, tareaId, conteo, imagenes){
+  const ocultos = {};
+  for (const t of Anon.TIPOS) if (conteo && conteo[t] > 0) ocultos[t] = Math.floor(conteo[t]);
+  const r = leerRegistro();
+  r.push({fecha: new Date().toISOString(), modo, destino, prompt: tareaId ? nombreTarea(tareaId) : "Sin prompt", imagenes: imagenes || 0, ocultos});
+  try { localStorage.setItem(LS_REG, JSON.stringify(r.slice(-MAX_REG))); } catch(e){}
+  pintarRegistro();
+}
+function pintarRegistro(){
+  const r = leerRegistro();
+  $("ajRegistroInfo").textContent = r.length
+    ? "Registro de envíos: " + r.length + (r.length === 1 ? " envío" : " envíos") + " desde el " + new Date(r[0].fecha).toLocaleDateString("es-CL") + ". Guarda solo fecha, destino, prompt y cuántos datos se ocultaron; ningún dato del paciente."
+    : "Registro de envíos: vacío. Cada vez que algo sale del dispositivo se anota la fecha, el destino, el prompt y cuántos datos se ocultaron; ningún dato del paciente.";
+  $("ajRegistroBajar").disabled = $("ajRegistroBorrar").disabled = !r.length;
+}
+function csvRegistro(){
+  const tipos = Anon.TIPOS, cel = v => '"' + String(v).replace(/"/g, '""') + '"';
+  const filas = [["fecha", "modo", "destino", "prompt", "imagenes"].concat(tipos.map(t => "ocultos_" + t.toLowerCase()))];
+  for (const e of leerRegistro()) filas.push([e.fecha, e.modo, e.destino, e.prompt, e.imagenes].concat(tipos.map(t => (e.ocultos && e.ocultos[t]) || 0)));
+  return filas.map(f => f.map(cel).join(";")).join("\r\n");
+}
+$("ajRegistroBajar").addEventListener("click", async () => {
+  const nombre = "velo-registro-" + new Date().toISOString().slice(0, 10) + ".csv", blob = new Blob(["\ufeff" + csvRegistro()], {type: "text/csv"});
+  if (guardador){ try { await guardador.save({filename: nombre, data: blob}); } catch(e){} return; }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+});
+$("ajRegistroBorrar").addEventListener("click", () => {
+  const b = $("ajRegistroBorrar");
+  if (!b.dataset.confirmar){ b.dataset.confirmar = "1"; b.textContent = "Toca otra vez para borrar el registro"; setTimeout(() => { delete b.dataset.confirmar; b.textContent = "Borrar el registro"; }, 3500); return; }
+  delete b.dataset.confirmar; b.textContent = "Borrar el registro";
+  try { localStorage.removeItem(LS_REG); } catch(e){}
+  pintarRegistro();
+});
 $("ajCerrar").addEventListener("click", cerrarAjustes);
 $("ajAuto").addEventListener("change", () => { aj.auto = $("ajAuto").checked; guardarAjustes(); aplicarModo(); });
 $("ajProv").addEventListener("change", () => { aj.prov = $("ajProv").value; guardarAjustes(); pintarAjustes(); aplicarModo(); });
@@ -4762,7 +4848,7 @@ async function bdHacer(modo, fn){
     });
   } catch(e){ return null; }
 }
-const CAMPOS_CASO = ["id", "n", "creado", "terminado", "estado", "prov", "modelo", "tarea", "archivos", "enviado", "respuesta", "truncado", "mapa", "fechasOcultas", "residuos", "error"];
+const CAMPOS_CASO = ["id", "n", "creado", "terminado", "estado", "prov", "modelo", "tarea", "archivos", "enviado", "respuesta", "truncado", "mapa", "fechasOcultas", "residuos", "error", "conteo", "registrado"];
 function guardarCaso(c){ const r = {}; for (const k of CAMPOS_CASO) r[k] = c[k]; return bdHacer("readwrite", st => st.put(r)); }
 const borrarCasoBD = id => bdHacer("readwrite", st => st.delete(id));
 const leerCasosBD = () => bdHacer("readonly", st => st.getAll());
@@ -4813,11 +4899,12 @@ async function procesarCaso(c){
       c.archivos = aj.conservarFotos ? c.archivos.filter(a => /^image\//.test(a.type || "")) : null;
       if (c.archivos && !c.archivos.length) c.archivos = null;
       c.fechasOcultas = [...p.fechasOcultas];
-      if (p.ok){ c.mapa = Object.assign({}, p.cons.mapa); c.enviado = mensajeAuto(p.cons.salida, c.tarea, c.prov !== "compartir", lect.escrito); }
+      if (p.ok){ c.mapa = Object.assign({}, p.cons.mapa); c.conteo = Object.assign({}, p.cons.conteo); c.enviado = mensajeAuto(p.cons.salida, c.tarea, c.prov !== "compartir", lect.escrito); }
       else { c.estado = "revision"; c.residuos = [...p.residuos].map(r => ({tipo: r.tipo, texto: r.texto})); c.paso = ""; }
     }
     // Compartir: el caso queda listo para que el médico lo comparta con su app de IA (la app no envía nada)
     if (c.estado !== "revision") c.estado = c.prov === "compartir" ? "compartir" : "enviado", c.error = "", c.paso = "";
+    if (c.estado === "enviado" && !c.registrado){ registrarEnvio("automático", destinoDe(c.prov), c.tarea, c.conteo, 0); c.registrado = true; guardarCaso(c); }
     for (let i = 0; c.estado === "enviado"; i++){
       c.paso = "Esperando la respuesta de " + PROV[c.prov].corto + "…" + (i ? " (reintento " + i + " de " + REINTENTOS + ")" : ""); actualizar(c);
       try {
@@ -4976,8 +5063,8 @@ $("casos").addEventListener("pointerdown", e => { if (e.target.closest("[data-ve
 $("casos").addEventListener("click", async e => {
   const b = e.target.closest("button"); if (!b) return;
   const d = b.dataset, c = casoPorId(d.reintentar || d.copiarCaso || d.procesar || d.borrar || d.compartir || d.copiarEnviado || d.pegar || d.verRespuesta); if (!c) return;
-  if (d.compartir){ if (await compartirTexto(c.enviado, c.tarea) && c.estado === "compartir"){ c.estado = "compartido"; actualizar(c); } return; }
-  if (d.copiarEnviado){ if (await copiarTexto(c.enviado)){ toast("Copiado: pégalo en la app de IA."); if (c.estado === "compartir"){ c.estado = "compartido"; actualizar(c); } } return; }
+  if (d.compartir){ if (await compartirTexto(c.enviado, c.tarea)){ registrarEnvio("automático", "Compartido (.txt)", c.tarea, c.conteo, 0); if (c.estado === "compartir"){ c.estado = "compartido"; actualizar(c); } } return; }
+  if (d.copiarEnviado){ if (await copiarTexto(c.enviado)){ registrarEnvio("automático", "Copiado", c.tarea, c.conteo, 0); toast("Copiado: pégalo en la app de IA."); if (c.estado === "compartir"){ c.estado = "compartido"; actualizar(c); } } return; }
   if (d.pegar){
     // Primero lo copiado (el teléfono pide permiso para pegar); si no se puede, un cuadro para pegarlo a mano
     let t = "";

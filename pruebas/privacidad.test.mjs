@@ -137,3 +137,56 @@ test("fotos originales: por omisión se borran al anonimizar; con «Conservar» 
   assert.deepEqual(pg.errores, []);
   await pg.context().close();
 });
+
+/* ---------- protección de datos: aviso, avisos de cada proveedor y registro de envíos ---------- */
+test("registro de envíos: anota fecha, destino, prompt y cuántos datos se ocultaron, sin ningún dato del paciente", {skip: saltar}, async () => {
+  const pg = await abrir(AJ_CLAUDE);
+  await pg.setInputFiles("#adjuntoAuto", archivoTexto(CASO));
+  await esperarCasos(pg);
+  const reg = await pg.evaluate(() => JSON.parse(localStorage.getItem("velo_registro") || "[]"));
+  assert.equal(reg.length, 1);
+  assert.deepEqual(conDatos(JSON.stringify(reg)), [], JSON.stringify(reg));
+  assert.equal(reg[0].modo, "automático");
+  assert.equal(reg[0].destino, "Claude (API)");
+  assert.equal(reg[0].prompt, "Transcriptor de exámenes");
+  assert.ok(reg[0].ocultos.NOMBRE >= 1 && reg[0].ocultos.RUT === 1 && reg[0].ocultos.TELEFONO === 1, JSON.stringify(reg[0].ocultos));
+  // En Ajustes se ve y se descarga como CSV (también sin datos)
+  await pg.click("#btnAjustes");
+  assert.match(await pg.textContent("#ajRegistroInfo"), /1 envío/);
+  const [descarga] = await Promise.all([pg.waitForEvent("download"), pg.click("#ajRegistroBajar")]);
+  const csv = fs.readFileSync(await descarga.path(), "utf8");
+  assert.match(csv, /"fecha";"modo";"destino";"prompt";"imagenes";"ocultos_nombre"/);
+  assert.match(csv, /"automático";"Claude \(API\)";"Transcriptor de exámenes";"0"/);
+  assert.deepEqual(conDatos(csv), []);
+  // Borrar pide un segundo toque
+  await pg.click("#ajRegistroBorrar"); await pg.click("#ajRegistroBorrar");
+  assert.equal(await pg.evaluate(() => localStorage.getItem("velo_registro")), null);
+  assert.deepEqual(pg.errores, []);
+  await pg.context().close();
+});
+
+test("aviso de privacidad: se abre desde el pie y desde Ajustes, con el marco legal y qué sale del dispositivo", {skip: saltar}, async () => {
+  const pg = await abrir(AJ_CLAUDE);
+  await pg.click("#pieAutoPrivacidad");
+  assert.equal(await pg.isVisible("#privacidad"), true);
+  const t = await pg.textContent("#privacidad");
+  for (const x of ["Ley 21.719", "Ley 19.628", "Ley 20.584", "Estados Unidos", "Requiere revisión", "no es asesoría legal"]) assert.ok(t.includes(x), x);
+  await pg.click("#pvCerrar");
+  assert.equal(await pg.isVisible("#privacidad"), false);
+  await pg.click("#btnAjustes"); await pg.click("#ajPrivacidad");
+  assert.equal(await pg.isVisible("#privacidad"), true);
+  assert.deepEqual(pg.errores, []);
+  await pg.context().close();
+});
+
+test("cada proveedor avisa qué hace con lo enviado, también los que no usan clave", {skip: saltar}, async () => {
+  const pg = await abrir({auto: true, provV2: true, prov: "compartir", tarea: "exam"});
+  await pg.click("#btnAjustes");
+  assert.match(await pg.textContent("#ajProvNota"), /no use tus conversaciones para entrenar/);
+  assert.equal(await pg.isVisible("#ajProvNota"), true);
+  for (const [p, rx] of [["claude", /no se usa para entrenar/], ["openai", /no usa lo enviado para entrenar/], ["gemini", /nivel gratuito/]]){
+    await pg.selectOption("#ajProv", p);
+    assert.match(await pg.textContent("#ajProvNota"), rx, p);
+  }
+  await pg.context().close();
+});
