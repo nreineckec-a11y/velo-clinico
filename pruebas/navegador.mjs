@@ -74,12 +74,8 @@ export const estados = pg => pg.evaluate(() => [...document.querySelectorAll(".c
 export const esperar = (pg, fn, arg) => pg.waitForFunction(fn, arg, {timeout: 6 * 60 * 1000, polling: 200});
 // Espera a que todos los casos (o n de ellos) terminen: listo, error o requiere revisión
 export const esperarCasos = (pg, n) => esperar(pg, n => { const es = [...document.querySelectorAll(".caso-auto .insignia")]; return es.length >= (n || 1) && es.every(e => /Listo|Error|revisión/.test(e.textContent)); }, n);
-// Lo guardado en el dispositivo (IndexedDB), resumido
-export const guardados = pg => pg.evaluate(() => new Promise(ok => {
-  const rq = indexedDB.open("velo", 1);
-  rq.onupgradeneeded = () => { if (!rq.result.objectStoreNames.contains("casos")) rq.result.createObjectStore("casos", {keyPath: "id"}); };
-  rq.onsuccess = () => { const g = rq.result.transaction("casos").objectStore("casos").getAll(); g.onsuccess = () => ok(g.result.map(c => ({n: c.n, estado: c.estado, fotos: c.archivos ? c.archivos.length : 0, enviado: c.enviado || "", tieneRespuesta: !!c.respuesta}))); };
-}));
+// Lo guardado en el dispositivo (IndexedDB, cifrado), resumido tal como lo lee la app al volver a abrirse
+export const guardados = pg => pg.evaluate(async () => (await window.__velo.guardados()).map(({mapa, ...c}) => c));
 // Una "IA" que deja esperando las consultas hasta que se la suelte
 export function compuerta(){
   let soltar; const p = new Promise(r => { soltar = r; });
