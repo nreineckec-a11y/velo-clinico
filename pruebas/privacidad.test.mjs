@@ -61,7 +61,7 @@ test("al terminar con la app en segundo plano: aviso «Análisis listo», sin ni
   const g = compuerta();
   const pg = await abrir(AJ_CLAUDE, () => g.espera(), AVISOS_SIMULADOS);
   await pg.setInputFiles("#adjuntoAuto", archivoTexto(CASO));
-  await esperar(pg, () => /Enviado/.test(document.querySelector(".caso-auto .insignia").textContent));
+  await esperar(pg, () => { const e = document.querySelector(".caso-auto .insignia"); return e && /Enviado/.test(e.textContent); });
   await pg.evaluate(() => window.__ocultar());   // el médico bloqueó el teléfono o pasó a otra app
   g.soltar();
   await esperarCasos(pg);

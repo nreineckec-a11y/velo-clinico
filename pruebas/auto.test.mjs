@@ -5,7 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import {cargarMotor} from "./cargar-motor.mjs";
-import {saltar, abrir, AJ_CLAUDE} from "./navegador.mjs";
+import {saltar, abrir, AJ_CLAUDE, RAIZ_APP as RAIZ} from "./navegador.mjs";
 
 const Anon = cargarMotor();
 const verdad = JSON.parse(fs.readFileSync(new URL("./epicrisis/verdad.json", import.meta.url), "utf8"));
@@ -250,5 +250,91 @@ test("arrastrar un archivo a la página crea un caso del modo automático, sin a
   await soltar(pg, "body", [{nombre: "planilla.xlsx", tipo: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", texto: "x"}]);
   await pg.waitForTimeout(300);
   assert.equal(await pg.locator(".caso-auto").count(), 1);
+  await pg.context().close();
+});
+
+/* ---------- varias fotos seguidas y aviso de foto borrosa ---------- */
+// Pinta en el «video» de la cámara simulada la página, nítida o desenfocada
+const ENFOCAR = blur => { window.__desenfoque = blur; };
+// (la cámara simulada dibuja la foto con el desenfoque que pida la prueba)
+const camaraBorrosa = () => {
+  const orig = CanvasRenderingContext2D.prototype.drawImage;
+  CanvasRenderingContext2D.prototype.drawImage = function(img, ...r){
+    if (img instanceof HTMLVideoElement && window.__desenfoque){ this.filter = "blur(" + window.__desenfoque + "px)"; orig.call(this, img, ...r); this.filter = "none"; return; }
+    return orig.call(this, img, ...r);
+  };
+};
+
+test("cámara: una foto borrosa se avisa en el momento; «Sacarla de nuevo» la descarta y «Usar igual» la suma", {skip: saltar}, async () => {
+  const pg = await abrir(AJ_CLAUDE, null, camaraBorrosa);
+  await pg.click("#btnCamara");
+  await pg.waitForFunction(() => !document.querySelector("#camDisparo").disabled);
+  await pg.evaluate(ENFOCAR, 8);
+  await pg.click("#camDisparo");
+  await pg.waitForFunction(() => !document.querySelector("#camAviso").hidden);
+  assert.match(await pg.textContent("#camAviso"), /La foto salió borrosa/);
+  assert.equal(await pg.isDisabled("#camListo"), true, "no se termina con una foto por decidir");
+  await pg.click("#camRepetir");
+  assert.equal(await pg.isHidden("#camAviso"), true);
+  assert.equal(await pg.locator("#camMini img").count(), 0, "la borrosa se descartó");
+  // Nítidas: se suman sin aviso, varias seguidas
+  await pg.evaluate(ENFOCAR, 0);
+  await pg.click("#camDisparo"); await pg.waitForFunction(() => document.querySelectorAll("#camMini img").length === 1);
+  await pg.click("#camDisparo"); await pg.waitForFunction(() => document.querySelectorAll("#camMini img").length === 2);
+  assert.equal(await pg.isHidden("#camAviso"), true);
+  // Otra borrosa, que se usa igual: queda marcada
+  await pg.evaluate(ENFOCAR, 8);
+  await pg.click("#camDisparo"); await pg.waitForFunction(() => !document.querySelector("#camAviso").hidden);
+  await pg.click("#camUsar");
+  await pg.waitForFunction(() => document.querySelectorAll("#camMini img").length === 3);
+  assert.equal(await pg.locator("#camMini .cam-mini.borrosa").count(), 1);
+  // Se puede quitar una página ya sacada
+  await pg.click('#camMini [data-quitar-pagina="2"]');
+  assert.equal(await pg.locator("#camMini img").count(), 2);
+  assert.match(await pg.textContent("#camListo"), /Listo \(2\)/);
+  await pg.click("#camListo");
+  await esperarCaso(pg);
+  assert.equal(await estadoCaso(pg), "Listo");
+  assert.equal(pg.envios.length, 1, "las páginas van juntas, en un solo envío");
+  assert.deepEqual(pg.errores, []);
+  await pg.context().close();
+});
+
+test("cámara del sistema (sin permiso en la app): las fotos se suman hasta «Listo» y se envían como un solo caso", {skip: saltar}, async () => {
+  const pg = await abrir(AJ_CLAUDE, null, () => { navigator.mediaDevices.getUserMedia = async () => { throw new Error("sin permiso"); }; });
+  await pg.click("#btnCamara");
+  await pg.waitForFunction(() => !document.querySelector("#camSistema").hidden);
+  const foto = n => RAIZ + "pruebas/epicrisis/pagina" + n + ".jpg";
+  await pg.setInputFiles("#camaraNativa", foto(1));
+  await pg.waitForFunction(() => document.querySelectorAll("#camMini img").length === 1);
+  assert.equal(await pg.isHidden("#camara"), false, "la cámara sigue abierta para la siguiente página");
+  assert.equal(pg.envios.length, 0, "nada se envía antes de «Listo»");
+  await pg.setInputFiles("#camaraNativa", foto(2));
+  await pg.waitForFunction(() => document.querySelectorAll("#camMini img").length === 2);
+  await pg.click("#camListo");
+  await esperarCaso(pg);
+  assert.equal(await pg.locator(".caso-auto").count(), 1, "un solo caso con las 2 páginas");
+  assert.equal(pg.envios.length, 1);
+  assert.deepEqual(pg.errores, []);
+  await pg.context().close();
+});
+
+test("fotos de la galería: si una salió borrosa, el caso espera («Procesar igual» o borrar) antes de leerla", {skip: saltar}, async () => {
+  const pg = await abrir(AJ_CLAUDE);
+  // Una foto desenfocada hecha en la página a partir de una de prueba
+  const borrosa = await pg.evaluate(async () => {
+    const im = new Image(); im.src = "/pruebas/epicrisis/pagina1.jpg"; await im.decode();
+    const c = document.createElement("canvas"); c.width = im.naturalWidth; c.height = im.naturalHeight;
+    const g = c.getContext("2d"); g.filter = "blur(8px)"; g.drawImage(im, 0, 0);
+    const b = await new Promise(r => c.toBlob(r, "image/jpeg", 0.9));
+    return [...new Uint8Array(await b.arrayBuffer())];
+  });
+  await pg.setInputFiles("#adjuntoAuto", [{name: "a.jpg", mimeType: "image/jpeg", buffer: fs.readFileSync(RAIZ + "pruebas/epicrisis/pagina2.jpg")}, {name: "b.jpg", mimeType: "image/jpeg", buffer: Buffer.from(borrosa)}]);
+  await pg.waitForFunction(() => /salió borrosa/.test((document.querySelector(".caso-auto") || {}).textContent || ""));
+  assert.match(await pg.textContent(".caso-auto"), /La foto 2 salió borrosa/);
+  assert.equal(pg.envios.length, 0, "no se lee ni se envía hasta decidir");
+  await pg.click(".caso-auto [data-procesar]");
+  await esperarCaso(pg);
+  assert.equal(pg.envios.length, 1);
   await pg.context().close();
 });

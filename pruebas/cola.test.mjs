@@ -48,7 +48,7 @@ test("si la app se cierra esperando la respuesta, al abrirla de nuevo se envía 
   const g = compuerta();
   const pg = await abrir(AJ_CLAUDE, (e, n) => n === 1 ? g.espera() : RESPUESTA_CLAUDE);
   await pg.setInputFiles("#adjuntoAuto", archivoTexto(CASO));
-  await esperar(pg, () => /Enviado/.test(document.querySelector(".caso-auto .insignia").textContent));
+  await esperar(pg, () => { const e = document.querySelector(".caso-auto .insignia"); return e && /Enviado/.test(e.textContent); });
   const antes = await guardados(pg);
   assert.equal(antes.length, 1); assert.equal(antes[0].estado, "enviado"); assert.equal(antes[0].fotos, 0);
   await pg.reload();                       // iOS cerró la app
@@ -65,7 +65,7 @@ test("si la app se cierra esperando la respuesta, al abrirla de nuevo se envía 
 test("si la app se cierra mientras lee la foto, al abrirla se vuelve a leer desde la foto guardada", {skip: saltar}, async () => {
   const pg = await abrir(AJ_CLAUDE);
   await pg.setInputFiles("#adjuntoAuto", RAIZ_APP + "pruebas/epicrisis/pagina1.jpg");
-  await esperar(pg, () => /Procesando/.test(document.querySelector(".caso-auto .insignia").textContent));
+  await esperar(pg, () => { const e = document.querySelector(".caso-auto .insignia"); return e && /Procesando/.test(e.textContent); });
   const antes = await guardados(pg);
   assert.equal(antes[0].estado, "procesando"); assert.equal(antes[0].fotos, 1, "la foto debe quedar guardada hasta leerla");
   await pg.reload();
@@ -82,7 +82,7 @@ test("se puede fotografiar el siguiente caso mientras el anterior se procesa", {
   const g = compuerta();
   const pg = await abrir(AJ_CLAUDE, () => g.espera());
   await pg.setInputFiles("#adjuntoAuto", archivoTexto(CASO));
-  await esperar(pg, () => /Enviado/.test(document.querySelector(".caso-auto .insignia").textContent));
+  await esperar(pg, () => { const e = document.querySelector(".caso-auto .insignia"); return e && /Enviado/.test(e.textContent); });
   await pg.click("#btnCamara");
   await esperar(pg, () => !document.querySelector("#camDisparo").disabled);
   await pg.click("#camDisparo");
