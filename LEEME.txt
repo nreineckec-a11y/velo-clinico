@@ -75,6 +75,16 @@ Validador final (antes de copiar o enviar):
 - Si aun así queda algo, el caso queda en "Requiere revisión": no se copia ni se envía hasta que lo ocultes a mano o corrijas el texto.
 - Las imágenes no pasan por este validador: las revisa la comprobación de la foto ya tapada.
 
+Documentos Word y archivos de los proyectos:
+- Cuando un prompt pide un Word (Interconsulta: Telecardiología, Televascular y consultoría COSAM; Certificados), la IA escribe el documento entre «<<<WORD nombre.docx>>>» y «<<<FIN WORD>>>», con títulos, párrafos, negritas y tablas. La app muestra «Descargar Word» y arma el .docx en el dispositivo, con los datos reales en lugar de los marcadores. La IA nunca los ve. Funciona con todos los proveedores: también al pegar la respuesta de «Compartir».
+- Archivos de los proyectos (Ajustes): como el conocimiento de un proyecto de Claude. Por cada prompt se agregan documentos de referencia (mapa de derivación en Excel, plantillas Word, PDF o texto) y su texto va con el prompt.
+  - Se guardan solo en el dispositivo.
+  - Un archivo con un RUT no se acepta; si trae teléfonos o correos, la app avisa para que se revise que sean del establecimiento.
+  - En un Excel, las columnas con el mismo valor en todas las filas se dicen una vez, para acortar el texto.
+- Interconsulta: el prompt es el del proyecto «Generador de interconsultas APS». La versión privada del médico trae incluidos el mapa de derivación del CESFAM y el de Telecardiología; en la app pública se agregan en Ajustes (no se publican en el repositorio).
+- El documento se rearma con el contenido de la plantilla (filas, columnas, encabezados), no con su diseño (logos, tipografía).
+- El mapa de derivación completo agrega unos 250 mil caracteres a cada interconsulta. Con una clave API eso se paga en cada consulta; con la cuenta de Claude o «Compartir» no tiene costo extra.
+
 Protección de datos (Ley 19.628 vigente; Ley 21.719 desde el 1 de diciembre de 2026, con un proyecto en el Senado para postergarla a 2027; Ley 20.584 para la ficha clínica):
 - Lo que hace la app (medidas técnicas):
   - Minimización: anonimiza en el dispositivo y envía solo el texto anonimizado y el prompt. En el modo manual con Claude también van los recortes de imagen, con los datos tapados.
