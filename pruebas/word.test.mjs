@@ -112,3 +112,72 @@ test("modo manual: con la respuesta pegada, «Descargar Word» también arma el 
   assert.deepEqual(pg.errores, []);
   await pg.context().close();
 });
+
+/* ---------- plantillas Word del médico: la app rellena el archivo original ---------- */
+import zlib from "node:zlib";
+// Un .docx como los de Word: con sus partes comprimidas (deflate)
+function zipComprimido(partes){
+  const loc = [], cen = []; let off = 0;
+  for (const [n, txt] of partes){
+    const nb = Buffer.from(n), datos = Buffer.from(txt), comp = zlib.deflateRawSync(datos), crc = zlib.crc32(datos);
+    const lh = Buffer.alloc(30); lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(8, 8); lh.writeUInt32LE(crc, 14);
+    lh.writeUInt32LE(comp.length, 18); lh.writeUInt32LE(datos.length, 22); lh.writeUInt16LE(nb.length, 26);
+    const ch = Buffer.alloc(46); ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt16LE(8, 10); ch.writeUInt32LE(crc, 16);
+    ch.writeUInt32LE(comp.length, 20); ch.writeUInt32LE(datos.length, 24); ch.writeUInt16LE(nb.length, 28); ch.writeUInt32LE(off, 42);
+    loc.push(lh, nb, comp); cen.push(ch, nb); off += 30 + nb.length + comp.length;
+  }
+  const c = Buffer.concat(cen), fin = Buffer.alloc(22); fin.writeUInt32LE(0x06054b50, 0); fin.writeUInt16LE(partes.length, 8); fin.writeUInt16LE(partes.length, 10); fin.writeUInt32LE(c.length, 12); fin.writeUInt32LE(off, 16);
+  return new Uint8Array(Buffer.concat([...loc, c, fin]));
+}
+// Una plantilla FICTICIA: identificación en una tabla, un campo en una frase, uno solo en su párrafo y uno partido en
+// trozos (como queda en Word al escribir), dentro de un .docx comprimido
+function plantillaFicticia(){
+  const u8 = Anon.crearDocx("# FICHA FICTICIA DE PRUEBA\n| Nombre: {{NOMBRE}} |\n|---|\n| Edad: {{EDAD: años}} |\nMotivo: {{MOTIVO}}\n{{DESCRIPCION: anamnesis y luego la historia}}\nDiagnóstico: {{DIAG**NOS**TICO}}\nFirma del profesional");
+  return zipComprimido([...Anon.entradasZip(u8)].map(e => [e.nombre, deZip(u8, e.nombre)]));
+}
+
+test("plantillas: detecta los campos con su indicación, también uno partido en trozos, en un .docx comprimido", async () => {
+  const c = [...await Anon.camposPlantilla(plantillaFicticia())].map(x => x.id + (x.indicacion ? ":" + x.indicacion : ""));
+  assert.deepEqual(c, ["NOMBRE", "EDAD:años", "MOTIVO", "DESCRIPCION:anamnesis y luego la historia", "DIAGNOSTICO"]);
+});
+
+test("plantillas: el bloque «| plantilla: ID» trae los campos; la app rellena el original", async () => {
+  const [w] = Anon.bloquesWord("<<<WORD Ficha [NOMBRE_1].docx | plantilla: Ficha ficticia>>>\n## NOMBRE\nJuan Pérez Soto\n## Edad\n67\n## DESCRIPCION\n67 años\nAM: HTA\n\nPaciente con **ánimo bajo** & insomnio.\n## DIAGNÓSTICO\nTEPT\n<<<FIN WORD>>>");
+  assert.equal(w.plantilla, "FICHA_FICTICIA");
+  assert.deepEqual(Object.keys(w.campos), ["NOMBRE", "EDAD", "DESCRIPCION", "DIAGNOSTICO"]);
+  const doc = deZip(await Anon.rellenarPlantilla(plantillaFicticia(), w.campos), "word/document.xml");
+  assert.match(doc, /FICHA FICTICIA DE PRUEBA/, "el resto de la plantilla queda igual");
+  assert.match(doc, /Nombre: Juan Pérez Soto/);
+  assert.match(doc, /Edad: 67/);
+  assert.match(doc, /Motivo: <\/w:t>/, "un campo sin valor queda vacío");
+  // El campo solo en su párrafo pasa a un párrafo por línea, con la negrita y los caracteres especiales
+  assert.match(doc, />67 años<\/w:t><\/w:r><\/w:p><w:p>(<w:pPr>[^]*?<\/w:pPr>)?<w:r>(<w:rPr>[^]*?<\/w:rPr>)?<w:t xml:space="preserve">AM: HTA</);
+  assert.match(doc, /<w:b\/>[^]*?ánimo bajo/);
+  assert.match(doc, /&amp; insomnio/);
+  assert.match(doc, /Diagnóstico: TEPT/, "el campo partido en trozos también se rellena");
+  assert.doesNotMatch(doc, /\{\{|\}\}/);
+});
+
+test("plantillas: al agregar un Word con campos se guarda como plantilla; «Descargar Word» rellena el original con los datos reales", {skip: saltar}, async () => {
+  const resp = "<<<WORD Ficha [NOMBRE_1].docx | plantilla: PLANTILLA_FICTICIA>>>\n## NOMBRE\n[NOMBRE_1]\n## EDAD\n67\n## DESCRIPCION\n67 años\n\nCuadro ansioso de 3 meses.\n## DIAGNOSTICO\nTAG\n<<<FIN WORD>>>";
+  const pg = await abrir(AJ_IC, () => ({status: 200, json: {content: [{type: "text", text: resp}], stop_reason: "end_turn"}}));
+  await pg.click("#btnAjustes"); await pg.selectOption("#ajArchTarea", "ic");
+  await pg.setInputFiles("#ajArchInput", {name: "plantilla ficticia.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", buffer: Buffer.from(plantillaFicticia())});
+  await pg.waitForFunction(() => /agregado/.test(document.querySelector("#ajArchEstado").textContent));
+  assert.match(await pg.textContent("#ajArchEstado"), /como plantilla Word con 5 campos/);
+  assert.match(await pg.textContent("#ajArchLista"), /plantilla Word/);
+  await pg.click("#ajCerrar");
+  await pg.setInputFiles("#adjuntoAuto", archivoTexto("Paciente: Juan Pérez Soto, 67 años. Ansiedad. Presentar en consultoría COSAM."));
+  await esperarCasos(pg);
+  const enviado = pg.envios[0].cuerpo.messages[0].content;
+  assert.match(enviado, /PLANTILLA WORD «plantilla ficticia\.docx» \(identificador: PLANTILLA_FICTICIA\)/);
+  assert.match(enviado, /<<<WORD plantilla ficticia\.docx \| plantilla: PLANTILLA_FICTICIA>>>\n## NOMBRE\n\(valor\)/);
+  assert.match(enviado, /- DESCRIPCION: anamnesis y luego la historia/);
+  const [d] = await Promise.all([pg.waitForEvent("download"), pg.click(".caso-auto [data-word]")]);
+  const doc = deZip(new Uint8Array(fs.readFileSync(await d.path())), "word/document.xml");
+  assert.match(doc, /FICHA FICTICIA DE PRUEBA/);
+  assert.match(doc, /Nombre: Juan Pérez Soto/, "en la plantilla van los datos reales");
+  assert.match(doc, /Cuadro ansioso de 3 meses/);
+  assert.deepEqual(pg.errores, []);
+  await pg.context().close();
+});

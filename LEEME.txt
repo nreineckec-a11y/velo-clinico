@@ -82,7 +82,12 @@ Documentos Word y archivos de los proyectos:
   - Un archivo con un RUT no se acepta; si trae teléfonos o correos, la app avisa para que se revise que sean del establecimiento.
   - En un Excel, las columnas con el mismo valor en todas las filas se dicen una vez, para acortar el texto.
 - Interconsulta: el prompt es el del proyecto «Generador de interconsultas APS». La versión privada del médico trae incluidos el mapa de derivación del CESFAM y el de Telecardiología; en la app pública se agregan en Ajustes (no se publican en el repositorio).
-- El documento se rearma con el contenido de la plantilla (filas, columnas, encabezados), no con su diseño (logos, tipografía).
+- Plantillas Word propias: un .docx con campos {{CAMPO}} o {{CAMPO: indicación}} (por ejemplo «Nombre: {{NOMBRE}}» o un párrafo con solo «{{DESCRIPCION: anamnesis y luego la historia}}») se guarda como plantilla al agregarlo en Archivos de los proyectos.
+  - La IA recibe sus campos e indicaciones y responde solo los valores, con «<<<WORD nombre.docx | plantilla: ID>>>» y «## CAMPO».
+  - La app rellena el archivo original, con su formato, logos y tablas. Un campo solo en su párrafo pasa a un párrafo por línea; uno dentro de una frase, a una línea.
+  - Si el dispositivo no tiene la plantilla, se arma un Word simple con el contenido.
+- Sin plantilla, el documento se rearma con el contenido (filas, columnas, encabezados), no con el diseño (logos, tipografía).
+- Una plantilla debe estar en blanco: nunca una ficha ya llena con datos de un paciente.
 - El mapa de derivación completo agrega unos 250 mil caracteres a cada interconsulta. Con una clave API eso se paga en cada consulta; con la cuenta de Claude o «Compartir» no tiene costo extra.
 
 Protección de datos (Ley 19.628 vigente; Ley 21.719 desde el 1 de diciembre de 2026, con un proyecto en el Senado para postergarla a 2027; Ley 20.584 para la ficha clínica):
