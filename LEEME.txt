@@ -1,7 +1,10 @@
 VELO CLÍNICO
 
 MODO AUTOMÁTICO (activado por omisión; se apaga en Ajustes)
-- Arrastras el PDF a la zona «Adjuntar PDF» (o a cualquier parte de la página) o haces clic en ella para elegirlo; varios archivos juntos son un solo caso. También sirven fotos y Word. Con «Tomar foto» sacas una o varias páginas del mismo caso y tocas «Listo».
+- Arrastras el PDF a la zona «Adjuntar PDF» (o a cualquier parte de la página) o haces clic en ella para elegirlo; varios archivos juntos son un solo caso. También sirven fotos y Word. Con «Tomar foto» sacas todas las páginas seguidas y tocas «Listo»: van juntas, como un solo documento.
+- Cada foto se revisa apenas se saca. Si salió borrosa (o no se ve texto), la app avisa en el momento: «Sacarla de nuevo» la descarta y «Usar igual» la suma marcada en rojo. Una página ya sacada se quita con la × de su miniatura. Las fotos elegidas de la galería también se revisan: si alguna salió borrosa, el caso espera («Procesar igual» o «Borrar») antes de leerla.
+- Sin permiso de cámara en la app, «Usar la cámara del sistema» saca una foto por vez, pero cada una se suma a las anteriores hasta tocar «Listo».
+- En el modo manual, «Tomar fotos» abre la misma cámara; al tocar «Listo», las fotos pasan al caso para revisarlas y taparlas.
 - También puedes escribir, pegar o dictar el caso en el cuadro «O escribe o pega el caso» y tocar «Procesar el texto» (con el micrófono del teclado del iPhone puedes dictar). Entra al mismo flujo que una foto: oculta lo personal, pasa el validador y queda para compartir o enviar. Lo que pidas («Hazme una interconsulta…») viaja con el caso. El texto escrito se borra del cuadro al procesarlo y no se conserva en el teléfono.
 - Sin tocar nada más: la app lee las páginas en el teléfono, oculta los datos personales, pasa el validador final y envía SOLO EL TEXTO anonimizado (ninguna imagen) con el prompt por defecto a la IA elegida. La respuesta aparece en «Casos» con los datos reales repuestos.
 - Cada caso guarda lo que se envió, tal cual («Ver lo enviado»), para revisarlo después.

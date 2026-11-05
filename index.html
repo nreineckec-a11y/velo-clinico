@@ -168,12 +168,18 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
 .e-listo{background:var(--accent); color:var(--accent-ink)}
 .e-revision,.e-error{background:var(--warn-bg); color:var(--err-ink); box-shadow:0 0 0 1px var(--warn-line) inset}
 .caso-auto pre.out{margin:0}
-.cam-wrap{flex:1; min-height:0; display:flex; align-items:center; justify-content:center; background:#000}
+.cam-wrap{position:relative; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; background:#000}
+.cam-aviso{position:absolute; left:12px; right:12px; bottom:12px; display:grid; gap:10px; padding:14px; border-radius:14px; background:var(--warn-bg); color:var(--warn-ink); border:2px solid var(--warn-line); font-weight:600; box-shadow:0 6px 24px rgba(0,0,0,.35)}
+.cam-aviso p{margin:0}
+.cam-mini{position:relative; flex:none}
+.cam-mini.borrosa img{outline:3px solid var(--err-ink); outline-offset:-3px}
+.cam-mini button{position:absolute; top:-6px; right:-6px; width:24px; height:24px; border-radius:50%; border:0; background:var(--ink); color:var(--bg); font:700 14px/24px var(--f-body); cursor:pointer; padding:0}
 .cam-wrap video{max-width:100%; max-height:100%; display:block}
 .cam-pie{display:flex; align-items:center; gap:12px; padding-block:12px; background:var(--surface); border-top:1px solid var(--line);
   padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px))}
 .cam-miniaturas{flex:1; min-width:0; display:flex; gap:6px; overflow-x:auto}
-.cam-miniaturas img{height:56px; border-radius:6px; border:1px solid var(--line); flex:none}
+.cam-miniaturas img{height:56px; border-radius:6px; border:1px solid var(--line); flex:none; display:block}
+.cam-miniaturas{padding-top:6px}
 .cam-disparo{flex:none; width:72px; height:72px; border-radius:50%; border:5px solid var(--accent); background:#fff; cursor:pointer}
 .cam-disparo:disabled{opacity:.4}
 .ajustes-cuerpo{flex:1; overflow:auto; display:grid; gap:10px; align-content:start; width:100%; max-width:680px; margin:0 auto; padding:16px}
@@ -229,6 +235,7 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
     <div class="chips" id="tareas" role="group" aria-label="Tarea, opcional"></div>
     <textarea id="entrada" placeholder="Pega o dicta el caso y lo que necesitas.&#10;&#10;Ej.: «Hazme una interconsulta a urología. Paciente Juan Pérez, RUT 12.345.678-5, 67 años…»"></textarea>
     <div class="fila">
+      <button class="btn sec" id="btnFotosManual" type="button">Tomar fotos</button>
       <button class="btn sec" id="btnAdjuntar" type="button">Adjuntar foto, PDF o Word</button>
       <button class="btn-texto" id="btnEjemplo" type="button">Probar con un caso ficticio</button>
       <button class="btn sec chico" id="btnOcultarSel" type="button" hidden>Ocultar lo seleccionado</button>
@@ -304,13 +311,18 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
 
 <div class="modal" id="camara" role="dialog" aria-modal="true" aria-labelledby="camTitulo" hidden>
   <div class="modal-bar">
-    <strong id="camTitulo" style="font-family:var(--f-display); font-size:18px">Fotografiar examen</strong>
+    <strong id="camTitulo" style="font-family:var(--f-display); font-size:18px">Tomar fotos</strong>
     <span class="sep"></span>
     <button class="btn sec chico" id="camCancelar" type="button">Cancelar</button>
     <button class="btn chico" id="camListo" type="button" disabled>Listo</button>
   </div>
   <p class="modal-info" id="camInfo" role="status" aria-live="polite">Abriendo la cámara…</p>
-  <div class="cam-wrap"><video id="camVideo" playsinline muted autoplay></video></div>
+  <div class="cam-wrap"><video id="camVideo" playsinline muted autoplay></video>
+    <div class="cam-aviso" id="camAviso" role="alert" hidden>
+      <p id="camAvisoTxt"></p>
+      <div class="fila"><button class="btn chico" id="camRepetir" type="button">Sacarla de nuevo</button><button class="btn sec chico" id="camUsar" type="button">Usar igual</button></div>
+    </div>
+  </div>
   <div class="cam-pie">
     <div class="cam-miniaturas" id="camMini"></div>
     <label class="btn sec chico" for="camaraNativa" id="camSistema" hidden>Usar la cámara del sistema</label>
@@ -3342,6 +3354,30 @@ function zipSinComprimir(archivos){
   return out;
 }
 
+/* ---------- nitidez de una foto: avisar en el momento si salió borrosa ---------- */
+// gris: la imagen en escala de grises (Uint8, ancho w, alto h), reducida a unos 1000 px de lado mayor. Se mide la energía
+// de los bordes (varianza del laplaciano) en cuadros de 32 px y se toma la de los cuadros con más detalle (percentil 90):
+// así una hoja con mucho margen en blanco no parece borrosa. Devuelve {nitidez, contraste} (contraste: desviación del
+// gris en esos cuadros; muy bajo, no hay texto que medir).
+function nitidez(gris, w, h){
+  const T = 32, vals = [], cons = [];
+  for (let ty = 1; ty + T < h - 1; ty += T) for (let tx = 1; tx + T < w - 1; tx += T){
+    let s = 0, s2 = 0, g = 0, g2 = 0, n = 0;
+    for (let y = ty; y < ty + T; y++){
+      const o = y * w;
+      for (let x = tx; x < tx + T; x++){
+        const i = o + x, v = gris[i], l = 4 * v - gris[i - 1] - gris[i + 1] - gris[i - w] - gris[i + w];
+        s += l; s2 += l * l; g += v; g2 += v * v; n++;
+      }
+    }
+    vals.push(s2 / n - (s / n) ** 2); cons.push(Math.sqrt(Math.max(0, g2 / n - (g / n) ** 2)));
+  }
+  if (!vals.length) return {nitidez: 0, contraste: 0};
+  const orden = vals.map((v, i) => [v, cons[i]]).sort((a, b) => a[0] - b[0]), k = Math.floor(orden.length * 0.9);
+  const altos = orden.slice(k);
+  return {nitidez: orden[Math.min(k, orden.length - 1)][0], contraste: altos.reduce((a, x) => a + x[1], 0) / altos.length};
+}
+
 /* ---------- autoprueba: casos FICTICIOS para comprobar en el propio dispositivo que el anonimizador funciona ---------- */
 // (14 quinquies d) de la Ley 21.719: verificar regularmente la eficacia de las medidas). Son los formatos de las fugas
 // reales reportadas (pruebas/fugas.test.mjs) y algunos documentos sintéticos; ningún dato es real.
@@ -3379,7 +3415,7 @@ function autoprueba(){
   return {total: AUTOPRUEBA.length, fallas};
 }
 
-root.Anon = {analizar, construir, restaurar, revisar, validar, proteger, protegerAuto, nombresDe, dvRut, pendienteTexto, filasOcr, zonasATapar, margenesCajas, codigosEnImagen, analizarHoja, detectarHoja, contornoHoja, blanquearFuera, curvaContraste, homografia, aplicarH, tamanoCuad, rectificar, lecturaDeHoja, contornoCaja, ajustarAltoPalabras, unirLecturas, reducir, entidadesDe, coincidencias, distancia, fusionarCajas, dentroCuad, agrandarCuad, aplanarLuz, blanquearFondo, pendienteEn, enderezar, cajaOriginal, textoItemsPdf, leerDocx, plegar, cuentaDigitos, normalizarRut, esCodigo, LISTA_BLANCA, AUTOPRUEBA, autoprueba, leerXlsx, bloquesWord, crearDocx, entradasZip, camposPlantilla, textoPlantilla, rellenarPlantilla, idCampo, RX_WORD_INI, RX_WORD_FIN, TIPOS, ETIQUETA, OPC_DEF};
+root.Anon = {analizar, construir, restaurar, revisar, validar, proteger, protegerAuto, nombresDe, dvRut, pendienteTexto, filasOcr, zonasATapar, margenesCajas, codigosEnImagen, analizarHoja, detectarHoja, contornoHoja, blanquearFuera, curvaContraste, homografia, aplicarH, tamanoCuad, rectificar, lecturaDeHoja, contornoCaja, ajustarAltoPalabras, unirLecturas, reducir, entidadesDe, coincidencias, distancia, fusionarCajas, dentroCuad, agrandarCuad, aplanarLuz, blanquearFondo, pendienteEn, enderezar, cajaOriginal, textoItemsPdf, leerDocx, plegar, cuentaDigitos, normalizarRut, esCodigo, LISTA_BLANCA, AUTOPRUEBA, autoprueba, leerXlsx, bloquesWord, crearDocx, entradasZip, camposPlantilla, textoPlantilla, rellenarPlantilla, idCampo, nitidez, RX_WORD_INI, RX_WORD_FIN, TIPOS, ETIQUETA, OPC_DEF};
 })(typeof window !== "undefined" ? window : globalThis);
 </script>
 <script>
@@ -3938,7 +3974,8 @@ function agregarImagen(blob){
     im.onload = () => {
       const k = Math.min(1, MAXL / Math.max(im.naturalWidth, im.naturalHeight));
       const f = {img:im, src, w:Math.max(1, Math.round(im.naturalWidth * k)), h:Math.max(1, Math.round(im.naturalHeight * k)),
-        pts:null, blob:null, url:null, pendiente:true, tapas:[], ocr:"espera", ocrN:0};
+        pts:null, blob:null, url:null, pendiente:true, tapas:[], ocr:"espera", ocrN:0, borrosa: revisarNitidez(im, im.naturalWidth, im.naturalHeight).borrosa};
+      if (f.borrosa) toast("Una foto salió borrosa: conviene sacarla de nuevo.");
       caso.fotos.push(f);
       encolarLectura(f);
       res(true);
@@ -4436,6 +4473,7 @@ function pintarFotos(){
       : f.verif === "comprobando" ? "Comprobando que no quede nada a la vista…"
       : "Lista para enviar" + (n ? " · " + n + (n === 1 ? " dato tapado" : " datos tapados") : "") + (f.verif === "ok" ? " · comprobada" : f.verif === "aceptada" ? " · enviada tal como la dejaste" : "");
     return '<div class="foto-item' + (f.pendiente ? " pend" : "") + (fugas ? " fuga" : "") + '"><img src="' + esc(f.url || f.src) + '" alt="Imagen ' + (i + 1) + '">' +
+      (f.borrosa ? '<span class="estado aviso">⚠ Salió borrosa: conviene quitarla y sacarla de nuevo</span>' : "") +
       '<span class="nota">' + info + '</span><div class="fila">' +
       '<button class="btn sec chico" type="button" data-tachar="' + i + '">Revisar</button>' +
       '<button class="btn sec chico" type="button" data-quitar="' + i + '">Quitar</button></div></div>';
@@ -4946,7 +4984,7 @@ function cerrarAjustes(){ $("ajustes").hidden = true; document.body.classList.re
 $("btnAjustes").addEventListener("click", abrirAjustes);
 // Aviso de privacidad (desde Ajustes o desde el pie de la página), con su versión y fecha y el responsable que se
 // configuró en Ajustes (Ley 21.719, art. 14 ter a, b y c)
-const VERSION_APP = "velo-v14";
+const VERSION_APP = "velo-v15";
 const AVISO = {version: "2.0", fecha: "4 de noviembre de 2026"};
 function abrirPrivacidad(){
   $("pvVersion").textContent = "Versión " + AVISO.version + " del " + AVISO.fecha + " · " + VERSION_APP;
@@ -5461,7 +5499,7 @@ async function bdHacer(modo, fn, almacen){
     });
   } catch(e){ return null; }
 }
-const CAMPOS_CASO = ["id", "n", "creado", "terminado", "estado", "prov", "modelo", "tarea", "archivos", "enviado", "respuesta", "truncado", "mapa", "fechasOcultas", "residuos", "error", "conteo", "registrado"];
+const CAMPOS_CASO = ["id", "n", "creado", "terminado", "estado", "prov", "modelo", "tarea", "archivos", "enviado", "respuesta", "truncado", "mapa", "fechasOcultas", "residuos", "error", "conteo", "registrado", "avisoNitidez"];
 
 /* ---------- cifrado de los casos guardados (Ley 21.719, art. 14 quinquies a: seudonimización y cifrado) ---------- */
 // Una llave AES-GCM de 256 bits creada en este dispositivo, no exportable (ni la propia página puede leerla), guardada
@@ -5529,8 +5567,19 @@ function crearCaso(estado, archivos){
   aplicarModo(); actualizar(c);
   return c;
 }
-function nuevoCasoAuto(archivos){
+async function nuevoCasoAuto(archivos){
   archivos = [...archivos].filter(Boolean); if (!archivos.length) return;
+  // (fotos de la galería: si alguna salió borrosa, el caso espera a que el médico decida, antes de leerla)
+  const borrosas = [];
+  for (let i = 0; i < archivos.length; i++){ const r = await nitidezDeArchivo(archivos[i]); if (r && r.borrosa) borrosas.push(i + 1); }
+  if (borrosas.length){
+    const c = crearCaso("capturando", archivos);
+    c.avisoNitidez = (borrosas.length === 1 ? (archivos.length === 1 ? "La foto salió borrosa" : "La foto " + borrosas[0] + " salió borrosa") : "Las fotos " + borrosas.join(", ") + " salieron borrosas") +
+      ": la IA no podrá leerla bien. Bórralo y sácalas de nuevo, o procésalo igual.";
+    actualizar(c);
+    if (navigator.vibrate) try { navigator.vibrate(200); } catch(e){}
+    return;
+  }
   contarUso(aj.tarea);
   procesarCaso(crearCaso("procesando", archivos));
 }
@@ -5692,8 +5741,9 @@ function pintarCasos(){
     if (c.paso) h += '<p class="estado cargando">' + esc(c.paso) + "</p>";
     if (c.estado === "capturando"){
       const n = (c.archivos || []).length, enCamara = camCaso === c;
-      h += '<p class="nota">' + (n === 1 ? "1 página capturada" : n + " páginas capturadas") + (enCamara ? "." : ": la captura se interrumpió.") + "</p>";
-      if (!enCamara) h += '<div class="acciones">' + (n ? boton("procesar", c, "Procesar " + (n === 1 ? "la página" : "las " + n + " páginas")) : "") + borrar(c) + "</div>";
+      if (c.avisoNitidez) h += '<p class="estado aviso">' + esc(c.avisoNitidez) + "</p>";
+      else h += '<p class="nota">' + (n === 1 ? "1 página capturada" : n + " páginas capturadas") + (enCamara ? "." : ": la captura se interrumpió.") + "</p>";
+      if (!enCamara) h += '<div class="acciones">' + (n ? boton("procesar", c, c.avisoNitidez ? "Procesar igual" : "Procesar " + (n === 1 ? "la página" : "las " + n + " páginas")) : "") + borrar(c) + "</div>";
     }
     if (c.estado === "revision") h += '<p class="estado error">' + esc(MSG_REVISION_AUTO(c.residuos)) + "</p>";
     if (c.estado === "error") h += '<p class="estado error">' + esc(c.error) + "</p>";
@@ -5766,19 +5816,23 @@ $("casos").addEventListener("click", async e => {
 // (los detalles abiertos siguen abiertos al repintar)
 $("casos").addEventListener("toggle", e => { const d = e.target; if (d.dataset && d.dataset.ver){ const c = casoPorId(d.dataset.ver); if (c) c.verEnviado = d.open; } }, true);
 
-/* ---------- la cámara: varias páginas de un mismo caso y luego «Listo» ---------- */
-// Las páginas se guardan a medida que se sacan (caso "capturando"): si la app se cierra a mitad, no se pierden
-let camStream = null, camCaso = null, camUrls = [];
-const camPaginas = () => (camCaso && camCaso.archivos) || [];
+/* ---------- la cámara: varias páginas seguidas y luego «Listo» ---------- */
+// Modo automático: las páginas se guardan a medida que se sacan (caso "capturando"): si la app se cierra a mitad, no se
+// pierden. Modo manual: al tocar «Listo» las fotos pasan al caso, como si se hubieran adjuntado.
+// Cada foto se revisa apenas se saca: si salió borrosa, la app avisa en el momento para sacarla de nuevo.
+let camStream = null, camCaso = null, camUrls = [], camDestino = "auto", camManual = [], camBorrosas = [], camPendientes = [];
+const camPaginas = () => camDestino === "manual" ? camManual : ((camCaso && camCaso.archivos) || []);
 function pintarCam(){
-  $("camMini").innerHTML = camUrls.map((u, i) => '<img src="' + esc(u) + '" alt="Página ' + (i + 1) + '">').join("");
+  $("camMini").innerHTML = camUrls.map((u, i) => '<span class="cam-mini' + (camBorrosas[i] ? " borrosa" : "") + '"><img src="' + esc(u) + '" alt="Página ' + (i + 1) + (camBorrosas[i] ? " (borrosa)" : "") + '">' +
+    '<button type="button" data-quitar-pagina="' + i + '" aria-label="Quitar la página ' + (i + 1) + '">×</button></span>').join("");
   const n = camPaginas().length;
-  $("camListo").disabled = !n;
+  $("camListo").disabled = !n || camPendientes.length > 0;
   $("camListo").textContent = n ? "Listo (" + n + ")" : "Listo";
   $("camDisparo").disabled = !camStream || n >= MAX_FOTOS;
 }
-async function abrirCamara(){
-  camCaso = null; camUrls = []; $("camSistema").hidden = true;
+async function abrirCamara(destino){
+  camDestino = destino === "manual" ? "manual" : "auto";
+  camCaso = null; camUrls = []; camManual = []; camBorrosas = []; camPendientes = []; $("camSistema").hidden = true; $("camAviso").hidden = true;
   $("camara").hidden = false; document.body.classList.add("modal-abierto");
   $("camInfo").textContent = "Abriendo la cámara…"; pintarCam();
   try {
@@ -5787,11 +5841,12 @@ async function abrirCamara(){
     if ($("camara").hidden){ detenerCamara(); return; }
     $("camVideo").srcObject = camStream;
     try { await $("camVideo").play(); } catch(e){}
-    $("camInfo").textContent = "Encuadra la hoja completa, con buena luz, y toca el botón. Puedes sacar varias páginas del mismo caso; al terminar, «Listo».";
+    $("camInfo").textContent = "Encuadra la hoja completa, con buena luz, y toca el botón. Saca todas las páginas seguidas; al terminar, «Listo».";
   } catch(e){
     camStream = null;
-    // Sin permiso de cámara aquí (por ejemplo, dentro de otra app): la cámara del sistema, una foto por vez
-    $("camInfo").textContent = "No se pudo abrir la cámara en la app. Usa la cámara del sistema o «Adjuntar PDF».";
+    // Sin permiso de cámara aquí (por ejemplo, dentro de otra app): la cámara del sistema, una foto por vez, pero sin
+    // salir de aquí: cada foto se suma a las anteriores hasta tocar «Listo»
+    $("camInfo").textContent = "No se pudo abrir la cámara en la app. Usa «Usar la cámara del sistema» para cada página (se van sumando) y al terminar, «Listo».";
     $("camSistema").hidden = false;
   }
   pintarCam();
@@ -5802,34 +5857,90 @@ function detenerCamara(){
 }
 // Cierra la cámara; devuelve el caso que se estaba capturando (si había)
 function cerrarCamara(){
-  detenerCamara(); camUrls.forEach(u => URL.revokeObjectURL(u)); camUrls = [];
-  $("camara").hidden = true; document.body.classList.remove("modal-abierto");
+  detenerCamara(); camUrls.forEach(u => URL.revokeObjectURL(u)); camUrls = []; camBorrosas = []; camPendientes = [];
+  $("camara").hidden = true; $("camAviso").hidden = true; document.body.classList.remove("modal-abierto");
   const c = camCaso; camCaso = null; pintarCasos();
   return c;
 }
-async function capturar(){
-  const v = $("camVideo"); if (!camStream || !v.videoWidth || camPaginas().length >= MAX_FOTOS) return;
-  const cv = document.createElement("canvas"); cv.width = v.videoWidth; cv.height = v.videoHeight;
-  cv.getContext("2d").drawImage(v, 0, 0);
-  const b = await new Promise(r => cv.toBlob(r, "image/jpeg", 0.92)); cv.width = cv.height = 0;
-  if (!b) return;
-  if (!camCaso) camCaso = crearCaso("capturando", []);
-  camCaso.archivos.push(b); camUrls.push(URL.createObjectURL(b));
-  actualizar(camCaso);
+// ¿Salió borrosa? (img: un canvas, un video o una imagen ya decodificada). Se mide a unos 1000 px de lado mayor.
+const UMBRAL_NITIDEZ = 200;
+function revisarNitidez(img, w, h){
+  try {
+    const k = Math.min(1, 1000 / Math.max(w, h)), W = Math.max(64, Math.round(w * k)), H = Math.max(64, Math.round(h * k));
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const g = c.getContext("2d", {willReadFrequently: true}); g.fillStyle = "#fff"; g.fillRect(0, 0, W, H); g.drawImage(img, 0, 0, W, H);
+    const r = Anon.nitidez(grisDe(g, W, H), W, H); c.width = c.height = 0;
+    return {borrosa: r.contraste >= 6 && r.nitidez < UMBRAL_NITIDEZ, sinTexto: r.contraste < 6, valor: r.nitidez};
+  } catch(e){ return {borrosa: false, sinTexto: false, valor: null}; }
+}
+async function nitidezDeArchivo(f){
+  if (!/^image\//.test(f.type || "")) return null;
+  try { const bm = await createImageBitmap(f); const r = revisarNitidez(bm, bm.width, bm.height); bm.close && bm.close(); return r; } catch(e){ return null; }
+}
+function agregarPagina(b, borrosa){
+  if (camDestino === "manual") camManual.push(b);
+  else { if (!camCaso) camCaso = crearCaso("capturando", []); camCaso.archivos.push(b); actualizar(camCaso); }
+  camUrls.push(URL.createObjectURL(b)); camBorrosas.push(!!borrosa);
   const n = camPaginas().length;
   $("camInfo").textContent = (n === 1 ? "1 página" : n + " páginas") + ". Saca la siguiente o toca «Listo».";
   pintarCam();
 }
-$("btnCamara").addEventListener("click", () => { pedirPermisoAvisos(); abrirCamara(); });
+// La siguiente foto borrosa por decidir: «Sacarla de nuevo» (se descarta) o «Usar igual»
+function mostrarPendiente(){
+  const p = camPendientes[0];
+  $("camAviso").hidden = !p;
+  if (p){
+    $("camAvisoTxt").textContent = (p.sinTexto ? "No se ve texto en la foto" : "La foto salió borrosa") + ": la IA no podrá leerla bien. Sácala de nuevo con el teléfono firme, buena luz y la hoja completa.";
+    if (navigator.vibrate) try { navigator.vibrate(200); } catch(e){}
+  }
+  pintarCam();
+}
+async function capturar(){
+  const v = $("camVideo"); if (!camStream || !v.videoWidth || camPaginas().length >= MAX_FOTOS) return;
+  // (sacar otra foto mientras se avisa de una borrosa es sacarla de nuevo)
+  camPendientes = [];
+  const cv = document.createElement("canvas"); cv.width = v.videoWidth; cv.height = v.videoHeight;
+  cv.getContext("2d").drawImage(v, 0, 0);
+  const r = revisarNitidez(cv, cv.width, cv.height);
+  const b = await new Promise(res => cv.toBlob(res, "image/jpeg", 0.92)); cv.width = cv.height = 0;
+  if (!b) return;
+  if (r.borrosa || r.sinTexto){ camPendientes.push({b, sinTexto: r.sinTexto}); mostrarPendiente(); return; }
+  $("camAviso").hidden = true;
+  agregarPagina(b, false);
+}
+$("camRepetir").addEventListener("click", () => { camPendientes.shift(); mostrarPendiente(); if (!camPendientes.length) $("camInfo").textContent = "Vuelve a sacar la página."; });
+$("camUsar").addEventListener("click", () => { const p = camPendientes.shift(); if (p) agregarPagina(p.b, true); mostrarPendiente(); });
+// Quitar una página ya sacada (por ejemplo, la que salió borrosa)
+$("camMini").addEventListener("click", e => {
+  const b = e.target.closest("[data-quitar-pagina]"); if (!b) return;
+  const i = +b.dataset.quitarPagina, lista = camPaginas(); if (!lista[i]) return;
+  lista.splice(i, 1); URL.revokeObjectURL(camUrls[i]); camUrls.splice(i, 1); camBorrosas.splice(i, 1);
+  if (camCaso) actualizar(camCaso);
+  $("camInfo").textContent = "Página " + (i + 1) + " quitada. " + (lista.length ? lista.length + (lista.length === 1 ? " página." : " páginas.") : "Saca la primera página.");
+  pintarCam();
+});
+function terminarCamara(){
+  const fotos = camDestino === "manual" ? camManual.slice() : null, c = cerrarCamara();
+  if (fotos){ if (fotos.length) procesarArchivos(fotos.map((b, i) => new File([b], "foto-" + (i + 1) + ".jpg", {type: "image/jpeg"}))); return; }
+  if (c){ contarUso(c.tarea); c.estado = "procesando"; actualizar(c); procesarCaso(c); }
+}
+$("btnCamara").addEventListener("click", () => { pedirPermisoAvisos(); abrirCamara("auto"); });
+$("btnFotosManual").addEventListener("click", () => abrirCamara("manual"));
 $("camDisparo").addEventListener("click", capturar);
-$("camCancelar").addEventListener("click", () => { const c = cerrarCamara(); if (c) quitarCaso(c); });
-$("camListo").addEventListener("click", () => { const c = cerrarCamara(); if (c){ contarUso(c.tarea); c.estado = "procesando"; actualizar(c); procesarCaso(c); } });
-$("camaraNativa").addEventListener("change", e => {
+$("camCancelar").addEventListener("click", () => { const manual = camDestino === "manual", c = cerrarCamara(); if (c && !manual) quitarCaso(c); });
+$("camListo").addEventListener("click", terminarCamara);
+$("camaraNativa").addEventListener("change", async e => {
   const l = [...(e.target.files || [])]; e.target.value = "";
-  // (desde la cámara de la app sin permiso: las fotos del sistema se suman a las que ya hubiera)
-  const c = $("camara").hidden ? null : cerrarCamara();
-  if (c){ c.archivos = c.archivos.concat(l); contarUso(c.tarea); c.estado = "procesando"; actualizar(c); procesarCaso(c); }
-  else nuevoCasoAuto(l);
+  // Desde la cámara de la app sin permiso: cada foto del sistema se revisa y se suma a las anteriores (sin cerrar la
+  // cámara); se termina con «Listo»
+  if ($("camara").hidden){ nuevoCasoAuto(l); return; }
+  for (const f of l){
+    if (camPaginas().length + camPendientes.length >= MAX_FOTOS) break;
+    const r = await nitidezDeArchivo(f);
+    if (r && (r.borrosa || r.sinTexto)) camPendientes.push({b: f, sinTexto: r.sinTexto});
+    else agregarPagina(f, false);
+  }
+  mostrarPendiente();
 });
 $("btnElegirAuto").addEventListener("click", () => { pedirPermisoAvisos(); $("adjuntoAuto").click(); });
 // En una pantalla táctil no se arrastra: se toca
