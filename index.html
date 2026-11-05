@@ -3163,15 +3163,100 @@ function bloquesWord(texto){
   for (let i = 0; i < L.length; i++){
     const m = L[i].match(RX_WORD_INI); if (!m) continue;
     let j = i + 1; while (j < L.length && !RX_WORD_FIN.test(L[j])) j++;
+    // «nombre.docx | plantilla: ID»: el documento se arma rellenando esa plantilla del proyecto
+    const [cab, ...resto] = m[1].split("|"), mp = resto.join("|").match(/plantilla\s*:\s*([^|]+?)\s*$/iu);
     // (el nombre del archivo, sin marcadores ni caracteres que no admite un archivo)
-    let nombre = m[1].replace(/\[[^\]]*\]/g, "").replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, " ").trim().replace(/\.docx$/i, "").replace(/^[-_. ]+|[-_. ]+$/g, "");
+    let nombre = cab.replace(/\[[^\]]*\]/g, "").replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, " ").trim().replace(/\.docx$/i, "").replace(/^[-_. ]+|[-_. ]+$/g, "");
     // (sin tildes: algunos navegadores descartan un nombre de archivo con letras fuera del ASCII)
     nombre = nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7e]/g, "");
-    out.push({nombre: (nombre || "documento") + ".docx", contenido: L.slice(i + 1, j).join("\n").replace(/^\n+|\n+$/g, "")});
+    const contenido = L.slice(i + 1, j).join("\n").replace(/^\n+|\n+$/g, "");
+    out.push({nombre: (nombre || "documento") + ".docx", contenido, plantilla: mp ? idCampo(mp[1]) : null, campos: mp ? camposDeBloque(contenido) : null});
     i = j;
   }
   return out;
 }
+// Los valores de los campos de un bloque que rellena una plantilla: «## CAMPO» y debajo su valor (una o más líneas)
+const idCampo = t => plegar(String(t)).toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+function camposDeBloque(contenido){
+  const out = {}; let k = null, buf = [];
+  const cerrar = () => { if (k) out[k] = buf.join("\n").replace(/^\s*\n|\n\s*$/g, "").replace(/^\n+|\n+$/g, ""); };
+  for (const l of String(contenido).split("\n")){
+    const m = l.match(/^\s*##\s+(.+?)\s*:?\s*$/);
+    if (m){ cerrar(); k = idCampo(m[1]); buf = []; } else if (k) buf.push(l);
+  }
+  cerrar();
+  return out;
+}
+
+/* ---------- plantillas Word del médico: campos {{CAMPO}} o {{CAMPO: indicación}} que la app rellena ---------- */
+const RX_CAMPO = /\{\{\s*([\p{L}\p{N}_ ]+?)\s*(?::\s*([^{}]*?))?\s*\}\}/gu;
+const desXml = t => t.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+const aXml = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const textoPar = p => desXml([...p.matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g)].map(m => m[1]).join(""));
+const partesConCampos = n => /^word\/(document|header\d*|footer\d*)\.xml$/.test(n);
+// Un párrafo cuyo campo quedó partido en varios trozos (Word lo hace al escribir) se rehace en un solo trozo
+function unirCampos(p){
+  const t = textoPar(p); RX_CAMPO.lastIndex = 0;
+  const campos = t.match(RX_CAMPO) || [];
+  if (campos.every(c => p.includes(aXml(c)))) return p;
+  const abre = p.match(/^<w:p(?:\s[^>]*)?>/)[0], ppr = (p.match(/<w:pPr>[\s\S]*?<\/w:pPr>/) || [""])[0];
+  const rpr = (p.match(/<w:r(?:\s[^>]*)?>\s*(<w:rPr>[\s\S]*?<\/w:rPr>)/) || ["", ""])[1];
+  return abre + ppr + "<w:r>" + rpr + '<w:t xml:space="preserve">' + aXml(t) + "</w:t></w:r></w:p>";
+}
+async function partesDocx(u8){
+  const out = new Map();
+  for (const e of entradasZip(u8)) out.set(e.nombre, await datosZip(u8, e));
+  return out;
+}
+// Los campos de una plantilla: [{id, indicacion}]
+async function camposPlantilla(buf){
+  const partes = await partesDocx(new Uint8Array(buf)), dec = new TextDecoder(), vistos = new Map();
+  for (const [n, d] of partes){
+    if (!partesConCampos(n)) continue;
+    for (const p of dec.decode(d).match(/<w:p[ >][\s\S]*?<\/w:p>/g) || []){
+      RX_CAMPO.lastIndex = 0; let m;
+      const t = textoPar(p);
+      while ((m = RX_CAMPO.exec(t))){ const id = idCampo(m[1]); if (!vistos.has(id)) vistos.set(id, (m[2] || "").trim()); }
+    }
+  }
+  return [...vistos].map(([id, indicacion]) => ({id, indicacion}));
+}
+// El texto de la plantilla, con sus campos, para que la IA la conozca
+async function textoPlantilla(buf){
+  const partes = await partesDocx(new Uint8Array(buf)), dec = new TextDecoder(), out = [];
+  for (const [n, d] of partes) if (partesConCampos(n)) for (const p of dec.decode(d).match(/<w:p[ >][\s\S]*?<\/w:p>/g) || []){ const t = textoPar(p).trim(); if (t) out.push(t); }
+  return out.join("\n");
+}
+// Rellena la plantilla original con los valores {CAMPO: texto}: un campo solo en su párrafo se reemplaza por un párrafo
+// por línea (con el mismo formato; **negrita** se respeta); un campo dentro de una frase, por su valor en una línea. Los
+// campos sin valor quedan vacíos. Devuelve los bytes del .docx (con su formato, logos y tablas).
+async function rellenarPlantilla(buf, valores){
+  const partes = await partesDocx(new Uint8Array(buf)), dec = new TextDecoder(), enc = new TextEncoder();
+  const val = {}; for (const k of Object.keys(valores || {})) val[idCampo(k)] = String(valores[k] == null ? "" : valores[k]);
+  const runs = (rpr, linea) => linea.split(/(\*\*[^*]+\*\*)/).filter(Boolean).map(seg => {
+    const neg = /^\*\*.+\*\*$/.test(seg), t = neg ? seg.slice(2, -2) : seg;
+    const r = neg ? (rpr ? rpr.replace("<w:rPr>", "<w:rPr><w:b/>") : "<w:rPr><w:b/></w:rPr>") : rpr;
+    return "<w:r>" + r + '<w:t xml:space="preserve">' + aXml(t) + "</w:t></w:r>";
+  }).join("");
+  for (const [n, d] of partes){
+    if (!partesConCampos(n)) continue;
+    const xml = dec.decode(d).replace(/<w:p[ >][\s\S]*?<\/w:p>/g, p0 => {
+      if (!textoPar(p0).includes("{{")) return p0;
+      const p = unirCampos(p0), t = textoPar(p).trim();
+      RX_CAMPO.lastIndex = 0; const solo = t.match(/^\{\{[^{}]*\}\}$/) && t.match(RX_CAMPO);
+      if (solo){
+        RX_CAMPO.lastIndex = 0; const id = idCampo(RX_CAMPO.exec(t)[1]);
+        const abre = p.match(/^<w:p(?:\s[^>]*)?>/)[0].replace(/\sw14:(?:paraId|textId)="[^"]*"/g, ""), ppr = (p.match(/<w:pPr>[\s\S]*?<\/w:pPr>/) || [""])[0];
+        const rpr = (p.match(/<w:r(?:\s[^>]*)?>\s*(<w:rPr>[\s\S]*?<\/w:rPr>)/) || ["", ""])[1];
+        return (val[id] || "").split("\n").map(l => abre + ppr + runs(rpr, l) + "</w:p>").join("");
+      }
+      return p.replace(/(<w:t(?:\s[^>]*)?>)([^<]*)(<\/w:t>)/g, (m, a, txt, c) => a + aXml(desXml(txt).replace(RX_CAMPO, (x, k) => (val[idCampo(k)] || "").replace(/\s*\n\s*/g, "; "))) + c);
+    });
+    partes.set(n, enc.encode(xml));
+  }
+  return zipSinComprimir([...partes]);
+}
+
 // Crea un .docx a partir de un texto con formato simple: «# » título, «## »/«### » subtítulos, una línea por párrafo,
 // «- » viñetas, **negrita** y tablas Markdown (| a | b |, con la fila de encabezado seguida de |---|---|). Devuelve los
 // bytes del archivo (Uint8Array). Todo se arma en el dispositivo.
@@ -3294,7 +3379,7 @@ function autoprueba(){
   return {total: AUTOPRUEBA.length, fallas};
 }
 
-root.Anon = {analizar, construir, restaurar, revisar, validar, proteger, protegerAuto, nombresDe, dvRut, pendienteTexto, filasOcr, zonasATapar, margenesCajas, codigosEnImagen, analizarHoja, detectarHoja, contornoHoja, blanquearFuera, curvaContraste, homografia, aplicarH, tamanoCuad, rectificar, lecturaDeHoja, contornoCaja, ajustarAltoPalabras, unirLecturas, reducir, entidadesDe, coincidencias, distancia, fusionarCajas, dentroCuad, agrandarCuad, aplanarLuz, blanquearFondo, pendienteEn, enderezar, cajaOriginal, textoItemsPdf, leerDocx, plegar, cuentaDigitos, normalizarRut, esCodigo, LISTA_BLANCA, AUTOPRUEBA, autoprueba, leerXlsx, bloquesWord, crearDocx, entradasZip, RX_WORD_INI, RX_WORD_FIN, TIPOS, ETIQUETA, OPC_DEF};
+root.Anon = {analizar, construir, restaurar, revisar, validar, proteger, protegerAuto, nombresDe, dvRut, pendienteTexto, filasOcr, zonasATapar, margenesCajas, codigosEnImagen, analizarHoja, detectarHoja, contornoHoja, blanquearFuera, curvaContraste, homografia, aplicarH, tamanoCuad, rectificar, lecturaDeHoja, contornoCaja, ajustarAltoPalabras, unirLecturas, reducir, entidadesDe, coincidencias, distancia, fusionarCajas, dentroCuad, agrandarCuad, aplanarLuz, blanquearFondo, pendienteEn, enderezar, cajaOriginal, textoItemsPdf, leerDocx, plegar, cuentaDigitos, normalizarRut, esCodigo, LISTA_BLANCA, AUTOPRUEBA, autoprueba, leerXlsx, bloquesWord, crearDocx, entradasZip, camposPlantilla, textoPlantilla, rellenarPlantilla, idCampo, RX_WORD_INI, RX_WORD_FIN, TIPOS, ETIQUETA, OPC_DEF};
 })(typeof window !== "undefined" ? window : globalThis);
 </script>
 <script>
@@ -4861,7 +4946,7 @@ function cerrarAjustes(){ $("ajustes").hidden = true; document.body.classList.re
 $("btnAjustes").addEventListener("click", abrirAjustes);
 // Aviso de privacidad (desde Ajustes o desde el pie de la página), con su versión y fecha y el responsable que se
 // configuró en Ajustes (Ley 21.719, art. 14 ter a, b y c)
-const VERSION_APP = "velo-v13";
+const VERSION_APP = "velo-v14";
 const AVISO = {version: "2.0", fecha: "4 de noviembre de 2026"};
 function abrirPrivacidad(){
   $("pvVersion").textContent = "Versión " + AVISO.version + " del " + AVISO.fecha + " · " + VERSION_APP;
@@ -4885,10 +4970,32 @@ $("pvCerrar").addEventListener("click", cerrarPrivacidad);
 /* ===================== documentos Word: los arma la app con los datos reales ===================== */
 // El bloque «<<<WORD …>>>» de la respuesta, con los marcadores ya reemplazados por los datos reales, pasa a .docx en
 // el dispositivo (la IA nunca ve esos datos)
-function bajarWord(w, mapa){
+// Si el bloque dice «plantilla: ID» y el proyecto tiene esa plantilla, se rellena el archivo original (con su formato y
+// logos); si no, se arma un Word simple con el contenido.
+const TIPO_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const deB64 = b => Uint8Array.from(atob(b), c => c.charCodeAt(0));
+function plantillaPorId(id){
+  const a = ARCHIVOS_FIJOS.concat(archivosProyecto).find(x => x.plantilla && x.plantilla.id === id);
+  return a ? (a.plantilla.b64 ? deB64(a.plantilla.b64) : new Uint8Array(a.plantilla.bytes)) : null;
+}
+async function bajarWord(w, mapa){
   if (!w) return;
-  const texto = Anon.restaurar(w.contenido, mapa || {}).salida;
-  descargar(w.nombre, new Blob([Anon.crearDocx(texto)], {type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}));
+  const real = t => Anon.restaurar(t, mapa || {}).salida, pl = w.plantilla && plantillaPorId(w.plantilla);
+  if (pl){
+    try {
+      const valores = {}; for (const k of Object.keys(w.campos || {})) valores[k] = real(w.campos[k]);
+      descargar(w.nombre, new Blob([await Anon.rellenarPlantilla(pl, valores)], {type: TIPO_DOCX})); return;
+    } catch(e){ toast("No se pudo rellenar la plantilla: se armó un Word simple con el contenido."); }
+  } else if (w.plantilla) toast("Este dispositivo no tiene la plantilla «" + w.plantilla + "» (Ajustes → Archivos de los proyectos): se armó un Word simple.");
+  descargar(w.nombre, new Blob([Anon.crearDocx(real(w.contenido))], {type: TIPO_DOCX}));
+}
+// Lo que se le dice a la IA de una plantilla con campos: cómo rellenarla y su texto
+function descripcionPlantilla(nombre, id, campos, texto){
+  const base = nombre.replace(/\.docx$/i, "");
+  return "PLANTILLA WORD «" + nombre + "» (identificador: " + id + "). La app rellena el archivo original del médico, con su formato, logos y tablas: no escribas la plantilla completa, solo el valor de cada campo, con este bloque:\n" +
+    "<<<WORD " + base + ".docx | plantilla: " + id + ">>>\n" + campos.map(c => "## " + c.id + "\n(valor)").join("\n") + "\n<<<FIN WORD>>>\n" +
+    "Cada valor puede tener varias líneas (una por párrafo) y **negrita**. Un campo sin dato en el texto: «no consignado».\nCampos:\n" +
+    campos.map(c => "- " + c.id + (c.indicacion ? ": " + c.indicacion : "")).join("\n") + "\nTexto de la plantilla (los campos van entre {{ }}):\n" + texto;
 }
 
 /* ===================== archivos de los proyectos (como el conocimiento de un proyecto de Claude) ===================== */
@@ -4910,7 +5017,7 @@ function pintarArchivosProyecto(){
   sel.innerHTML = TAREAS.map(t => '<option value="' + t.id + '"' + (t.id === id ? " selected" : "") + ">" + esc(t.nombre) + " (" + archivosDe(t.id).length + ")</option>").join("");
   const as = archivosDe(sel.value);
   $("ajArchLista").innerHTML = as.length ? as.map(a => '<div class="fila" style="justify-content:space-between"><span><b>' + esc(a.nombre) + "</b> · " +
-      Math.round(a.texto.length / 1000) + " mil caracteres" + (a.fijo ? " · incluido en esta versión" : "") + "</span>" +
+      (a.plantilla ? "plantilla Word" : Math.round(a.texto.length / 1000) + " mil caracteres") + (a.fijo ? " · incluido en esta versión" : "") + "</span>" +
       (a.fijo ? "" : '<button class="btn-texto quitar" type="button" data-quitar-arch="' + esc(a.id) + '">Quitar</button>') + "</div>").join("")
     : '<p class="nota" style="margin:0">Este prompt no tiene archivos.</p>';
 }
@@ -4943,8 +5050,17 @@ $("ajArchInput").addEventListener("change", async e => {
       const datos = Anon.validar(texto, {});
       if (datos.some(r => r.tipo === "RUT")) throw new Error("trae un RUT («" + recortar(datos.find(r => r.tipo === "RUT").texto, 16) + "»): un archivo del proyecto no debe tener datos de personas");
       const avisoContacto = datos.some(r => r.tipo === "TELEFONO" || r.tipo === "CORREO");
-      await bdHacer("readwrite", st => st.put({id: Date.now() + "-" + Math.random().toString(36).slice(2, 7), tarea, nombre: String(f.name || "archivo").slice(0, 120), texto, fecha: new Date().toISOString()}), BD.proyecto);
-      msgs.push("«" + f.name + "» agregado" + (avisoContacto ? " (trae teléfonos o correos: revisa que sean del establecimiento, no de pacientes)" : "") + ".");
+      const reg = {id: Date.now() + "-" + Math.random().toString(36).slice(2, 7), tarea, nombre: String(f.name || "archivo").slice(0, 120), texto, fecha: new Date().toISOString()};
+      // (un Word con campos {{CAMPO}} es una plantilla: la app la rellena al descargar)
+      if (/\.docx$/i.test(f.name || "")){
+        const buf = await f.arrayBuffer(), campos = await Anon.camposPlantilla(buf);
+        if (campos.length){
+          const id = Anon.idCampo(reg.nombre.replace(/\.docx$/i, "")) || "PLANTILLA";
+          reg.plantilla = {id, bytes: buf}; reg.texto = descripcionPlantilla(reg.nombre, id, campos, await Anon.textoPlantilla(buf));
+        }
+      }
+      await bdHacer("readwrite", st => st.put(reg), BD.proyecto);
+      msgs.push("«" + f.name + "» agregado" + (reg.plantilla ? " como plantilla Word con " + reg.texto.match(/^- /gm).length + " campos" : "") + (avisoContacto ? " (trae teléfonos o correos: revisa que sean del establecimiento, no de pacientes)" : "") + ".");
     } catch(err){ msgs.push("«" + f.name + "» no se agregó: " + ((err && err.message) || "error") + "."); }
   }
   await cargarArchivosProyecto();
