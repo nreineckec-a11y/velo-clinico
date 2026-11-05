@@ -8,7 +8,7 @@ export function cargarMotor(ruta){
   const html = readFileSync(archivo, "utf8");
   const m = html.match(/<script id="motor">([\s\S]*?)<\/script>/);
   if (!m) throw new Error("No se encontró <script id=\"motor\"> en " + archivo);
-  const ctx = {globalThis: {}};
+  const ctx = {globalThis: {}, TextEncoder, TextDecoder};
   ctx.globalThis = ctx;
   vm.createContext(ctx);
   vm.runInContext(m[1], ctx);
