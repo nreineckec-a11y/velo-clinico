@@ -338,3 +338,46 @@ test("fotos de la galería: si una salió borrosa, el caso espera («Procesar ig
   assert.equal(pg.envios.length, 1);
   await pg.context().close();
 });
+
+test("nitidez: avisa apenas la foto sale más suave que una legible (desenfocada o movida), aunque tenga ruido de cámara", {skip: saltar}, async () => {
+  const pg = await abrir(AJ_CLAUDE);
+  const r = await pg.evaluate(async () => {
+    // Ruido de cámara (como en una foto real con poca luz) y la revisión de la app
+    const revisar = c => {
+      const g = c.getContext("2d"), d = g.getImageData(0, 0, c.width, c.height);
+      for (let i = 0; i < d.data.length; i += 4){ const z = (Math.random() + Math.random() + Math.random() - 1.5) * 12; d.data[i] += z; d.data[i + 1] += z; d.data[i + 2] += z; }
+      g.putImageData(d, 0, 0);
+      return window.__velo.revisarNitidez(c, c.width, c.height).borrosa;
+    };
+    const copia = (src, blur, mov) => {
+      const c = document.createElement("canvas"); c.width = src.width || src.naturalWidth; c.height = src.height || src.naturalHeight; const g = c.getContext("2d");
+      g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
+      if (mov){ g.globalAlpha = 1 / 6; for (let i = 0; i < 6; i++) g.drawImage(src, i * mov / 5, i * mov / 10); g.globalAlpha = 1; }
+      else { g.filter = blur ? "blur(" + blur + "px)" : "none"; g.drawImage(src, 0, 0); g.filter = "none"; }
+      return c;
+    };
+    // Una hoja nítida, con texto de 22 y de 30 px, girada sobre un fondo
+    const hoja = fsz => {
+      const W = 1800, H = 2400, h0 = document.createElement("canvas"); h0.width = W; h0.height = H; const g = h0.getContext("2d");
+      g.fillStyle = "#fbfaf7"; g.fillRect(0, 0, W, H); g.fillStyle = "#1c1c1c"; g.font = fsz + "px 'DejaVu Sans', sans-serif"; g.textBaseline = "top";
+      for (let i = 0; i < 40; i++) g.fillText("Hemoglobina 12,8 g/dL   Creatinina 1,1 mg/dL   Paciente con control " + i, 110, 110 + i * fsz * 1.65);
+      const c = document.createElement("canvas"); c.width = W + 300; c.height = H + 300; const f = c.getContext("2d");
+      f.fillStyle = "#6a635c"; f.fillRect(0, 0, c.width, c.height); f.translate(c.width / 2, c.height / 2); f.rotate(0.03); f.drawImage(h0, -W / 2, -H / 2);
+      return c;
+    };
+    const out = {};
+    for (const fsz of [22, 30]){ const h = hoja(fsz); out["hoja" + fsz] = {nitida: revisar(copia(h)), desenfocada: revisar(copia(h, 2.4)), movida: revisar(copia(h, 0, 12))}; }
+    // Las fotos de las pruebas: algo suaves pero legibles; con un desenfoque más, ya no
+    for (const n of [1, 2, 3, 4]){
+      const im = new Image(); im.src = "/pruebas/epicrisis/pagina" + n + ".jpg"; await im.decode();
+      out["prueba" + n] = {nitida: revisar(copia(im)), desenfocada: revisar(copia(im, 2)), movida: revisar(copia(im, 0, 12))};
+    }
+    return out;
+  });
+  for (const [k, v] of Object.entries(r)){
+    assert.equal(v.nitida, false, k + ": una foto legible no debe dar aviso");
+    assert.equal(v.desenfocada, true, k + ": una foto desenfocada debe dar aviso");
+    assert.equal(v.movida, true, k + ": una foto movida debe dar aviso");
+  }
+  await pg.context().close();
+});
