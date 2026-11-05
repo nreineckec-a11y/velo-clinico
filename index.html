@@ -3355,27 +3355,37 @@ function zipSinComprimir(archivos){
 }
 
 /* ---------- nitidez de una foto: avisar en el momento si salió borrosa ---------- */
-// gris: la imagen en escala de grises (Uint8, ancho w, alto h), reducida a unos 1000 px de lado mayor. Se mide la energía
-// de los bordes (varianza del laplaciano) en cuadros de 32 px y se toma la de los cuadros con más detalle (percentil 90):
-// así una hoja con mucho margen en blanco no parece borrosa. Devuelve {nitidez, contraste} (contraste: desviación del
-// gris en esos cuadros; muy bajo, no hay texto que medir).
+// gris: la imagen en escala de grises (Uint8, ancho w, alto h), reducida a unos 1600 px de lado mayor. Se mide el ancho
+// de los bordes de las letras (método de Marziliano): en cada borde fuerte (un salto de 70 o más niveles de gris), cuántos
+// píxeles hay entre el mínimo y el máximo del perfil, en filas y en columnas, sobre la imagen suavizada (3x3) para que el
+// ruido de la cámara no cuente. Una foto nítida tiene bordes de unos 4 px; una desenfocada o movida, de 7 o más. No
+// depende del tamaño de la letra ni de cuánto texto hay. Devuelve {ancho: el promedio de la mitad central, bordes:
+// cuántos bordes fuertes, tenues: cuántos bordes con poco contraste (lo que queda de las letras en una foto muy borrosa)}.
 function nitidez(gris, w, h){
-  const T = 32, vals = [], cons = [];
-  for (let ty = 1; ty + T < h - 1; ty += T) for (let tx = 1; tx + T < w - 1; tx += T){
-    let s = 0, s2 = 0, g = 0, g2 = 0, n = 0;
-    for (let y = ty; y < ty + T; y++){
-      const o = y * w;
-      for (let x = tx; x < tx + T; x++){
-        const i = o + x, v = gris[i], l = 4 * v - gris[i - 1] - gris[i + 1] - gris[i - w] - gris[i + w];
-        s += l; s2 += l * l; g += v; g2 += v * v; n++;
-      }
-    }
-    vals.push(s2 / n - (s / n) ** 2); cons.push(Math.sqrt(Math.max(0, g2 / n - (g / n) ** 2)));
+  const s = new Float32Array(w * h);
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++){
+    const i = y * w + x;
+    s[i] = (gris[i - w - 1] + gris[i - w] + gris[i - w + 1] + gris[i - 1] + gris[i] + gris[i + 1] + gris[i + w - 1] + gris[i + w] + gris[i + w + 1]) / 9;
   }
-  if (!vals.length) return {nitidez: 0, contraste: 0};
-  const orden = vals.map((v, i) => [v, cons[i]]).sort((a, b) => a[0] - b[0]), k = Math.floor(orden.length * 0.9);
-  const altos = orden.slice(k);
-  return {nitidez: orden[Math.min(k, orden.length - 1)][0], contraste: altos.reduce((a, x) => a + x[1], 0) / altos.length};
+  const anchos = []; let tenues = 0;
+  // (filas para los bordes verticales y columnas para los horizontales; una de cada 3)
+  for (const [paso, largo, otro] of [[1, w, h], [w, h, w]]){
+    for (let a = 4; a < otro - 4; a += 3) for (let b = 4; b < largo - 4; b++){
+      const i = paso === 1 ? a * w + b : b * w + a, gr = s[i + paso] - s[i - paso], ag = Math.abs(gr);
+      // (solo en el punto de mayor pendiente del borde)
+      if (ag < 8 || ag < Math.abs(s[i] - s[i - 2 * paso]) || ag < Math.abs(s[i + 2 * paso] - s[i])) continue;
+      const sube = gr > 0; let l = i, r = i, n = 0;
+      while (n < 20 && (sube ? s[l - paso] < s[l] : s[l - paso] > s[l])){ l -= paso; n++; }
+      n = 0; while (n < 20 && (sube ? s[r + paso] > s[r] : s[r + paso] < s[r])){ r += paso; n++; }
+      const salto = Math.abs(s[r] - s[l]);
+      if (salto >= 70 && ag >= 24) anchos.push((r - l) / paso);
+      else if (salto >= 25) tenues++;
+    }
+  }
+  if (!anchos.length) return {ancho: 0, bordes: 0, tenues};
+  anchos.sort((x, y) => x - y);
+  const q = anchos.slice(anchos.length >> 2, Math.max((anchos.length >> 2) + 1, (anchos.length * 3) >> 2));
+  return {ancho: q.reduce((x, y) => x + y, 0) / q.length, bordes: anchos.length, tenues};
 }
 
 /* ---------- autoprueba: casos FICTICIOS para comprobar en el propio dispositivo que el anonimizador funciona ---------- */
@@ -4984,7 +4994,7 @@ function cerrarAjustes(){ $("ajustes").hidden = true; document.body.classList.re
 $("btnAjustes").addEventListener("click", abrirAjustes);
 // Aviso de privacidad (desde Ajustes o desde el pie de la página), con su versión y fecha y el responsable que se
 // configuró en Ajustes (Ley 21.719, art. 14 ter a, b y c)
-const VERSION_APP = "velo-v15";
+const VERSION_APP = "velo-v16";
 const AVISO = {version: "2.0", fecha: "4 de noviembre de 2026"};
 function abrirPrivacidad(){
   $("pvVersion").textContent = "Versión " + AVISO.version + " del " + AVISO.fecha + " · " + VERSION_APP;
@@ -5707,6 +5717,7 @@ function limpiarVencidos(){
 setInterval(limpiarVencidos, 60 * 1000);
 if (window.__velo){
   window.__velo.limpiar = limpiarVencidos;
+  window.__velo.revisarNitidez = (img, w, h) => revisarNitidez(img, w, h);
   // Lo guardado en el dispositivo: descifrado por la app (resumido) y tal como queda en IndexedDB
   window.__velo.guardados = async () => { await Promise.all([...colaBD.values()]); return (await leerCasosBD()).map(c => ({n: c.n, estado: c.estado, fotos: c.archivos ? c.archivos.length : 0, enviado: c.enviado || "", tieneRespuesta: !!c.respuesta, mapa: c.mapa})); };
   window.__velo.crudos = async () => { await Promise.all([...colaBD.values()]); return bdHacer("readonly", st => st.getAll()); };
@@ -5862,15 +5873,19 @@ function cerrarCamara(){
   const c = camCaso; camCaso = null; pintarCasos();
   return c;
 }
-// ¿Salió borrosa? (img: un canvas, un video o una imagen ya decodificada). Se mide a unos 1000 px de lado mayor.
-const UMBRAL_NITIDEZ = 200;
+// ¿Salió borrosa? (img: un canvas, un video o una imagen ya decodificada). Se mide a unos 1600 px de lado mayor.
+// Ancho de borde a partir del cual se avisa (con fotos de prueba: nítidas 3,7–4,8 px; las de las pruebas, algo suaves
+// pero legibles, 6,0–7,2; con 2,4 px de desenfoque 9,5–10,2; movidas 8 px 7,0–8,2), con o sin ruido de cámara
+const UMBRAL_NITIDEZ = 7.3;
 function revisarNitidez(img, w, h){
   try {
-    const k = Math.min(1, 1000 / Math.max(w, h)), W = Math.max(64, Math.round(w * k)), H = Math.max(64, Math.round(h * k));
+    const k = Math.min(1, 1600 / Math.max(w, h)), W = Math.max(64, Math.round(w * k)), H = Math.max(64, Math.round(h * k));
     const c = document.createElement("canvas"); c.width = W; c.height = H;
     const g = c.getContext("2d", {willReadFrequently: true}); g.fillStyle = "#fff"; g.fillRect(0, 0, W, H); g.drawImage(img, 0, 0, W, H);
     const r = Anon.nitidez(grisDe(g, W, H), W, H); c.width = c.height = 0;
-    return {borrosa: r.contraste >= 6 && r.nitidez < UMBRAL_NITIDEZ, sinTexto: r.contraste < 6, valor: r.nitidez};
+    // (sin bordes fuertes: si quedan bordes tenues, las letras se borronearon; si tampoco, no hay texto en la foto)
+    const sinTexto = r.bordes < 50 && r.tenues < 50;
+    return {borrosa: !sinTexto && (r.bordes < 50 || r.ancho >= UMBRAL_NITIDEZ), sinTexto, valor: r.ancho};
   } catch(e){ return {borrosa: false, sinTexto: false, valor: null}; }
 }
 async function nitidezDeArchivo(f){
