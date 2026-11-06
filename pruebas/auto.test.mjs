@@ -93,6 +93,51 @@ test("con un residuo que no se puede ocultar, el caso queda en «Requiere revisi
   await pg.context().close();
 });
 
+test("«Revisar en el modo manual»: un caso en revisión pasa al modo manual con sus mismas fotos y texto, sin sacarlas de nuevo", {skip: saltar}, async () => {
+  const pg = await abrir(AJ_CLAUDE);
+  await pg.evaluate(() => { window.__velo.rondas = 0; });
+  await pg.setInputFiles("#adjuntoAuto", [{name: "caso.txt", mimeType: "text/plain", buffer: Buffer.from("Documento del paciente 09 8765 4321, control el 12/03/2025.")},
+    {name: "p.jpg", mimeType: "image/jpeg", buffer: fs.readFileSync(RAIZ + "pruebas/epicrisis/pagina2.jpg")}]);
+  await esperarCaso(pg);
+  assert.equal(await estadoCaso(pg), "Requiere revisión");
+  assert.match(await pg.textContent("#casos"), /Revisar en el modo manual/);
+  // Los archivos quedan guardados (cifrados) para pasarlos al manual
+  assert.equal((await pg.evaluate(async () => (await window.__velo.guardados())[0].fotos)), 2);
+  // Con un caso empezado en el modo manual, pide un segundo toque (lo reemplaza)
+  await pg.evaluate(() => { document.querySelector("#entrada").value = "otro caso a medias"; });
+  await pg.click("[data-manual]");
+  assert.match(await pg.textContent("[data-manual]"), /Toca otra vez/);
+  assert.equal(await pg.isVisible("#bloqueAuto"), true, "el primer toque no cambia nada");
+  await pg.click("[data-manual]");
+  await pg.waitForFunction(() => document.querySelectorAll("#fotos .foto-item").length === 1);
+  assert.equal(await pg.isVisible("#bloqueAuto"), false, "quedó en el modo manual");
+  assert.equal(await pg.evaluate(() => JSON.parse(localStorage.getItem("velo_ajustes")).auto), false);
+  const entrada = await pg.inputValue("#entrada");
+  assert.match(entrada, /09 8765 4321/, "el texto del caso pasó al cuadro");
+  assert.doesNotMatch(entrada, /otro caso a medias/);
+  assert.match((await pg.evaluate(() => [...document.querySelectorAll("#tareas .chip[aria-pressed=true]")].map(b => b.textContent))).join(), /Transcriptor de exámenes/, "con el mismo prompt");
+  // El caso automático se quitó (también del teléfono) y no salió nada
+  assert.equal(await pg.evaluate(async () => (await window.__velo.guardados()).length), 0);
+  assert.equal(pg.envios.length, 0);
+  assert.deepEqual(pg.errores, []);
+  await pg.context().close();
+});
+
+test("modo manual: la cámara deja sacar más de 6 fotos seguidas (hasta 20 por caso)", {skip: saltar}, async () => {
+  const pg = await abrir(Object.assign({}, AJ_CLAUDE, {auto: false}));
+  await pg.click("#btnFotosManual");
+  await pg.waitForFunction(() => !document.querySelector("#camDisparo").disabled);
+  for (let i = 1; i <= 9; i++){
+    await pg.click("#camDisparo");
+    await pg.waitForFunction(i => document.querySelectorAll("#camMini img").length === i && !document.querySelector("#camListo").disabled, i);
+  }
+  assert.equal(await pg.isDisabled("#camDisparo"), false, "a las 9 fotos se puede seguir");
+  await pg.click("#camListo");
+  await pg.waitForFunction(() => document.querySelectorAll("#fotos .foto-item").length === 9);
+  assert.doesNotMatch(await pg.textContent("#adjInfo"), /Máximo/);
+  await pg.context().close();
+});
+
 test("lo que el anonimizador deja pasar lo oculta el validador y el caso se envía", {skip: saltar}, async () => {
   const pg = await abrir(AJ_CLAUDE);
   await pg.setInputFiles("#adjuntoAuto", {name: "caso.txt", mimeType: "text/plain", buffer: Buffer.from("Documento del paciente 09 8765 4321, control el 12/03/2025.")});

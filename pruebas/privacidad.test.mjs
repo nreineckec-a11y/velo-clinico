@@ -278,7 +278,7 @@ test("respaldo de las medidas: configuración, cifrado, autoprueba del anonimiza
   // El aviso de privacidad muestra versión, fecha y el responsable configurado
   await pg.click("#ajPrivacidad");
   const av = await pg.textContent("#privacidad");
-  assert.match(av, /Versión 2\.0 del 4 de noviembre de 2026/);
+  assert.match(av, /Versión 2\.1 del 6 de noviembre de 2026/);
   assert.ok(av.includes("CESFAM de prueba") && av.includes("delegado@ejemplo.cl") && av.includes("Decisiones automatizadas"));
   assert.deepEqual(pg.errores, []);
   await pg.context().close();
