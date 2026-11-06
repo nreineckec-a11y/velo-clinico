@@ -6,6 +6,13 @@ MODO AUTOMÁTICO (activado por omisión; se apaga en Ajustes)
 - La sensibilidad del aviso se elige en Ajustes: «Sensible», «Normal» (por omisión: avisa si la foto está claramente desenfocada o movida), «Poco sensible» o «No avisar». El aviso muestra la medida de la foto: el ancho de los bordes de las letras en píxeles (más alto, más borrosa) y desde cuánto avisa.
 - Sin permiso de cámara en la app, «Usar la cámara del sistema» saca una foto por vez, pero cada una se suma a las anteriores hasta tocar «Listo».
 - En el modo manual, «Tomar fotos» abre la misma cámara; al tocar «Listo», las fotos pasan al caso para revisarlas y taparlas.
+- Documentos largos: en el modo automático un caso puede tener hasta 40 páginas (fotos o PDF escaneado), porque se envía solo el texto. En el modo manual siguen siendo 6 imágenes. Si un PDF trae más, el caso dice cuántas quedaron fuera; nunca se omiten en silencio.
+- PDF escaneado con poca resolución (la imagen de la página tiene unos 100 ppi o menos, típico de un PDF armado con capturas):
+  - La página se dibuja a su tamaño original y se agranda con suavizado de alta calidad, en PNG (sin pérdida). Antes, la compresión JPEG borraba los puntos decimales («TSH 293» en vez de 2.93).
+  - Antes de leer se borran las líneas de las tablas: el lector se saltaba los números dentro de celdas con bordes (el recuento diferencial del hemograma).
+  - El caso avisa que la lectura puede equivocarse en decimales y tablas, y la IA recibe la indicación de marcar con «(?)» los valores dudosos o implausibles, en vez de corregirlos en silencio u omitirlos.
+  - Lo mejor sigue siendo el PDF original del laboratorio, que trae el texto: se usa tal cual, sin lector.
+- Rangos de referencia leídos sin espacios («0.40-4.05», «1005-1030», «1-2años») ya no se ocultan como folios ni como códigos. «Fecha autorización», «aprobación» y «liberación» son fechas clínicas: quedan a la vista.
 - También puedes escribir, pegar o dictar el caso en el cuadro «O escribe o pega el caso» y tocar «Procesar el texto» (con el micrófono del teclado del iPhone puedes dictar). Entra al mismo flujo que una foto: oculta lo personal, pasa el validador y queda para compartir o enviar. Lo que pidas («Hazme una interconsulta…») viaja con el caso. El texto escrito se borra del cuadro al procesarlo y no se conserva en el teléfono.
 - Sin tocar nada más: la app lee las páginas en el teléfono, oculta los datos personales, pasa el validador final y envía SOLO EL TEXTO anonimizado (ninguna imagen) con el prompt por defecto a la IA elegida. La respuesta aparece en «Casos» con los datos reales repuestos.
 - Cada caso guarda lo que se envió, tal cual («Ver lo enviado»), para revisarlo después.
