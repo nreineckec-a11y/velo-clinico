@@ -338,6 +338,14 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
   </div>
   <div class="ajustes-cuerpo">
     <label class="check"><input type="checkbox" id="ajAuto"><span><b>Modo automático</b><br><span class="nota">Foto → lectura en el teléfono → datos personales ocultos → validación → envío → resultado, sin confirmaciones. Solo sale el texto anonimizado: ninguna imagen. Si el validador encuentra un dato que no puede ocultar, el caso queda en «Requiere revisión» y no se envía.</span></span></label>
+    <label class="lbl" for="ajNitidez">Aviso de foto borrosa</label>
+    <select id="ajNitidez">
+      <option value="alta">Sensible: avisa ante cualquier foto algo suave</option>
+      <option value="media">Normal: avisa si la foto está claramente desenfocada o movida (recomendado)</option>
+      <option value="baja">Poco sensible: solo fotos muy borrosas</option>
+      <option value="no">No avisar</option>
+    </select>
+    <p class="nota">El aviso muestra la medida de la foto (el ancho de los bordes de las letras, en píxeles: más alto, más borrosa). Si te avisa de fotos que se leen bien, elige «Poco sensible».</p>
     <label class="check"><input type="checkbox" id="ajCamaraInicio"><span><b>Abrir la cámara al iniciar la app</b><br><span class="nota">Al tocar el ícono de Velo en la pantalla de inicio, la cámara queda lista para fotografiar (al volver a la app desde otra, no). También abre la cámara la dirección de la app terminada en «?camara».</span></span></label>
     <label class="lbl" for="ajProv">Proveedor</label>
     <select id="ajProv"></select>
@@ -4933,7 +4941,7 @@ const bloqueoInst = via => viaPermitida(via) ? null : "Modo institucional: «" +
 const LS_AJ = "velo_ajustes";
 const ajustesBase = () => ({auto: true, prov: enMarco ? "claude-app" : "compartir", modelos: {}, claves: {}, recordar: true, tarea: "exam",
   avisar: true, plazoBorrado: 24, conservarFotos: false, camaraAlIniciar: false, fechasSinRotulo: "edad", usos: {},
-  inst: false, vias: [], responsable: "", contacto: ""});
+  inst: false, vias: [], responsable: "", contacto: "", nitidez: "media"});
 function leerAjustes(){
   let g = null;
   try { g = JSON.parse(localStorage.getItem(LS_AJ) || "null"); } catch(e){}
@@ -4945,6 +4953,7 @@ function leerAjustes(){
   if (!(g && g.provV2)){ if (g && !enMarco && a.prov !== "claude-app") a.prov = "compartir"; a.provV2 = true; a.migrado = true; }
   if (a.tarea && !TAREAS.some(t => t.id === a.tarea)) a.tarea = null;
   a.auto = a.auto !== false; a.avisar = a.avisar !== false; a.conservarFotos = a.conservarFotos === true; a.camaraAlIniciar = a.camaraAlIniciar === true;
+  if (!["alta", "media", "baja", "no"].includes(a.nitidez)) a.nitidez = "media";
   if (![0, 1, 24, 168].includes(a.plazoBorrado)) a.plazoBorrado = 24;
   a.inst = a.inst === true; a.vias = Array.isArray(a.vias) ? a.vias.filter(v => VIAS[v]) : [];
   a.responsable = String(a.responsable || "").slice(0, 120); a.contacto = String(a.contacto || "").slice(0, 120);
@@ -4978,7 +4987,7 @@ function pintarAjustes(){
   }
   $("ajFechas").value = aj.fechasSinRotulo; $("ajAvisar").checked = aj.avisar; $("ajPlazo").value = String(aj.plazoBorrado); $("ajFotos").checked = aj.conservarFotos;
   pintarAvisoProv();
-  $("ajResp").value = aj.responsable; $("ajContacto").value = aj.contacto;
+  $("ajResp").value = aj.responsable; $("ajContacto").value = aj.contacto; $("ajNitidez").value = aj.nitidez;
   $("ajInst").checked = aj.inst; $("ajInstVias").hidden = !aj.inst;
   document.querySelectorAll("#ajInstVias [data-via]").forEach(x => { x.checked = aj.vias.includes(x.dataset.via); });
   $("ajTarea").innerHTML = '<option value="">Ninguno</option>' + TAREAS.map(t => '<option value="' + t.id + '"' + (t.id === aj.tarea ? " selected" : "") + ">" + esc(t.nombre) + "</option>").join("");
@@ -4994,7 +5003,7 @@ function cerrarAjustes(){ $("ajustes").hidden = true; document.body.classList.re
 $("btnAjustes").addEventListener("click", abrirAjustes);
 // Aviso de privacidad (desde Ajustes o desde el pie de la página), con su versión y fecha y el responsable que se
 // configuró en Ajustes (Ley 21.719, art. 14 ter a, b y c)
-const VERSION_APP = "velo-v16";
+const VERSION_APP = "velo-v17";
 const AVISO = {version: "2.0", fecha: "4 de noviembre de 2026"};
 function abrirPrivacidad(){
   $("pvVersion").textContent = "Versión " + AVISO.version + " del " + AVISO.fecha + " · " + VERSION_APP;
@@ -5238,6 +5247,7 @@ async function textoRespaldo(){
 $("ajRespaldo").addEventListener("click", async () => descargar("velo-respaldo-medidas-" + hoyIso() + ".txt", new Blob(["\ufeff" + await textoRespaldo()], {type: "text/plain"})));
 $("ajCerrar").addEventListener("click", cerrarAjustes);
 $("ajAuto").addEventListener("change", () => { aj.auto = $("ajAuto").checked; guardarAjustes(); aplicarModo(); });
+$("ajNitidez").addEventListener("change", () => { aj.nitidez = $("ajNitidez").value; guardarAjustes(); });
 $("ajResp").addEventListener("input", () => { aj.responsable = $("ajResp").value.slice(0, 120); guardarAjustes(); });
 $("ajContacto").addEventListener("input", () => { aj.contacto = $("ajContacto").value.slice(0, 120); guardarAjustes(); });
 $("ajInst").addEventListener("change", () => { aj.inst = $("ajInst").checked; guardarAjustes(); pintarAjustes(); aplicarModo(); });
@@ -5717,7 +5727,7 @@ function limpiarVencidos(){
 setInterval(limpiarVencidos, 60 * 1000);
 if (window.__velo){
   window.__velo.limpiar = limpiarVencidos;
-  window.__velo.revisarNitidez = (img, w, h) => revisarNitidez(img, w, h);
+  window.__velo.revisarNitidez = (img, w, h, nivel) => { const antes = aj.nitidez; if (nivel) aj.nitidez = nivel; try { return revisarNitidez(img, w, h); } finally { aj.nitidez = antes; } };
   // Lo guardado en el dispositivo: descifrado por la app (resumido) y tal como queda en IndexedDB
   window.__velo.guardados = async () => { await Promise.all([...colaBD.values()]); return (await leerCasosBD()).map(c => ({n: c.n, estado: c.estado, fotos: c.archivos ? c.archivos.length : 0, enviado: c.enviado || "", tieneRespuesta: !!c.respuesta, mapa: c.mapa})); };
   window.__velo.crudos = async () => { await Promise.all([...colaBD.values()]); return bdHacer("readonly", st => st.getAll()); };
@@ -5874,9 +5884,12 @@ function cerrarCamara(){
   return c;
 }
 // ¿Salió borrosa? (img: un canvas, un video o una imagen ya decodificada). Se mide a unos 1600 px de lado mayor.
-// Ancho de borde a partir del cual se avisa (con fotos de prueba: nítidas 3,7–4,8 px; las de las pruebas, algo suaves
-// pero legibles, 6,0–7,2; con 2,4 px de desenfoque 9,5–10,2; movidas 8 px 7,0–8,2), con o sin ruido de cámara
-const UMBRAL_NITIDEZ = 7.3;
+// Ancho de borde a partir del cual se avisa, según la sensibilidad de Ajustes. Con fotos simuladas: nítidas 3,7–4,8 px;
+// las de las pruebas, algo suaves pero legibles, 6,0–7,2; con 2,4 px de desenfoque 9,5–10,2; con 3,2 px 11,4–12,1;
+// movidas 8 px 7,0–8,2 y 12 px 8,6–9,7. Las fotos reales de teléfono salen más suaves que las simuladas («Sensible», 7,3,
+// avisaba de fotos que se leían bien): «Normal» avisa con un desenfoque claro.
+const UMBRALES_NITIDEZ = {alta: 7.3, media: 9.5, baja: 11.5, no: Infinity};
+const umbralNitidez = () => UMBRALES_NITIDEZ[aj.nitidez] || UMBRALES_NITIDEZ.media;
 function revisarNitidez(img, w, h){
   try {
     const k = Math.min(1, 1600 / Math.max(w, h)), W = Math.max(64, Math.round(w * k)), H = Math.max(64, Math.round(h * k));
@@ -5884,8 +5897,9 @@ function revisarNitidez(img, w, h){
     const g = c.getContext("2d", {willReadFrequently: true}); g.fillStyle = "#fff"; g.fillRect(0, 0, W, H); g.drawImage(img, 0, 0, W, H);
     const r = Anon.nitidez(grisDe(g, W, H), W, H); c.width = c.height = 0;
     // (sin bordes fuertes: si quedan bordes tenues, las letras se borronearon; si tampoco, no hay texto en la foto)
-    const sinTexto = r.bordes < 50 && r.tenues < 50;
-    return {borrosa: !sinTexto && (r.bordes < 50 || r.ancho >= UMBRAL_NITIDEZ), sinTexto, valor: r.ancho};
+    const sinTexto = r.bordes < 50 && r.tenues < 50, umbral = umbralNitidez();
+    if (umbral === Infinity) return {borrosa: false, sinTexto: false, valor: r.ancho, umbral};
+    return {borrosa: !sinTexto && (r.bordes < 50 || r.ancho >= umbral), sinTexto, valor: r.ancho, umbral};
   } catch(e){ return {borrosa: false, sinTexto: false, valor: null}; }
 }
 async function nitidezDeArchivo(f){
@@ -5905,7 +5919,8 @@ function mostrarPendiente(){
   const p = camPendientes[0];
   $("camAviso").hidden = !p;
   if (p){
-    $("camAvisoTxt").textContent = (p.sinTexto ? "No se ve texto en la foto" : "La foto salió borrosa") + ": la IA no podrá leerla bien. Sácala de nuevo con el teléfono firme, buena luz y la hoja completa.";
+    $("camAvisoTxt").textContent = (p.sinTexto ? "No se ve texto en la foto" : "La foto salió borrosa") + ": la IA no podrá leerla bien. Sácala de nuevo con el teléfono firme, buena luz y la hoja completa." +
+      (p.valor && !p.sinTexto ? " (Medida: " + p.valor.toFixed(1).replace(".", ",") + " px; avisa desde " + String(p.umbral).replace(".", ",") + ". Se cambia en Ajustes.)" : "");
     if (navigator.vibrate) try { navigator.vibrate(200); } catch(e){}
   }
   pintarCam();
@@ -5919,7 +5934,7 @@ async function capturar(){
   const r = revisarNitidez(cv, cv.width, cv.height);
   const b = await new Promise(res => cv.toBlob(res, "image/jpeg", 0.92)); cv.width = cv.height = 0;
   if (!b) return;
-  if (r.borrosa || r.sinTexto){ camPendientes.push({b, sinTexto: r.sinTexto}); mostrarPendiente(); return; }
+  if (r.borrosa || r.sinTexto){ camPendientes.push({b, sinTexto: r.sinTexto, valor: r.valor, umbral: r.umbral}); mostrarPendiente(); return; }
   $("camAviso").hidden = true;
   agregarPagina(b, false);
 }
@@ -5952,7 +5967,7 @@ $("camaraNativa").addEventListener("change", async e => {
   for (const f of l){
     if (camPaginas().length + camPendientes.length >= MAX_FOTOS) break;
     const r = await nitidezDeArchivo(f);
-    if (r && (r.borrosa || r.sinTexto)) camPendientes.push({b: f, sinTexto: r.sinTexto});
+    if (r && (r.borrosa || r.sinTexto)) camPendientes.push({b: f, sinTexto: r.sinTexto, valor: r.valor, umbral: r.umbral});
     else agregarPagina(f, false);
   }
   mostrarPendiente();
