@@ -69,9 +69,17 @@ async function pdfFicticio(pg, n){
     g.fillText("Fecha autorizacion: 19/10/2026      Toma de Muestra: 19/10/2026 07:54", 40, 100);
     g.font = "bold 20px Arial"; g.fillText(p.titulo, 330, 180); g.font = "15px Arial";
     g.fillText("TSH Ultrasensible        " + p.valor + "        mIU/L        0.40 - 4.05", 40, 260);
-    g.strokeStyle = "#000"; g.lineWidth = 1.2;
+    // Una tabla con bordes grises dobles (como el recuento diferencial del hemograma)
+    g.strokeStyle = "#999"; g.lineWidth = 1;
     const cols = ["Segmentados", "Eosinofilos", "Basofilos", "Monocitos", "Linfocitos"], vals = ["50", "7", "1", "6", "36"];
-    for (let k = 0; k < 5; k++){ g.strokeRect(40 + k * 150, 320, 150, 90); g.beginPath(); g.moveTo(40 + k * 150, 365); g.lineTo(190 + k * 150, 365); g.stroke(); g.fillText(cols[k], 50 + k * 150, 350); g.font = "bold 15px Arial"; g.fillText(vals[k], 105 + k * 150, 395); g.font = "15px Arial"; }
+    for (let k = 0; k < 5; k++){
+      for (const d of [0, 3]){ g.strokeRect(40 + k * 150 + d, 320 + d, 150 - 2 * d, 90 - 2 * d); g.beginPath(); g.moveTo(40 + k * 150, 365 + d); g.lineTo(190 + k * 150, 365 + d); g.stroke(); }
+      g.fillText(cols[k], 50 + k * 150, 350); g.font = "bold 15px Arial"; g.fillText(vals[k], 105 + k * 150, 395); g.font = "15px Arial";
+    }
+    // Un perfil bioquímico: columnas muy separadas, filas juntas (el lector corría los valores una fila)
+    const filas = [["GLICEMIA", "84", "mg/dL", "74 - 99"], ["ACIDO URICO", "5.1", "mg/dL", "2.5 - 7.5"], ["CALCIO", "9.0", "mg/dL", "8.4 - 10.6"],
+      ["FOSFORO", "4.6", "mg/dL", "2.5 - 4.5"], ["ALBUMINA", "4.2", "g/dL", "3.5 - 5"], ["TRANSAMINASA (GOT)", "24", "U/L", "14 - 36"], ["N UREICO", "16", "mg/dL", "7 - 17"]];
+    filas.forEach((f, i) => { const y = 470 + i * 22; g.fillText(f[0], 40, y); g.fillText(f[1], 330, y); g.fillText(f[2], 500, y); g.fillText(f[3], 700, y); });
     const b = await new Promise(r => c.toBlob(r, "image/jpeg", 0.8));
     return [...new Uint8Array(await b.arrayBuffer())];
   })), PAGINAS(n));
@@ -91,7 +99,10 @@ test("PDF escaneado de 9 páginas y baja resolución: se leen todas, con decimal
   assert.ok(leidas >= 8, "decimales leídos: " + leidas + " de 9");
   assert.match(enviado, /0\.40\s*-\s*4\.05/, "el rango de referencia queda");
   assert.match(enviado, /19\/10\/2026/, "la fecha de autorización (clínica) queda");
-  assert.match(enviado, /50\s+7\s+1\s+6\s+36/, "la fila de la tabla se lee");
+  assert.match(enviado, /50[\s|]+7[\s|]+1[\s|]+6[\s|]+36/, "la fila de la tabla (con bordes grises dobles) se lee");
+  // Cada valor del perfil bioquímico queda en su fila, con su decimal (una página de PDF no se «endereza»)
+  const filas = [/GLICEMIA\s+84\s+mg\/dL/, /ACIDO URICO\s+5\.1\s+mg\/dL/, /CALCIO\s+9\.0\s+mg\/dL/, /FOSFORO\s+4\.6\s+mg\/dL/, /ALBUMINA\s+4\.2\s+g\/dL/, /\(GOT\)\s+24\s+U\/L/, /UREICO\s+16\s+mg\/dL/];
+  for (const rx of filas){ const bien = enviado.split("--- Página ").slice(1).filter(p => rx.test(p)).length; assert.ok(bien >= 8, rx + ": bien en " + bien + " de 9 páginas"); }
   assert.match(enviado, /PDF escaneado con poca resolución/, "la IA sabe que la lectura puede tener errores");
   assert.match(await pg.textContent(".caso-auto"), /baja resolución/);
   assert.deepEqual(pg.errores, []);
