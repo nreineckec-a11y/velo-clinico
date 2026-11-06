@@ -3380,7 +3380,9 @@ function zipSinComprimir(archivos){
 // horizontales de al menos «largo» píxeles y verticales de al menos «largo» píxeles, de hasta «grosor» de ancho. Las
 // letras no tienen trazos tan largos. (En una tabla de hemograma, el lector se saltaba la fila del recuento diferencial)
 function borrarLineas(img, W, H, opc){
-  const o = Object.assign({oscuro: 140, grosor: 6}, opc || {});
+  // (oscuro 200: los bordes suelen ser grises y dobles, más claros que el texto; grosor 14: se mira más allá de la
+  // segunda línea de un borde doble)
+  const o = Object.assign({oscuro: 200, grosor: 14}, opc || {});
   const largoH = Math.max(60, Math.round(W * 0.06)), largoV = Math.max(60, Math.round(H * 0.035));
   const marca = new Uint8Array(W * H);
   // Una corrida larga de píxeles oscuros que, unos píxeles arriba y abajo (o a los lados), es clara en su mayor parte
@@ -4204,6 +4206,7 @@ async function leerVarias(w, blob, blob2, modos, lecturas){
 async function textoDeUnaLectura(w, lecturas, modo, blob, blob2, pendiente){
   const ws = lecturas[modo] || await leerImagen(w, modo.endsWith("+") ? (blob2 || blob) : blob, modo.replace("+", ""));
   const bien = ws.filter(p => p.conf == null || p.conf >= 30);
+  if (window.__velo) (window.__velo.palabrasTexto = window.__velo.palabrasTexto || []).push(bien);   // solo en las pruebas automáticas
   return Anon.filasOcr(bien, pendiente == null ? Anon.pendienteTexto(bien) : pendiente).texto;
 }
 // Lee una imagen: si hay hoja, la lee enderezada; si no, tal cual. Devuelve palabras y recuadros en coordenadas del lienzo.
@@ -4239,8 +4242,15 @@ async function leerHoja(fuente, lienzo, q, paso, opc, mascara, lectura){
       }), analisis: zt.res, texto};
     } catch(err){ if (/tardó/.test(String(err && err.message))) throw err; }
   }
-  // Sin hoja reconocible (o si falló lo anterior): se lee la imagen completa tal cual
-  const imagen = await new Promise(r => lienzo.toBlob(r, "image/jpeg", 0.92));
+  // Sin hoja reconocible (o si falló lo anterior): se lee la imagen completa tal cual. Para el texto del modo
+  // automático, sin las líneas de las tablas y en PNG (sin pérdida: la compresión borraba puntos decimales)
+  if (lectura && lectura.texto){
+    const lc = lienzo.getContext("2d", {willReadFrequently: true}), W = lienzo.width, H = lienzo.height, id = lc.getImageData(0, 0, W, H), px = id.data;
+    const g = new Uint8Array(W * H); for (let i = 0, j = 0; j < g.length; i += 4, j++) g[j] = (px[i] * 299 + px[i + 1] * 587 + px[i + 2] * 114) / 1000;
+    if (Anon.borrarLineas(g, W, H)){ for (let i = 0, j = 0; j < g.length; i += 4, j++) if (g[j] === 255){ px[i] = px[i + 1] = px[i + 2] = 255; } lc.putImageData(id, 0, 0); }
+  }
+  const imagen = await new Promise(r => lectura && lectura.texto ? lienzo.toBlob(r, "image/png") : lienzo.toBlob(r, "image/jpeg", 0.92));
+  if (window.__velo) window.__velo.imagenTexto = imagen;   // solo en las pruebas automáticas
   if (!imagen) throw new Error("no se pudo preparar la imagen");
   const lecturas = {}, palabras = await leerVarias(await cargarOcr(), imagen, null, lectura && lectura.modos, lecturas);
   const zt = Anon.zonasATapar(palabras, null, opc);
@@ -4460,13 +4470,17 @@ async function textoPdf(pdf){
 // Un PDF escaneado con poca resolución (la imagen de la página tiene ~100 ppi o menos): pdf.js la agranda sin suavizar
 // y el lector pierde puntos decimales y filas de tablas. Se dibuja a su tamaño original y se agranda al doble con
 // suavizado de alta calidad (así el lector recupera «2.93» donde leía «293»). La imagen devuelta lleva bajaResolucion.
+// (lado mayor al que se agranda una página escaneada de baja resolución para leerla: a 2000 px el lector perdía puntos
+// decimales de una tabla de 72 ppi, «5.1» por «51»; a 3000 px los lee. Se agranda un número entero de veces: con un
+// factor no entero, el suavizado vuelve a borrar los puntos)
+const LADO_PDF_LEER = 3000;
 async function paginaComoImagen(pdf, n, paraLeer){
   const pg = await pdf.getPage(n);
   const v1 = pg.getViewport({scale:1});
   let escala = Math.min(3, MAXL / Math.max(v1.width, v1.height)), agrandar = 1, baja = false;
   if (paraLeer){
     const ancho = await anchoImagenPagina(pg);
-    if (ancho && ancho <= v1.width * 1.4){ baja = true; escala = ancho / v1.width; agrandar = Math.min(3, Math.max(1, MAXL / (Math.max(v1.width, v1.height) * escala))); }
+    if (ancho && ancho <= v1.width * 1.4){ baja = true; escala = ancho / v1.width; agrandar = Math.min(4, Math.max(1, Math.round((window.__velo && window.__velo.ladoPdf || LADO_PDF_LEER) / (Math.max(v1.width, v1.height) * escala)))); }
   }
   const vp = pg.getViewport({scale: escala});
   let c = document.createElement("canvas"); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
@@ -4479,6 +4493,9 @@ async function paginaComoImagen(pdf, n, paraLeer){
   }
   const b = await new Promise(r => paraLeer ? c.toBlob(r, "image/png") : c.toBlob(r, "image/jpeg", 0.9));
   if (b && baja) b.bajaResolucion = true;
+  // (una página de PDF es plana y derecha: se lee tal cual, sin buscar la hoja ni enderezar renglones; enderezar una
+  // tabla desplazaba las columnas de la derecha una fila y la IA asignaba valores al examen equivocado)
+  if (b && paraLeer) b.dePdf = true;
   return b;
 }
 // El ancho en píxeles de la imagen más grande de la página (0 si no tiene o no se puede saber)
@@ -5080,7 +5097,7 @@ function cerrarAjustes(){ $("ajustes").hidden = true; document.body.classList.re
 $("btnAjustes").addEventListener("click", abrirAjustes);
 // Aviso de privacidad (desde Ajustes o desde el pie de la página), con su versión y fecha y el responsable que se
 // configuró en Ajustes (Ley 21.719, art. 14 ter a, b y c)
-const VERSION_APP = "velo-v18";
+const VERSION_APP = "velo-v19";
 const AVISO = {version: "2.0", fecha: "4 de noviembre de 2026"};
 function abrirPrivacidad(){
   $("pvVersion").textContent = "Versión " + AVISO.version + " del " + AVISO.fecha + " · " + VERSION_APP;
@@ -5505,13 +5522,14 @@ async function leerFotoTexto(blob){
   const {im, u} = await cargarImagenBlob(blob);
   const c = document.createElement("canvas");
   try {
-    const k = Math.min(1, MAXL / Math.max(im.naturalWidth, im.naturalHeight));
+    const k = Math.min(1, (blob.dePdf ? 3200 : MAXL) / Math.max(im.naturalWidth, im.naturalHeight));
     const w = Math.max(1, Math.round(im.naturalWidth * k)), h = Math.max(1, Math.round(im.naturalHeight * k));
     c.width = w; c.height = h;
     const cc = c.getContext("2d", {willReadFrequently: true}); cc.drawImage(im, 0, 0, w, h);
-    // La hoja en la foto (bordes, perspectiva, renglones), igual que al tapar una foto en el modo manual
+    // La hoja en la foto (bordes, perspectiva, renglones), igual que al tapar una foto en el modo manual. Una página de
+    // PDF ya es plana y derecha: se lee tal cual
     let hoja = null, cuad = null;
-    try {
+    if (!blob.dePdf) try {
       const gris = grisDe(cc, w, h);
       hoja = Anon.analizarHoja(gris, w, h);
       if (hoja.zona && Math.max(w, h) >= 1000){

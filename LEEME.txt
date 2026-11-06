@@ -8,8 +8,9 @@ MODO AUTOMÁTICO (activado por omisión; se apaga en Ajustes)
 - En el modo manual, «Tomar fotos» abre la misma cámara; al tocar «Listo», las fotos pasan al caso para revisarlas y taparlas.
 - Documentos largos: en el modo automático un caso puede tener hasta 40 páginas (fotos o PDF escaneado), porque se envía solo el texto. En el modo manual siguen siendo 6 imágenes. Si un PDF trae más, el caso dice cuántas quedaron fuera; nunca se omiten en silencio.
 - PDF escaneado con poca resolución (la imagen de la página tiene unos 100 ppi o menos, típico de un PDF armado con capturas):
-  - La página se dibuja a su tamaño original y se agranda con suavizado de alta calidad, en PNG (sin pérdida). Antes, la compresión JPEG borraba los puntos decimales («TSH 293» en vez de 2.93).
-  - Antes de leer se borran las líneas de las tablas: el lector se saltaba los números dentro de celdas con bordes (el recuento diferencial del hemograma).
+  - La página se dibuja a su tamaño original y se agranda un número entero de veces (a unos 3000 px) con suavizado de alta calidad, en PNG (sin pérdida). Antes, la compresión JPEG y un agrandado insuficiente borraban los puntos decimales («TSH 293» en vez de 2.93, «Fósforo 46» en vez de 4.6).
+  - Una página de PDF se lee tal cual, sin buscar la hoja ni enderezar los renglones (eso es para fotos de papel). Enderezar una tabla desplazaba las columnas de la derecha una fila y la IA asignaba valores al examen equivocado (la GOT con el valor del N ureico).
+  - Antes de leer se borran las líneas de las tablas, también las grises y dobles: el lector se saltaba los números dentro de celdas con bordes (el recuento diferencial del hemograma).
   - El caso avisa que la lectura puede equivocarse en decimales y tablas, y la IA recibe la indicación de marcar con «(?)» los valores dudosos o implausibles, en vez de corregirlos en silencio u omitirlos.
   - Lo mejor sigue siendo el PDF original del laboratorio, que trae el texto: se usa tal cual, sin lector.
 - Rangos de referencia leídos sin espacios («0.40-4.05», «1005-1030», «1-2años») ya no se ocultan como folios ni como códigos. «Fecha autorización», «aprobación» y «liberación» son fechas clínicas: quedan a la vista.
