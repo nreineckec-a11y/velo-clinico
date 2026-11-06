@@ -727,8 +727,17 @@ spo2 fio2 pao2 paco2 etco2 hco3 h2o o2 co2 pm10 omega-3 vitd3 hba2 mdrd-4
 // parientes ("PI-RADS-5"), escalas y grados ("Grado3", "GOLD-4")
 const RX_BLANCA = [/^[cpyr]?t[0-4x](?:is)?[a-d]?n[0-3x][a-c]?(?:m[01x][a-c]?)?$/, /^[ctlsd]\d{1,2}(?:-[ctlsd]?\d{1,2})+$/,
   /^g\d{1,2}p\d{1,2}(?:a\d{1,2})?(?:c\d{1,2})?(?:v\d{1,2})?$/, /^(?:bi|ti|pi|li|o|c)-?rads-?\d[abc]?$/, /^\p{L}{3,8}-?\d[a-c]?$/u];
-// Un número con su unidad ("500mg", "10x12mm", "x7dias"), un ordinal ("12avo") o una hora ("14h30")
-const RX_NUMERO_UNIDAD = /^(?:x|c)?\d+(?:[.,]\d+)?(?:x\d+(?:[.,]\d+)?)*(?:mg|g|gr|grs|mcg|ug|kg|kgs|ml|cc|l|lt|lts|dl|mm|mms|cm|cms|m|mts|mmhg|cmh2o|ui|u|meq|mmol|umol|nmol|mosm|ng|pg|mui|uui|h|hr|hrs|hs|horas|min|seg|s|d|dia|dias|sem|semanas|mes|meses|a|ano|anos|lpm|rpm|cpm|kcal|ppm|ufc|pts|puntos|veces|comp|cp|caps|tab|gts|gotas|puff|amp|fco|sobres|fl)$|^\d+(?:er|ero|era|do|da|ro|ra|to|ta|vo|va|mo|ma|no|na|avo|ava)$|^\d{1,2}h\d{2}$/;
+// Un rango de referencia leído sin espacios ("0.40-4.05", "1005-1030", "57-64"): el menor primero y, si no tiene
+// decimales, de no más de 5 cifras por lado (un RUT sin puntos, "12345678-9", tiene una sola cifra tras el guion)
+function esRango(t){
+  const m = String(t).match(/^(\d{1,5}(?:[.,]\d{1,3})?)[-–](\d{1,5}(?:[.,]\d{1,3})?)$/);
+  if (!m || m[2].replace(/\D/g, "").length < 2) return false;
+  const a = parseFloat(m[1].replace(",", ".")), b = parseFloat(m[2].replace(",", "."));
+  return a < b && b <= a * 1000 + 1000;
+}
+// Un número con su unidad ("500mg", "10x12mm", "x7dias", también un rango: "1-2años"), un ordinal ("12avo") o una
+// hora ("14h30")
+const RX_NUMERO_UNIDAD = /^(?:x|c)?(?:\d+(?:[.,]\d+)?-)?\d+(?:[.,]\d+)?(?:x\d+(?:[.,]\d+)?)*(?:mg|g|gr|grs|mcg|ug|kg|kgs|ml|cc|l|lt|lts|dl|mm|mms|cm|cms|m|mts|mmhg|cmh2o|ui|u|meq|mmol|umol|nmol|mosm|ng|pg|mui|uui|h|hr|hrs|hs|horas|min|seg|s|d|dia|dias|sem|semanas|mes|meses|a|ano|anos|lpm|rpm|cpm|kcal|ppm|ufc|pts|puntos|veces|comp|cp|caps|tab|gts|gotas|puff|amp|fco|sobres|fl)$|^\d+(?:er|ero|era|do|da|ro|ra|to|ta|vo|va|mo|ma|no|na|avo|ava)$|^\d{1,2}h\d{2}$/;
 // ¿Un token de 6 a 12 caracteres que mezcla letras y cifras, y no es un término clínico? (posible código de acceso)
 function esCodigo(tok){
   if (tok.length < 6 || tok.length > 12 || !/\p{L}/u.test(tok) || !/\p{N}/u.test(tok)) return false;
@@ -737,7 +746,10 @@ function esCodigo(tok){
   // Una palabra conocida pegada a un número ("Glucosa92", "2do-control"): el lector juntó dos palabras
   const pegada = f.match(/^(\p{L}{3,})-?\d{1,4}$/u) || f.match(/^\d{1,4}-?(\p{L}{3,})$/u);
   if (pegada && (palabraComun(pegada[1]) || MEDIDAS.has(pegada[1]))) return false;
-  return !RX_SOLO_FECHA.test(tok);
+  // (un número unido con guion a una palabra que se pronuncia, «25-HIDROXI»: un término, no un código)
+  const conPalabra = f.match(/^\d{1,3}-(\p{L}{5,})$/u) || f.match(/^(\p{L}{5,})-\d{1,3}$/u);
+  if (conPalabra && (conPalabra[1].match(/[aeiou]/g) || []).length >= 2 && !/[^aeiou]{4}/.test(conPalabra[1])) return false;
+  return !RX_SOLO_FECHA.test(tok) && !esRango(tok);
 }
 // Un token (letras y cifras, con guiones internos) en el texto
 const RX_TOKEN_COD = /(?<![\p{L}\p{N}\-\/@_.])([\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*)(?![\p{L}\p{N}\/@_]|[.,\-][\p{L}\p{N}])/gdu;
@@ -797,7 +809,7 @@ function textoItemsPdf(items){
 // Rótulos de la fecha de nacimiento (sobre el texto plegado: minúsculas y sin tildes)
 const RX_FECHA_NAC = /(?<![a-z])(?:fecha\s+(?:de\s+)?nacimiento|fecha\s+(?:de\s+)?nac\.?|f\.?\s*(?:de\s+)?nac(?:imiento)?\.?|(?<!recien\s)(?:nacimiento|nacid[oa]s?(?:\s+(?:el|en))?|nacio(?:\s+(?:el|en))?)|f\.\s*n\.?|f\/n|fnac|fn|dob)(?:\s*[-–\/]\s*edad)?(?![a-z])/g;
 // Rótulos de fechas clínicas o del documento: quedan a la vista
-const RX_FECHA_CLIN = /(?<![a-z])(?:toma|tomad[oa]|muestras?|recepcion|recibid[oa]|validacion|validad[oa]|emision|emitid[oa]|informes?|informad[oa]|resultados?|control(?:es)?|ingreso|ingresa|egreso|alta|procedimientos?|cirugias?|operad[oa]|operacion|intervencion|intervenid[oa]|examen(?:es)?|estudios?|atencion|atendid[oa]|consulta|solicitud|solicitad[oa]|impresion|creacion|registro|hospitalizacion|hospitalizad[oa]|biopsias?|derivacion|citacion|cita|entrega|firma|evaluacion|evolucion|epicrisis|ecografia|ecotomografia|radiografia|resonancia|tomografia|endoscopia|colonoscopia|mamografia|electrocardiograma|ecg|rx|tac|rnm|vigencia|vence|vencimiento|proxim[oa]|desde|hasta|inicio|termino|fur|fpp|parto|vacuna(?:cion)?|dosis|anteriores?|previ[oa]s?)(?![a-z])/g;
+const RX_FECHA_CLIN = /(?<![a-z])(?:toma|tomad[oa]|muestras?|recepcion|recibid[oa]|validacion|validad[oa]|emision|emitid[oa]|informes?|informad[oa]|resultados?|control(?:es)?|ingreso|ingresa|egreso|alta|procedimientos?|cirugias?|operad[oa]|operacion|intervencion|intervenid[oa]|examen(?:es)?|estudios?|atencion|atendid[oa]|consulta|solicitud|solicitad[oa]|impresion|creacion|registro|autorizacion|autorizad[oa]|aprobacion|aprobad[oa]|liberacion|liberad[oa]|hospitalizacion|hospitalizad[oa]|biopsias?|derivacion|citacion|cita|entrega|firma|evaluacion|evolucion|epicrisis|ecografia|ecotomografia|radiografia|resonancia|tomografia|endoscopia|colonoscopia|mamografia|electrocardiograma|ecg|rx|tac|rnm|vigencia|vence|vencimiento|proxim[oa]|desde|hasta|inicio|termino|fur|fpp|parto|vacuna(?:cion)?|dosis|anteriores?|previ[oa]s?)(?![a-z])/g;
 // De ellas, las que suelen ir después del documento (no sirven para calcular la edad)
 const RX_FECHA_FUTURA = /control|proxim|vigencia|vence|vencimiento|hasta|termino|cita|fpp/;
 // Lo que puede ir entre un rótulo y su fecha: puntuación, un paréntesis corto y palabras de enlace
@@ -1122,6 +1134,7 @@ function analizar(texto, opcIn){
       if (RX_UNIDAD.test(texto.slice(fin, fin + 14))) return false;
       const previa = (antes.match(/([\p{L}\p{N}]+)[^\p{L}\p{N}\n]*$/u) || [])[1];
       if (previa && MEDIDAS.has(plegar(previa))) return false;
+      if (esRango(m[1])) return false;
       return !/^[ \t]+[-–][ \t]*\d/.test(texto.slice(fin, fin + 6)) && !/\d[ \t]+[-–][ \t]*$/.test(antes);
     });
   }
@@ -3362,6 +3375,36 @@ function zipSinComprimir(archivos){
   return out;
 }
 
+/* ---------- líneas de las tablas: el lector no lee los números encerrados en celdas con bordes ---------- */
+// img: la imagen en grises (Uint8Array, se modifica), W x H. Borra (pone en blanco) los trazos oscuros rectos y largos:
+// horizontales de al menos «largo» píxeles y verticales de al menos «largo» píxeles, de hasta «grosor» de ancho. Las
+// letras no tienen trazos tan largos. (En una tabla de hemograma, el lector se saltaba la fila del recuento diferencial)
+function borrarLineas(img, W, H, opc){
+  const o = Object.assign({oscuro: 140, grosor: 6}, opc || {});
+  const largoH = Math.max(60, Math.round(W * 0.06)), largoV = Math.max(60, Math.round(H * 0.035));
+  const marca = new Uint8Array(W * H);
+  // Una corrida larga de píxeles oscuros que, unos píxeles arriba y abajo (o a los lados), es clara en su mayor parte
+  const claroFuera = (i, d, n, paso) => { let c = 0, t = 0; for (let k = 0; k < n; k += 4){ const a = i + k * paso - d, b = i + k * paso + d; if (a >= 0 && b < img.length){ t++; if (img[a] > o.oscuro && img[b] > o.oscuro) c++; } } return t && c >= t * 0.6; };
+  for (let y = 0; y < H; y++){
+    let x = 0;
+    while (x < W){
+      if (img[y * W + x] > o.oscuro){ x++; continue; }
+      const x0 = x; while (x < W && img[y * W + x] <= o.oscuro) x++;
+      if (x - x0 >= largoH && claroFuera(y * W + x0, o.grosor * W, x - x0, 1)) for (let k = x0; k < x; k++) marca[y * W + k] = 1;
+    }
+  }
+  for (let x = 0; x < W; x++){
+    let y = 0;
+    while (y < H){
+      if (img[y * W + x] > o.oscuro){ y++; continue; }
+      const y0 = y; while (y < H && img[y * W + x] <= o.oscuro) y++;
+      if (y - y0 >= largoV && claroFuera(y0 * W + x, o.grosor, y - y0, W)) for (let k = y0; k < y; k++) marca[k * W + x] = 1;
+    }
+  }
+  let n = 0; for (let i = 0; i < marca.length; i++) if (marca[i]){ img[i] = 255; n++; }
+  return n;
+}
+
 /* ---------- nitidez de una foto: avisar en el momento si salió borrosa ---------- */
 // gris: la imagen en escala de grises (Uint8, ancho w, alto h), reducida a unos 1600 px de lado mayor. Se mide el ancho
 // de los bordes de las letras (método de Marziliano): en cada borde fuerte (un salto de 70 o más niveles de gris), cuántos
@@ -3433,7 +3476,7 @@ function autoprueba(){
   return {total: AUTOPRUEBA.length, fallas};
 }
 
-root.Anon = {analizar, construir, restaurar, revisar, validar, proteger, protegerAuto, nombresDe, dvRut, pendienteTexto, filasOcr, zonasATapar, margenesCajas, codigosEnImagen, analizarHoja, detectarHoja, contornoHoja, blanquearFuera, curvaContraste, homografia, aplicarH, tamanoCuad, rectificar, lecturaDeHoja, contornoCaja, ajustarAltoPalabras, unirLecturas, reducir, entidadesDe, coincidencias, distancia, fusionarCajas, dentroCuad, agrandarCuad, aplanarLuz, blanquearFondo, pendienteEn, enderezar, cajaOriginal, textoItemsPdf, leerDocx, plegar, cuentaDigitos, normalizarRut, esCodigo, LISTA_BLANCA, AUTOPRUEBA, autoprueba, leerXlsx, bloquesWord, crearDocx, entradasZip, camposPlantilla, textoPlantilla, rellenarPlantilla, idCampo, nitidez, RX_WORD_INI, RX_WORD_FIN, TIPOS, ETIQUETA, OPC_DEF};
+root.Anon = {analizar, construir, restaurar, revisar, validar, proteger, protegerAuto, nombresDe, dvRut, pendienteTexto, filasOcr, zonasATapar, margenesCajas, codigosEnImagen, analizarHoja, detectarHoja, contornoHoja, blanquearFuera, curvaContraste, homografia, aplicarH, tamanoCuad, rectificar, lecturaDeHoja, contornoCaja, ajustarAltoPalabras, unirLecturas, reducir, entidadesDe, coincidencias, distancia, fusionarCajas, dentroCuad, agrandarCuad, aplanarLuz, blanquearFondo, pendienteEn, enderezar, cajaOriginal, textoItemsPdf, leerDocx, plegar, cuentaDigitos, normalizarRut, esCodigo, LISTA_BLANCA, AUTOPRUEBA, autoprueba, leerXlsx, bloquesWord, crearDocx, entradasZip, camposPlantilla, textoPlantilla, rellenarPlantilla, idCampo, nitidez, borrarLineas, RX_WORD_INI, RX_WORD_FIN, TIPOS, ETIQUETA, OPC_DEF};
 })(typeof window !== "undefined" ? window : globalThis);
 </script>
 <script>
@@ -3463,7 +3506,9 @@ const TAREAS = [
   {id:"med", nombre:"Medicamentos"},
   {id:"cert", nombre:"Certificados"}
 ];
-const MAX_FOTOS = 6;     // imágenes por caso
+const MAX_FOTOS = 6;     // imágenes por caso (modo manual: se envían las imágenes)
+// Páginas por caso en el modo automático (se envía solo el texto leído): un informe de laboratorio puede traer 15 o más
+const MAX_PAGINAS_AUTO = 40;
 const MAXL = 2000;       // lado máximo de cada imagen
 const SEP = "\n\n§§§SEP§§§\n\n";
 const NOTA_FOTO = "(Se adjuntan imágenes del caso revisadas por el médico; los recuadros negros tapan datos personales.)";
@@ -4123,6 +4168,8 @@ async function imagenParaLeer(fuente, q, paso, mascara, lectura){
   if (!L) throw new Error("no se pudo preparar la imagen");
   // Dos imágenes: contraste suave (para leer el texto suelto) y fuerte (para leer en columna, también la letra tenue)
   const blobs = [];
+  // (en el modo automático se borran las líneas de las tablas: el lector se saltaba los números de las celdas)
+  if (lectura && lectura.texto) for (const im of L.imgs) Anon.borrarLineas(im, L.W, L.H);
   for (const im of L.imgs){
     const o = document.createElement("canvas"); o.width = L.W; o.height = L.H;
     const oc = o.getContext("2d"), id = oc.createImageData(L.W, L.H), px = id.data;
@@ -4408,14 +4455,44 @@ async function textoPdf(pdf){
   }
   return paginas.join("\n\n").trim();
 }
-async function paginaComoImagen(pdf, n){
+// paraLeer: la página va al lector del teléfono (modo automático): en PNG, sin pérdida. En un PDF escaneado con poca
+// resolución, la compresión JPEG borraba los puntos decimales («TSH 293» en vez de 2.93)
+// Un PDF escaneado con poca resolución (la imagen de la página tiene ~100 ppi o menos): pdf.js la agranda sin suavizar
+// y el lector pierde puntos decimales y filas de tablas. Se dibuja a su tamaño original y se agranda al doble con
+// suavizado de alta calidad (así el lector recupera «2.93» donde leía «293»). La imagen devuelta lleva bajaResolucion.
+async function paginaComoImagen(pdf, n, paraLeer){
   const pg = await pdf.getPage(n);
   const v1 = pg.getViewport({scale:1});
-  const vp = pg.getViewport({scale: Math.min(3, MAXL / Math.max(v1.width, v1.height))});
-  const c = document.createElement("canvas"); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+  let escala = Math.min(3, MAXL / Math.max(v1.width, v1.height)), agrandar = 1, baja = false;
+  if (paraLeer){
+    const ancho = await anchoImagenPagina(pg);
+    if (ancho && ancho <= v1.width * 1.4){ baja = true; escala = ancho / v1.width; agrandar = Math.min(3, Math.max(1, MAXL / (Math.max(v1.width, v1.height) * escala))); }
+  }
+  const vp = pg.getViewport({scale: escala});
+  let c = document.createElement("canvas"); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
   const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
   await pg.render({canvasContext:g, viewport:vp}).promise;
-  return await new Promise(r => c.toBlob(r, "image/jpeg", 0.9));
+  if (agrandar > 1){
+    const c2 = document.createElement("canvas"); c2.width = Math.round(c.width * agrandar); c2.height = Math.round(c.height * agrandar);
+    const g2 = c2.getContext("2d"); g2.imageSmoothingEnabled = true; g2.imageSmoothingQuality = "high"; g2.drawImage(c, 0, 0, c2.width, c2.height);
+    c.width = c.height = 0; c = c2;
+  }
+  const b = await new Promise(r => paraLeer ? c.toBlob(r, "image/png") : c.toBlob(r, "image/jpeg", 0.9));
+  if (b && baja) b.bajaResolucion = true;
+  return b;
+}
+// El ancho en píxeles de la imagen más grande de la página (0 si no tiene o no se puede saber)
+async function anchoImagenPagina(pg){
+  try {
+    const lib = window.pdfjsLib, ops = await pg.getOperatorList(); let max = 0;
+    for (let i = 0; i < ops.fnArray.length; i++){
+      if (ops.fnArray[i] !== lib.OPS.paintImageXObject) continue;
+      const id = ops.argsArray[i][0], dep = String(id).startsWith("g_") ? pg.commonObjs : pg.objs;
+      const img = await new Promise(r => { const t = setTimeout(() => r(null), 3000); try { dep.get(id, x => { clearTimeout(t); r(x); }); } catch(e){ clearTimeout(t); r(null); } });
+      if (img && img.width) max = Math.max(max, img.width);
+    }
+    return max;
+  } catch(e){ return 0; }
 }
 async function leerPdf(f){
   const lib = await cargarPdfjs();
@@ -5003,7 +5080,7 @@ function cerrarAjustes(){ $("ajustes").hidden = true; document.body.classList.re
 $("btnAjustes").addEventListener("click", abrirAjustes);
 // Aviso de privacidad (desde Ajustes o desde el pie de la página), con su versión y fecha y el responsable que se
 // configuró en Ajustes (Ley 21.719, art. 14 ter a, b y c)
-const VERSION_APP = "velo-v17";
+const VERSION_APP = "velo-v18";
 const AVISO = {version: "2.0", fecha: "4 de noviembre de 2026"};
 function abrirPrivacidad(){
   $("pvVersion").textContent = "Versión " + AVISO.version + " del " + AVISO.fecha + " · " + VERSION_APP;
@@ -5402,9 +5479,11 @@ const NOTA_AUTO = `NOTA DE LA APP (no es una instrucción clínica): el texto de
 // escrito: el médico escribió o pegó el texto (no se leyó de fotos: no hay errores de lectura que avisar)
 const NOTA_AUTO_ESCRITO = NOTA_AUTO.replace(/el texto del médico se leyó en su teléfono desde fotos o PDF \(.*?\) y se anonimizó en el dispositivo antes de enviártelo\. No se adjuntan imágenes\./,
   "el texto del médico se anonimizó en su dispositivo antes de enviártelo. No se adjuntan imágenes.");
-function mensajeAuto(salida, tareaId, directa, escrito){
+// bajas: páginas que venían de un PDF escaneado con poca resolución (la lectura suele perder decimales y filas de tablas)
+const NOTA_BAJA_RES = " Algunas páginas venían de un PDF escaneado con poca resolución: es probable que la lectura haya perdido puntos decimales («293» por «2.93»), corrido columnas o saltado filas de tablas. Transcribe todo lo que esté, página por página, y marca con «(?)» cada valor dudoso o fisiológicamente implausible, diciendo cuál podría ser; no lo corrijas en silencio ni lo omitas.";
+function mensajeAuto(salida, tareaId, directa, escrito, bajas){
   const t = TAREAS.find(x => x.id === tareaId);
-  return (escrito ? NOTA_AUTO_ESCRITO : NOTA_AUTO) + (directa ? NOTA_SIN_ARCHIVOS : "") + NOTA_WORD +
+  return (escrito ? NOTA_AUTO_ESCRITO : NOTA_AUTO) + (bajas ? NOTA_BAJA_RES : "") + (directa ? NOTA_SIN_ARCHIVOS : "") + NOTA_WORD +
     "\n\n=== PREFERENCIAS GENERALES DEL MÉDICO ===\n" + P.preferencias.trim() +
     (t ? "\n\n=== INSTRUCCIONES DEL PROYECTO «" + t.nombre.toUpperCase() + "» ===\n" + P[t.id].trim() + textoArchivosProyecto(t) : "") +
     "\n\n=== TEXTO DEL MÉDICO ===\n" + salida;
@@ -5452,8 +5531,9 @@ async function leerFotoTexto(blob){
 const MODO_TEXTO = "6";
 // Fotos, PDF o Word de un caso → texto por página, más lo que la lectura doble encontró para ocultar
 async function leerArchivosAuto(archivos, avance){
-  const paginas = [], analisis = []; let fotos = 0;
-  const deFoto = async b => { fotos++; avance(paginas.length + 1); const r = await leerFotoAuto(b); paginas.push(r.texto); if (r.analisis) analisis.push(r.analisis); };
+  const paginas = [], analisis = []; let fotos = 0, omitidas = 0;
+  let bajas = 0;
+  const deFoto = async b => { if (b && b.bajaResolucion) bajas++; fotos++; avance(paginas.length + 1); const r = await leerFotoAuto(b); paginas.push(r.texto); if (r.analisis) analisis.push(r.analisis); };
   for (const f of archivos){
     const n = (f.name || "").toLowerCase(), tipo = f.type || "";
     if (tipo === "application/pdf" || n.endsWith(".pdf")){
@@ -5462,7 +5542,12 @@ async function leerArchivosAuto(archivos, avance){
       try {
         const t = await textoPdf(pdf);
         if (t.replace(/\s/g, "").length >= 40 * Math.min(pdf.numPages, 3)) paginas.push(t);
-        else for (let p = 1; p <= Math.min(pdf.numPages, MAX_FOTOS); p++){ const b = await paginaComoImagen(pdf, p); if (b) await deFoto(b); }
+        else {
+          // (un PDF escaneado: cada página se lee como una foto; si trae más páginas que el máximo, se avisa, nunca se omiten en silencio)
+          const maxP = (window.__velo && window.__velo.maxPaginas) || MAX_PAGINAS_AUTO;   // (en las pruebas, menos)
+          if (pdf.numPages > maxP) omitidas += pdf.numPages - maxP;
+          for (let p = 1; p <= Math.min(pdf.numPages, maxP); p++){ const b = await paginaComoImagen(pdf, p, true); if (b) await deFoto(b); }
+        }
       } finally { try { pdf.destroy(); } catch(e){} }
     }
     else if (n.endsWith(".docx")) paginas.push(await Anon.leerDocx(await f.arrayBuffer()));
@@ -5481,7 +5566,7 @@ async function leerArchivosAuto(archivos, avance){
   }
   const texto = paginas.map((t, i) => (paginas.length > 1 ? "--- Página " + (i + 1) + " ---\n" : "") + String(t || "").trim()).join("\n\n");
   // (escrito: nada se leyó de una foto; si hubo alguna, rigen las reglas de fotos)
-  return {texto, ocultar, nombres: [...nombres], escrito: fotos === 0};
+  return {texto, ocultar, nombres: [...nombres], escrito: fotos === 0, paginas: paginas.length, omitidas, bajas};
 }
 /* ---------- la cola de casos, guardada en el dispositivo (IndexedDB) ---------- */
 // Si iOS cierra la app (al bloquear el teléfono o al pasar a otra), cada caso sigue donde quedó al volver a abrirla.
@@ -5519,7 +5604,7 @@ async function bdHacer(modo, fn, almacen){
     });
   } catch(e){ return null; }
 }
-const CAMPOS_CASO = ["id", "n", "creado", "terminado", "estado", "prov", "modelo", "tarea", "archivos", "enviado", "respuesta", "truncado", "mapa", "fechasOcultas", "residuos", "error", "conteo", "registrado", "avisoNitidez"];
+const CAMPOS_CASO = ["id", "n", "creado", "terminado", "estado", "prov", "modelo", "tarea", "archivos", "enviado", "respuesta", "truncado", "mapa", "fechasOcultas", "residuos", "error", "conteo", "registrado", "avisoNitidez", "paginas", "omitidas", "bajas"];
 
 /* ---------- cifrado de los casos guardados (Ley 21.719, art. 14 quinquies a: seudonimización y cifrado) ---------- */
 // Una llave AES-GCM de 256 bits creada en este dispositivo, no exportable (ni la propia página puede leerla), guardada
@@ -5636,7 +5721,8 @@ async function procesarCaso(c){
       c.archivos = aj.conservarFotos ? c.archivos.filter(a => /^image\//.test(a.type || "")) : null;
       if (c.archivos && !c.archivos.length) c.archivos = null;
       c.fechasOcultas = [...p.fechasOcultas];
-      if (p.ok){ c.mapa = Object.assign({}, p.cons.mapa); c.conteo = Object.assign({}, p.cons.conteo); c.enviado = mensajeAuto(p.cons.salida, c.tarea, c.prov !== "compartir", lect.escrito); }
+      c.paginas = lect.paginas; c.omitidas = lect.omitidas || 0; c.bajas = lect.bajas || 0;
+      if (p.ok){ c.mapa = Object.assign({}, p.cons.mapa); c.conteo = Object.assign({}, p.cons.conteo); c.enviado = mensajeAuto(p.cons.salida, c.tarea, c.prov !== "compartir", lect.escrito, lect.bajas); }
       else { c.estado = "revision"; c.residuos = [...p.residuos].map(r => ({tipo: r.tipo, texto: r.texto})); c.paso = ""; }
     }
     // Compartir: el caso queda listo para que el médico lo comparta con su app de IA (la app no envía nada)
@@ -5767,6 +5853,9 @@ function pintarCasos(){
       if (!enCamara) h += '<div class="acciones">' + (n ? boton("procesar", c, c.avisoNitidez ? "Procesar igual" : "Procesar " + (n === 1 ? "la página" : "las " + n + " páginas")) : "") + borrar(c) + "</div>";
     }
     if (c.estado === "revision") h += '<p class="estado error">' + esc(MSG_REVISION_AUTO(c.residuos)) + "</p>";
+    // (las páginas que no se leyeron se dicen siempre: el médico debe saber que la respuesta no las incluye)
+    if (c.bajas) h += '<p class="estado aviso">' + (c.bajas === 1 ? "Una página del PDF es una imagen" : c.bajas + " páginas del PDF son imágenes") + " de baja resolución: la lectura puede equivocarse en decimales y tablas. Compara los valores con el original o, si lo tienes, usa el PDF original del laboratorio (con texto).</p>";
+    if (c.omitidas) h += '<p class="estado aviso">Se leyeron ' + c.paginas + " páginas; " + c.omitidas + (c.omitidas === 1 ? " página quedó" : " páginas quedaron") + " fuera (máximo " + MAX_PAGINAS_AUTO + " por caso). Envíalas en otro caso.</p>";
     if (c.estado === "error") h += '<p class="estado error">' + esc(c.error) + "</p>";
     // Compartir: el médico lo lleva a su app de IA y trae la respuesta de vuelta (para verla con los datos reales)
     if (c.estado === "compartir" || c.estado === "compartido"){
@@ -5843,13 +5932,15 @@ $("casos").addEventListener("toggle", e => { const d = e.target; if (d.dataset &
 // Cada foto se revisa apenas se saca: si salió borrosa, la app avisa en el momento para sacarla de nuevo.
 let camStream = null, camCaso = null, camUrls = [], camDestino = "auto", camManual = [], camBorrosas = [], camPendientes = [];
 const camPaginas = () => camDestino === "manual" ? camManual : ((camCaso && camCaso.archivos) || []);
+// (en el modo automático se envía solo el texto: caben más páginas que en el manual, que envía las imágenes)
+const maxCam = () => camDestino === "manual" ? MAX_FOTOS : MAX_PAGINAS_AUTO;
 function pintarCam(){
   $("camMini").innerHTML = camUrls.map((u, i) => '<span class="cam-mini' + (camBorrosas[i] ? " borrosa" : "") + '"><img src="' + esc(u) + '" alt="Página ' + (i + 1) + (camBorrosas[i] ? " (borrosa)" : "") + '">' +
     '<button type="button" data-quitar-pagina="' + i + '" aria-label="Quitar la página ' + (i + 1) + '">×</button></span>').join("");
   const n = camPaginas().length;
   $("camListo").disabled = !n || camPendientes.length > 0;
   $("camListo").textContent = n ? "Listo (" + n + ")" : "Listo";
-  $("camDisparo").disabled = !camStream || n >= MAX_FOTOS;
+  $("camDisparo").disabled = !camStream || n >= maxCam();
 }
 async function abrirCamara(destino){
   camDestino = destino === "manual" ? "manual" : "auto";
@@ -5926,7 +6017,7 @@ function mostrarPendiente(){
   pintarCam();
 }
 async function capturar(){
-  const v = $("camVideo"); if (!camStream || !v.videoWidth || camPaginas().length >= MAX_FOTOS) return;
+  const v = $("camVideo"); if (!camStream || !v.videoWidth || camPaginas().length >= maxCam()) return;
   // (sacar otra foto mientras se avisa de una borrosa es sacarla de nuevo)
   camPendientes = [];
   const cv = document.createElement("canvas"); cv.width = v.videoWidth; cv.height = v.videoHeight;
@@ -5965,7 +6056,7 @@ $("camaraNativa").addEventListener("change", async e => {
   // cámara); se termina con «Listo»
   if ($("camara").hidden){ nuevoCasoAuto(l); return; }
   for (const f of l){
-    if (camPaginas().length + camPendientes.length >= MAX_FOTOS) break;
+    if (camPaginas().length + camPendientes.length >= maxCam()) break;
     const r = await nitidezDeArchivo(f);
     if (r && (r.borrosa || r.sinTexto)) camPendientes.push({b: f, sinTexto: r.sinTexto, valor: r.valor, umbral: r.umbral});
     else agregarPagina(f, false);
