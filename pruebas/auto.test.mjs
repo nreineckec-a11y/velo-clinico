@@ -339,22 +339,20 @@ test("fotos de la galería: si una salió borrosa, el caso espera («Procesar ig
   await pg.context().close();
 });
 
-test("nitidez: avisa apenas la foto sale más suave que una legible (desenfocada o movida), aunque tenga ruido de cámara", {skip: saltar}, async () => {
+test("nitidez: «Normal» avisa con un desenfoque claro o una foto movida; «Sensible» y «Poco sensible» corren el corte; con ruido de cámara", {skip: saltar}, async () => {
   const pg = await abrir(AJ_CLAUDE);
   const r = await pg.evaluate(async () => {
-    // Ruido de cámara (como en una foto real con poca luz) y la revisión de la app
-    const revisar = c => {
+    const conRuido = c => {
       const g = c.getContext("2d"), d = g.getImageData(0, 0, c.width, c.height);
       for (let i = 0; i < d.data.length; i += 4){ const z = (Math.random() + Math.random() + Math.random() - 1.5) * 12; d.data[i] += z; d.data[i + 1] += z; d.data[i + 2] += z; }
-      g.putImageData(d, 0, 0);
-      return window.__velo.revisarNitidez(c, c.width, c.height).borrosa;
+      g.putImageData(d, 0, 0); return c;
     };
     const copia = (src, blur, mov) => {
       const c = document.createElement("canvas"); c.width = src.width || src.naturalWidth; c.height = src.height || src.naturalHeight; const g = c.getContext("2d");
       g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
       if (mov){ g.globalAlpha = 1 / 6; for (let i = 0; i < 6; i++) g.drawImage(src, i * mov / 5, i * mov / 10); g.globalAlpha = 1; }
       else { g.filter = blur ? "blur(" + blur + "px)" : "none"; g.drawImage(src, 0, 0); g.filter = "none"; }
-      return c;
+      return conRuido(c);
     };
     // Una hoja nítida, con texto de 22 y de 30 px, girada sobre un fondo
     const hoja = fsz => {
@@ -365,19 +363,26 @@ test("nitidez: avisa apenas la foto sale más suave que una legible (desenfocada
       f.fillStyle = "#6a635c"; f.fillRect(0, 0, c.width, c.height); f.translate(c.width / 2, c.height / 2); f.rotate(0.03); f.drawImage(h0, -W / 2, -H / 2);
       return c;
     };
-    const out = {};
-    for (const fsz of [22, 30]){ const h = hoja(fsz); out["hoja" + fsz] = {nitida: revisar(copia(h)), desenfocada: revisar(copia(h, 2.4)), movida: revisar(copia(h, 0, 12))}; }
-    // Las fotos de las pruebas: algo suaves pero legibles; con un desenfoque más, ya no
+    const fotos = {};
+    for (const fsz of [22, 30]){ const h = hoja(fsz); Object.assign(fotos, {["hoja" + fsz + " nítida"]: copia(h), ["hoja" + fsz + " algo suave"]: copia(h, 2.4), ["hoja" + fsz + " desenfocada"]: copia(h, 4), ["hoja" + fsz + " movida"]: copia(h, 0, 20)}); }
     for (const n of [1, 2, 3, 4]){
       const im = new Image(); im.src = "/pruebas/epicrisis/pagina" + n + ".jpg"; await im.decode();
-      out["prueba" + n] = {nitida: revisar(copia(im)), desenfocada: revisar(copia(im, 2)), movida: revisar(copia(im, 0, 12))};
+      Object.assign(fotos, {["prueba" + n + " nítida"]: copia(im), ["prueba" + n + " desenfocada"]: copia(im, 4), ["prueba" + n + " movida"]: copia(im, 0, 20)});
+    }
+    const out = {};
+    for (const nivel of ["alta", "media", "baja", "no"]){
+      out[nivel] = {};
+      for (const [k, c] of Object.entries(fotos)) out[nivel][k] = window.__velo.revisarNitidez(c, c.width, c.height, nivel).borrosa;
     }
     return out;
   });
-  for (const [k, v] of Object.entries(r)){
-    assert.equal(v.nitida, false, k + ": una foto legible no debe dar aviso");
-    assert.equal(v.desenfocada, true, k + ": una foto desenfocada debe dar aviso");
-    assert.equal(v.movida, true, k + ": una foto movida debe dar aviso");
+  for (const [k, v] of Object.entries(r.media)){
+    if (/nítida/.test(k)) assert.equal(v, false, "Normal, " + k + ": una foto legible no debe dar aviso");
+    if (/desenfocada|movida/.test(k)) assert.equal(v, true, "Normal, " + k + ": debe dar aviso");
   }
+  // «Sensible» avisa también con un desenfoque menor; «Poco sensible», no
+  for (const k of ["hoja22 algo suave", "hoja30 algo suave"]){ assert.equal(r.alta[k], true, "Sensible, " + k); assert.equal(r.baja[k], false, "Poco sensible, " + k); }
+  for (const k of Object.keys(r.media)) if (/nítida/.test(k)) assert.equal(r.baja[k], false, "Poco sensible, " + k);
+  assert.ok(Object.values(r.no).every(v => v === false), "«No avisar» no avisa nunca");
   await pg.context().close();
 });
