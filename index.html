@@ -254,6 +254,7 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
     <p class="nota" id="notaToque" hidden>Toca un dato marcado si necesitas que salga visible; tócalo otra vez para volver a ocultarlo.</p>
     <div class="fotos-previa" id="fotosPrevia"></div>
     <button class="btn grande solo-claude" id="enviar" type="button">Enviar a Claude</button>
+    <p class="nota solo-claude" id="perfilEnvio" hidden></p>
     <button class="btn sec" id="detener" type="button" hidden>Detener</button>
     <p class="estado" id="estado" role="status" aria-live="polite"></p>
     <details id="otras">
@@ -349,6 +350,8 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
     <label class="check"><input type="checkbox" id="ajCamaraInicio"><span><b>Abrir la cámara al iniciar la app</b><br><span class="nota">Al tocar el ícono de Velo en la pantalla de inicio, la cámara queda lista para fotografiar (al volver a la app desde otra, no). También abre la cámara la dirección de la app terminada en «?camara».</span></span></label>
     <label class="lbl" for="ajProv">Proveedor</label>
     <select id="ajProv"></select>
+    <label class="check" id="ajPorTareaBloque"><input type="checkbox" id="ajPorTarea"><span><b>Elegir el modelo según el prompt</b> (recomendado)<br><span class="nota">Con Claude, cada prompt usa el modelo y el esfuerzo que necesita: más razonamiento donde hay decisiones clínicas, más rapidez donde se transcribe.</span></span></label>
+    <ul class="nota" id="ajPerfiles" style="margin:0; padding-left:18px"></ul>
     <label class="lbl" for="ajModelo">Modelo</label>
     <input id="ajModelo" type="text" autocomplete="off" spellcheck="false" autocapitalize="off">
     <p class="nota" id="ajModeloNota"></p>
@@ -3508,6 +3511,24 @@ const TAREAS = [
   {id:"med", nombre:"Medicamentos"},
   {id:"cert", nombre:"Certificados"}
 ];
+// Modelo y esfuerzo de Claude según el prompt (Ajustes → «Elegir el modelo según el prompt»). Opus, esfuerzo alto, donde
+// la tarea es razonamiento clínico (qué derivar, diagnóstico, riesgo, crítica de un plan); Sonnet, esfuerzo medio, donde
+// es transcribir o reorganizar lo que ya está escrito (rápido y suficiente: el riesgo es leer mal, no razonar mal); y
+// esfuerzo bajo para rellenar una plantilla con datos ya dados. «nivel» es el respaldo si ese modelo no está disponible
+const PERFILES = {
+  ic:   {modelo: "claude-opus-5-5",   esfuerzo: "high",   nivel: "complex", motivo: "decide pertinencia, prioridad y destino según el mapa de derivación"},
+  sm:   {modelo: "claude-opus-5-5",   esfuerzo: "high",   nivel: "complex", motivo: "diagnóstico CIE-10/DSM-5, evaluación de riesgo y sugerencias basadas en evidencia"},
+  morb: {modelo: "claude-opus-5-5",   esfuerzo: "high",   nivel: "complex", motivo: "crítica del plan y toma de decisiones según MINSAL/GES"},
+  epi:  {modelo: "claude-sonnet-5-5", esfuerzo: "medium", nivel: "default", motivo: "transcribe y reorganiza la epicrisis, sin interpretar"},
+  exam: {modelo: "claude-sonnet-5-5", esfuerzo: "medium", nivel: "default", motivo: "transcripción estructurada; el esfuerzo medio alcanza para marcar valores dudosos"},
+  med:  {modelo: "claude-sonnet-5-5", esfuerzo: "medium", nivel: "default", motivo: "hoja para el paciente con las indicaciones ya decididas"},
+  cert: {modelo: "claude-sonnet-5-5", esfuerzo: "low",    nivel: "default", motivo: "rellena la plantilla con los datos dados"},
+  "":   {modelo: "claude-opus-5-5",   esfuerzo: "medium", nivel: "complex", motivo: "consulta libre, sin prompt"}
+};
+const NOMBRE_MODELO = {"claude-opus-5-5": "Opus 5.5", "claude-sonnet-5-5": "Sonnet 5.5", "claude-haiku-5-5": "Haiku 5.5"};
+const NOMBRE_ESFUERZO = {low: "bajo", medium: "medio", high: "alto"};
+const perfilDe = tarea => PERFILES[tarea && PERFILES[tarea] ? tarea : ""];
+const textoPerfil = pf => "Claude " + (NOMBRE_MODELO[pf.modelo] || pf.modelo) + " · esfuerzo " + NOMBRE_ESFUERZO[pf.esfuerzo];
 // Imágenes por caso en el modo manual (se envían las imágenes): un examen largo o varias hojas de un mismo caso
 const MAX_FOTOS = 20;
 // Páginas por caso en el modo automático (se envía solo el texto leído): un informe de laboratorio puede traer 15 o más
@@ -3745,6 +3766,7 @@ function pintarEnvio(){
     : comp ? "Comprobando que no quede ningún dato a la vista en " + (comp === 1 ? "la imagen" : "las imágenes") + "…"
     : (dir && nl > sampleMax ? "Claude acepta hasta " + sampleMax + " imágenes por envío: quita alguna." : "");
   $("enviar").hidden = !dir;
+  { const pf = perfilDe("tareaEnv" in caso ? caso.tareaEnv : tareaSel); $("perfilEnvio").hidden = !dir || !aj.porTarea; $("perfilEnvio").textContent = textoPerfil(pf) + ": " + pf.motivo + "."; }
   $("enviar").disabled = enCurso || !!bloqueo;
   $("enviar").textContent = confirmarAvisos ? "Enviar igual" : caso.turnos.length ? "Enviar de nuevo" : "Enviar a Claude";
   $("copiarAnon").disabled = !!(pend || comp || revision);
@@ -3837,8 +3859,9 @@ async function pedirRespuesta(est){
   $("detener").hidden = $("detenerSeg").hidden = false; pintarEnvio(); pintarSeg();
   est("Claude está respondiendo…", "cargando");
   try {
-    const r = await viaCuenta(turnos, caso.fotosEnviadas, ctl.signal, t => { resp.anon = t; pintarHilo(); });
-    resp.anon = r.texto; resp.pendiente = false;
+    if (!("tareaEnv" in caso)) caso.tareaEnv = tareaSel;   // (el seguimiento usa el modelo del primer envío)
+    const r = await viaCuenta(turnos, caso.fotosEnviadas, ctl.signal, t => { resp.anon = t; pintarHilo(); }, caso.tareaEnv);
+    resp.anon = r.texto; resp.pendiente = false; resp.usado = r.usado;
     est(r.truncado ? "La respuesta quedó incompleta: pide algo más acotado." : "", r.truncado ? "aviso" : "");
     return true;
   } catch(err){
@@ -3856,16 +3879,25 @@ async function pedirRespuesta(est){
     pintarHilo(); pintarEnvio(); pintarSeg();
   }
 }
-async function viaCuenta(turnos, fotos, signal, alEscribir){
+async function viaCuenta(turnos, fotos, signal, alEscribir, tarea){
   const input = turnos.map((t, i) => ({role: t.rol === "user" ? "user" : "assistant", content: t.texto}));
-  // Nivel más capaz, el más cercano al modelo que usa en sus proyectos
+  // Con «Elegir el modelo según el prompt», el modelo y el esfuerzo del prompt (si ese modelo no está disponible para
+  // la cuenta, responde el nivel equivalente); sin eso, el nivel más capaz, como en los proyectos del médico
   const opts = {signal, cache:false, modelTier:"complex", onText: ({text}) => { if (!signal.aborted) alEscribir(text); }};
+  if (aj.porTarea){ const pf = perfilDe(tarea); opts.model = pf.modelo; opts.effort = pf.esfuerzo; opts.modelTier = pf.nivel; }
   if (fotos.length){
     opts.images = fotos;
     if (input.length > 1) input[input.length - 1].content += "\n\n(Se adjuntan de nuevo las imágenes del primer mensaje.)";
   }
   const r = await sampleFn(input.length === 1 ? input[0].content : input, opts);
-  return {texto: r.text, truncado: !!r.truncated};
+  return {texto: r.text, truncado: !!r.truncated, usado: usadoCuenta(r, opts)};
+}
+// Qué respondió, para mostrarlo bajo la respuesta: el modelo pedido, o el nivel que respondió si ese no estaba
+function usadoCuenta(r, opts){
+  if (!opts.model) return "";
+  if (r && r.modelApplied) return textoPerfil({modelo: r.modelApplied, esfuerzo: opts.effort});
+  const nv = (r && r.modelTierApplied) || opts.modelTier;
+  return "Claude (nivel " + ({complex: "más capaz", default: "estándar", quick: "rápido"}[nv] || nv) + "): " + (NOMBRE_MODELO[opts.model] || opts.model) + " no estaba disponible para tu cuenta";
 }
 const ERRORES = {
   not_granted: "No se dio permiso para que esta página use Claude. Puedes usar la opción de copiar y pegar de abajo.",
@@ -4013,7 +4045,7 @@ function pintarHilo(){
     if (t.rol === "user") return i === 0 ? "" : '<div class="turno yo"><div class="burbuja">' + esc(t.real) + "</div></div>";
     if (t.pendiente && !t.anon) return '<div class="turno ia"><p class="pensando">Claude está pensando…</p></div>';
     return '<div class="turno ia"><div class="resp">' + renderMd(t.anon, caso.mapa) + "</div>" +
-      (t.interrumpida ? '<p class="nota">Respuesta interrumpida.</p>' : "") +
+      (t.interrumpida ? '<p class="nota">Respuesta interrumpida.</p>' : "") + (t.usado && !t.pendiente ? '<p class="nota">Respondió ' + esc(t.usado) + ".</p>" : "") +
       (t.pendiente ? "" : '<div class="fila"><button class="btn sec chico" type="button" data-copiar="' + i + '">Copiar</button>' +
         Anon.bloquesWord(t.anon).map((w, k) => '<button class="btn chico" type="button" data-word="' + i + ":" + k + '">Descargar Word</button>').join("") + "</div>") + "</div>";
   }).join("");
@@ -5036,7 +5068,7 @@ const bloqueoInst = via => viaPermitida(via) ? null : "Modo institucional: «" +
 const LS_AJ = "velo_ajustes";
 const ajustesBase = () => ({auto: true, prov: enMarco ? "claude-app" : "compartir", modelos: {}, claves: {}, recordar: true, tarea: "exam",
   avisar: true, plazoBorrado: 24, conservarFotos: false, camaraAlIniciar: false, fechasSinRotulo: "edad", usos: {},
-  inst: false, vias: [], responsable: "", contacto: "", nitidez: "media"});
+  inst: false, vias: [], responsable: "", contacto: "", nitidez: "media", porTarea: true});
 function leerAjustes(){
   let g = null;
   try { g = JSON.parse(localStorage.getItem(LS_AJ) || "null"); } catch(e){}
@@ -5049,6 +5081,7 @@ function leerAjustes(){
   if (a.tarea && !TAREAS.some(t => t.id === a.tarea)) a.tarea = null;
   a.auto = a.auto !== false; a.avisar = a.avisar !== false; a.conservarFotos = a.conservarFotos === true; a.camaraAlIniciar = a.camaraAlIniciar === true;
   if (!["alta", "media", "baja", "no"].includes(a.nitidez)) a.nitidez = "media";
+  a.porTarea = a.porTarea !== false;
   if (![0, 1, 24, 168].includes(a.plazoBorrado)) a.plazoBorrado = 24;
   a.inst = a.inst === true; a.vias = Array.isArray(a.vias) ? a.vias.filter(v => VIAS[v]) : [];
   a.responsable = String(a.responsable || "").slice(0, 120); a.contacto = String(a.contacto || "").slice(0, 120);
@@ -5063,6 +5096,9 @@ function guardarAjustes(){
 }
 const claveDe = p => String((aj.recordar ? aj.claves[p] : clavesSesion[p]) || "").trim();
 const modeloDe = p => PROV[p].sinClave ? "" : (String(aj.modelos[p] || "").trim() || PROV[p].modelo);
+// El modelo con que se envía un caso: con Claude y «Elegir el modelo según el prompt», el del prompt
+const conPerfil = p => aj.porTarea && (p === "claude" || p === "claude-app");
+const modeloPara = (p, tarea) => conPerfil(p) ? perfilDe(tarea).modelo : modeloDe(p);
 const nombreTarea = id => { const t = TAREAS.find(x => x.id === id); return t ? t.nombre : "ninguno"; };
 
 function pintarAjustes(){
@@ -5070,11 +5106,17 @@ function pintarAjustes(){
   $("ajAuto").checked = aj.auto; $("ajCamaraInicio").checked = aj.camaraAlIniciar;
   $("ajProv").innerHTML = Object.keys(PROV).filter(k => k !== "claude-app" || enMarco)
     .map(k => '<option value="' + k + '"' + (k === p ? " selected" : "") + ">" + esc(PROV[k].nombre) + (viaPermitida(viaDeProv(k)) ? "" : " — sin contrato") + "</option>").join("");
-  $("ajModelo").disabled = !!P.sinClave;
-  $("ajModelo").value = P.sinClave ? "" : (aj.modelos[p] || "");
-  $("ajModelo").placeholder = P.compartir ? "El que elijas en la app de IA" : P.sinClave ? "El que use la app de Claude" : P.modelo;
+  const esClaude = p === "claude" || p === "claude-app", porPrompt = esClaude && aj.porTarea;
+  $("ajPorTareaBloque").hidden = !esClaude; $("ajPorTarea").checked = aj.porTarea;
+  $("ajPerfiles").hidden = !porPrompt;
+  $("ajPerfiles").innerHTML = [...TAREAS.map(t => [t.nombre, perfilDe(t.id)]), ["Sin prompt", perfilDe("")]]
+    .map(([n, pf]) => "<li><b>" + esc(n) + "</b>: " + esc(textoPerfil(pf).replace(/^Claude /, "")) + " — " + esc(pf.motivo) + "</li>").join("");
+  $("ajModelo").disabled = !!P.sinClave || porPrompt;
+  $("ajModelo").value = P.sinClave || porPrompt ? "" : (aj.modelos[p] || "");
+  $("ajModelo").placeholder = P.compartir ? "El que elijas en la app de IA" : porPrompt ? "Según el prompt" : P.sinClave ? "El que use la app de Claude" : P.modelo;
   $("ajModeloNota").textContent = P.compartir ? "Al terminar cada caso, tocas «Compartir» y eliges la app de IA (Claude, ChatGPT…): le llega un .txt con el prompt y el texto anonimizado. Después pegas aquí su respuesta para verla con los datos reales. No necesitas clave ni créditos."
-    : P.sinClave ? "Dentro de la app de Claude se usa tu cuenta: no necesitas clave." : "Si lo dejas vacío se usa " + P.modelo + ". " + P.nota;
+    : P.sinClave ? "Dentro de la app de Claude se usa tu cuenta: no necesitas clave." + (porPrompt ? " Si tu plan no tiene el modelo del prompt, responde el más cercano y la respuesta lo dice." : "")
+    : porPrompt ? "Para usar un solo modelo, apaga «Elegir el modelo según el prompt» y escríbelo aquí." : "Si lo dejas vacío se usa " + P.modelo + ". " + P.nota;
   $("ajClaveBloque").hidden = !!P.sinClave;
   if (!P.sinClave){
     $("ajClave").value = claveDe(p); $("ajClave").placeholder = P.clavePh;
@@ -5098,7 +5140,7 @@ function cerrarAjustes(){ $("ajustes").hidden = true; document.body.classList.re
 $("btnAjustes").addEventListener("click", abrirAjustes);
 // Aviso de privacidad (desde Ajustes o desde el pie de la página), con su versión y fecha y el responsable que se
 // configuró en Ajustes (Ley 21.719, art. 14 ter a, b y c)
-const VERSION_APP = "velo-v20";
+const VERSION_APP = "velo-v21";
 const AVISO = {version: "2.1", fecha: "6 de noviembre de 2026"};
 function abrirPrivacidad(){
   $("pvVersion").textContent = "Versión " + AVISO.version + " del " + AVISO.fecha + " · " + VERSION_APP;
@@ -5311,7 +5353,7 @@ async function textoRespaldo(){
     "Aviso de privacidad: versión " + AVISO.version + " del " + AVISO.fecha, "Responsable del tratamiento: " + (aj.responsable || "(no configurado)"),
     "Contacto para solicitudes: " + (aj.contacto || "(no configurado)"), "Este documento no contiene datos de pacientes.", "");
   L.push("1. CONFIGURACIÓN DE ESTE DISPOSITIVO",
-    "- Modo: " + (aj.auto ? "automático" : "manual"), "- Proveedor de IA: " + P.nombre + (P.sinClave ? "" : " · modelo " + modeloDe(aj.prov)),
+    "- Modo: " + (aj.auto ? "automático" : "manual"), "- Proveedor de IA: " + P.nombre + (conPerfil(aj.prov) ? " · modelo y esfuerzo según el prompt" : P.sinClave ? "" : " · modelo " + modeloDe(aj.prov)),
     "- Modo institucional: " + (aj.inst ? "activo; vías contratadas: " + (aj.vias.length ? aj.vias.map(v => VIAS[v]).join("; ") : "ninguna") : "inactivo"),
     "- Borrado automático de los casos: " + (aj.plazoBorrado ? "a las " + aj.plazoBorrado + " h" : "desactivado (los borra el médico)"),
     "- Fotos originales: " + (aj.conservarFotos ? "se conservan en el dispositivo hasta el borrado del caso" : "se borran al anonimizarlas") + "; en un caso en «Requiere revisión», se guardan cifradas hasta pasarlo al modo manual, borrarlo o el plazo de borrado",
@@ -5351,6 +5393,7 @@ document.querySelectorAll("#ajInstVias [data-via]").forEach(x => x.addEventListe
   guardarAjustes(); pintarAjustes(); aplicarModo();
 }));
 $("ajProv").addEventListener("change", () => { aj.prov = $("ajProv").value; guardarAjustes(); pintarAjustes(); aplicarModo(); });
+$("ajPorTarea").addEventListener("change", () => { aj.porTarea = $("ajPorTarea").checked; guardarAjustes(); pintarAjustes(); aplicarModo(); pintarEnvio(); });
 $("ajModelo").addEventListener("input", () => { aj.modelos[aj.prov] = $("ajModelo").value.trim(); guardarAjustes(); aplicarModo(); });
 $("ajClave").addEventListener("input", () => {
   const v = $("ajClave").value.trim();
@@ -5400,7 +5443,7 @@ function aplicarModo(){
   $("bloqueAuto").hidden = !aj.auto;
   $("bloqueCasos").hidden = !aj.auto || !casosAuto.length;
   const P = PROV[aj.prov], falta = !P.sinClave && !claveDe(aj.prov);
-  $("autoInfo").textContent = (P.compartir ? "Se prepara solo el texto anonimizado, con el prompt, para compartirlo con tu app de IA" : "Se envía solo el texto anonimizado a " + P.corto + (P.sinClave ? "" : " (" + modeloDe(aj.prov) + ")")) +
+  $("autoInfo").textContent = (P.compartir ? "Se prepara solo el texto anonimizado, con el prompt, para compartirlo con tu app de IA" : "Se envía solo el texto anonimizado a " + (conPerfil(aj.prov) ? textoPerfil(perfilDe(aj.tarea)) + ", según el prompt" : P.corto + (P.sinClave ? "" : " (" + modeloDe(aj.prov) + ")"))) +
     " · Prompt: " + nombreTarea(aj.tarea) + "." + (falta ? " Falta la clave API: agrégala en Ajustes." : "") +
     (aj.prov === "claude-app" && !sampleFn ? " Claude con tu cuenta solo funciona dentro de la app de Claude." : "");
   const bloq = bloqueoInst(viaDeProv(aj.prov));
@@ -5410,23 +5453,25 @@ function aplicarModo(){
 
 /* ===================== envío a la IA elegida ===================== */
 // Con la clave API del propio médico: la consulta va directo del teléfono al proveedor, sin servidores intermedios
-async function viaAPI(prov, texto, signal){
+async function viaAPI(prov, texto, signal, tarea){
   const key = claveDe(prov), P = PROV[prov];
   if (!key) throw {mensaje: "Falta la clave API de " + P.corto + ". Agrégala en Ajustes y toca «Reintentar».", final: true};
-  const modelo = modeloDe(prov);
+  const modelo = modeloPara(prov, tarea);
   let url, init, extraer;
   if (prov === "claude"){
     const headers = {"content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true"};
     const body = {model: modelo, max_tokens: 16000, messages: [{role: "user", content: texto}]};
-    // En los modelos actuales, esfuerzo alto (en Opus 5.5 el valor por omisión es medio)
-    if (/^claude-(?:opus|sonnet|fable|haiku)-5/.test(modelo)) body.output_config = {effort: "high"};
+    // El esfuerzo del prompt (Ajustes → «Elegir el modelo según el prompt»); si no, alto (en Opus 5.5 el valor por
+    // omisión es medio)
+    if (/^claude-(?:opus|sonnet|fable|haiku)-5/.test(modelo)) body.output_config = {effort: conPerfil(prov) ? perfilDe(tarea).esfuerzo : "high"};
     // Si un filtro de seguridad declina la consulta, el mismo servidor la responde con otro modelo
     if (/^claude-(?:fable-5-1|opus-5-5|opus-5|sonnet-5-5)$/.test(modelo)){ headers["anthropic-beta"] = "server-side-fallback-2026-07-01"; body.fallbacks = "default"; }
     url = "https://api.anthropic.com/v1/messages";
     init = {method: "POST", headers, body: JSON.stringify(body)};
     extraer = j => {
       if (j.stop_reason === "refusal") throw {mensaje: "Claude no respondió esta solicitud (filtro de seguridad). Prueba con otro prompt o proveedor.", final: true};
-      return {texto: (j.content || []).filter(c => c.type === "text").map(c => c.text).join("\n").trim(), truncado: j.stop_reason === "max_tokens"};
+      return {texto: (j.content || []).filter(c => c.type === "text").map(c => c.text).join("\n").trim(), truncado: j.stop_reason === "max_tokens",
+        usado: textoPerfil({modelo: j.model || modelo, esfuerzo: body.output_config ? body.output_config.effort : "high"})};
     };
   } else if (prov === "openai"){
     url = "https://api.openai.com/v1/chat/completions";
@@ -5454,7 +5499,7 @@ async function viaAPI(prov, texto, signal){
   let j = null;
   try { j = await r.json(); } catch(e){}
   // (sin saldo no se reintenta: no se arregla esperando)
-  if (!r.ok){ const saldo = sinSaldo(j); throw {mensaje: mensajeApi(prov, r.status, j), red: !saldo && (r.status === 429 || r.status >= 500), final: saldo || (r.status !== 429 && r.status < 500)}; }
+  if (!r.ok){ const saldo = sinSaldo(j); if (j) j.modeloPedido = modelo; throw {mensaje: mensajeApi(prov, r.status, j), red: !saldo && (r.status === 429 || r.status >= 500), final: saldo || (r.status !== 429 && r.status < 500)}; }
   const out = extraer(j || {});
   if (!out.texto) throw {mensaje: "La IA no devolvió texto. Intenta de nuevo.", red: true};
   return out;
@@ -5471,7 +5516,7 @@ function mensajeApi(prov, st, j){
   if (sinSaldo(j)) return SIN_SALDO[prov];
   if (st === 401 || st === 403 || /api key/i.test(det)) return "La clave API de " + P.corto + " no es válida o no tiene permisos. Revísala en Ajustes.";
   if (st === 429) return "Se alcanzó el límite de uso o de saldo de tu cuenta de " + P.corto + ". Espera un momento o revisa la facturación.";
-  if (st === 404) return "El modelo «" + modeloDe(prov) + "» no está disponible para tu clave. Cámbialo en Ajustes.";
+  if (st === 404) return "El modelo «" + (j && j.modeloPedido || modeloDe(prov)) + "» no está disponible para tu clave. Cámbialo en Ajustes" + (conPerfil(prov) ? " (o apaga «Elegir el modelo según el prompt»)." : ".");
   if (st === 413) return "El caso es demasiado largo para enviarlo de una vez.";
   if (st >= 500) return P.corto + " no respondió (error " + st + "). Intenta de nuevo en unos minutos.";
   return "Error " + st + " de " + P.corto + (det ? ": " + det : ".");
@@ -5479,16 +5524,16 @@ function mensajeApi(prov, st, j){
 // Un solo mensaje con el caso; devuelve {texto, truncado}. Si no hay respuesta en 10 minutos (una conexión que iOS
 // dejó colgada al bloquear el teléfono), cuenta como error de red y se reintenta
 const ESPERA_RESPUESTA = 10 * 60 * 1000;
-async function enviarIA(prov, texto){
+async function enviarIA(prov, texto, tarea){
   const ctl = new AbortController(), reloj = setTimeout(() => ctl.abort(), (window.__velo && window.__velo.esperaRespuesta) || ESPERA_RESPUESTA);
-  try { return await enviarUna(prov, texto, ctl.signal); }
+  try { return await enviarUna(prov, texto, ctl.signal, tarea); }
   catch(err){ if (err && err.name === "AbortError") throw {mensaje: PROV[prov].corto + " no respondió a tiempo.", red: true}; throw err; }
   finally { clearTimeout(reloj); }
 }
-async function enviarUna(prov, texto, signal){
-  if (prov !== "claude-app") return viaAPI(prov, texto, signal);
+async function enviarUna(prov, texto, signal, tarea){
+  if (prov !== "claude-app") return viaAPI(prov, texto, signal, tarea);
   if (!sampleFn) throw {mensaje: "Claude con tu cuenta solo funciona dentro de la app de Claude. Ábrela ahí o elige otro proveedor en Ajustes.", final: true};
-  try { return await viaCuenta([{rol: "user", texto}], [], signal, () => {}); }
+  try { return await viaCuenta([{rol: "user", texto}], [], signal, () => {}, tarea); }
   catch(err){ if (err && err.code === "cancelled") throw Object.assign(new Error("tiempo"), {name: "AbortError"}); throw {mensaje: mensajeError(err), red: err && ["rate_limited"].includes(err.code), final: !(err && err.code === "rate_limited")}; }
 }
 
@@ -5623,7 +5668,7 @@ async function bdHacer(modo, fn, almacen){
     });
   } catch(e){ return null; }
 }
-const CAMPOS_CASO = ["id", "n", "creado", "terminado", "estado", "prov", "modelo", "tarea", "archivos", "enviado", "respuesta", "truncado", "mapa", "fechasOcultas", "residuos", "error", "conteo", "registrado", "avisoNitidez", "paginas", "omitidas", "bajas"];
+const CAMPOS_CASO = ["id", "n", "creado", "terminado", "estado", "prov", "modelo", "tarea", "archivos", "enviado", "respuesta", "truncado", "usado", "mapa", "fechasOcultas", "residuos", "error", "conteo", "registrado", "avisoNitidez", "paginas", "omitidas", "bajas"];
 
 /* ---------- cifrado de los casos guardados (Ley 21.719, art. 14 quinquies a: seudonimización y cifrado) ---------- */
 // Una llave AES-GCM de 256 bits creada en este dispositivo, no exportable (ni la propia página puede leerla), guardada
@@ -5686,7 +5731,7 @@ function actualizar(c){ pintarCasos(); if (casosAuto.includes(c)) guardarCaso(c)
 
 function crearCaso(estado, archivos){
   const c = {id: Date.now() + "-" + (++nCasoAuto), n: nCasoAuto, creado: Date.now(), estado, archivos,
-    prov: aj.prov, modelo: modeloDe(aj.prov), tarea: aj.tarea, paso: "", enviado: "", respuesta: "", mapa: {}, residuos: [], error: ""};
+    prov: aj.prov, modelo: modeloPara(aj.prov, aj.tarea), tarea: aj.tarea, paso: "", enviado: "", respuesta: "", mapa: {}, residuos: [], error: ""};
   casosAuto.unshift(c);
   aplicarModo(); actualizar(c);
   return c;
@@ -5754,8 +5799,8 @@ async function procesarCaso(c){
     for (let i = 0; c.estado === "enviado"; i++){
       c.paso = "Esperando la respuesta de " + PROV[c.prov].corto + "…" + (i ? " (reintento " + i + " de " + REINTENTOS + ")" : ""); actualizar(c);
       try {
-        const r = await enviarIA(c.prov, c.enviado);
-        c.respuesta = r.texto; c.truncado = !!r.truncado; c.estado = "listo"; c.paso = "";
+        const r = await enviarIA(c.prov, c.enviado, c.tarea);
+        c.respuesta = r.texto; c.truncado = !!r.truncado; c.usado = r.usado || ""; c.estado = "listo"; c.paso = "";
         break;
       } catch(err){
         if (!err || !err.red || i >= REINTENTOS) throw err;
@@ -5888,7 +5933,7 @@ function pintarCasos(){
       if (c.pegando) h += '<textarea data-pegada="' + esc(c.id) + '" rows="4" placeholder="Pega aquí la respuesta de la IA">' + esc(c.borrador || "") + '</textarea><div class="fila">' + boton("ver-respuesta", c, "Ver con los datos reales") + "</div>";
     }
     if (c.estado === "listo"){
-      h += '<div class="resp">' + renderMd(c.respuesta, c.mapa) + "</div>" + (c.truncado ? '<p class="nota">La respuesta quedó incompleta.</p>' : "");
+      h += '<div class="resp">' + renderMd(c.respuesta, c.mapa) + "</div>" + (c.truncado ? '<p class="nota">La respuesta quedó incompleta.</p>' : "") + (c.usado ? '<p class="nota">Respondió ' + esc(c.usado) + ".</p>" : "");
     }
     if (["listo", "revision", "error"].includes(c.estado))
       h += '<div class="acciones">' + (c.estado === "listo" ? boton("copiar-caso", c, "Copiar") : "") +
@@ -5940,7 +5985,7 @@ $("casos").addEventListener("click", async e => {
     return;
   }
   if (d.verRespuesta){ const ta = $("casos").querySelector('textarea[data-pegada="' + c.id + '"]'); if (!ponerRespuesta(c, ta ? ta.value : c.borrador)) toast("Pega primero la respuesta de la IA."); return; }
-  if (b.dataset.reintentar && c.estado === "error"){ c.prov = aj.prov; c.modelo = modeloDe(aj.prov); procesarCaso(c); }
+  if (b.dataset.reintentar && c.estado === "error"){ c.prov = aj.prov; c.modelo = modeloPara(aj.prov, c.tarea); procesarCaso(c); }
   else if (b.dataset.procesar && c.estado === "capturando"){ contarUso(c.tarea); c.estado = "procesando"; actualizar(c); procesarCaso(c); }
   else if (b.dataset.copiarCaso) toast(await copiarTexto(Anon.restaurar(textoPlano(c.respuesta), c.mapa).salida) ? "Respuesta copiada" : "No se pudo copiar: mantén presionado el texto");
   else if (b.dataset.borrar){
