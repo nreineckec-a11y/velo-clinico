@@ -56,8 +56,9 @@ test("cámara con 2 páginas → «Listo» → lectura, anonimizado, validador, 
   assert.equal(url, "https://api.anthropic.com/v1/messages");
   assert.equal(headers["x-api-key"], "sk-ant-prueba");
   assert.equal(headers["anthropic-dangerous-direct-browser-access"], "true");
-  assert.equal(cuerpo.model, "claude-opus-5-5");
-  assert.deepEqual(cuerpo.output_config, {effort: "high"});
+  // (Transcriptor de exámenes: Sonnet 5.5, esfuerzo medio, según el prompt)
+  assert.equal(cuerpo.model, "claude-sonnet-5-5");
+  assert.deepEqual(cuerpo.output_config, {effort: "medium"});
   assert.equal(cuerpo.fallbacks, "default");
   assert.equal(cuerpo.messages.length, 1);
   const enviado = cuerpo.messages[0].content;
