@@ -182,6 +182,18 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
 .cam-miniaturas{padding-top:6px}
 .cam-disparo{flex:none; width:72px; height:72px; border-radius:50%; border:5px solid var(--accent); background:#fff; cursor:pointer}
 .cam-disparo:disabled{opacity:.4}
+.cam-disparo.ocupada{opacity:1; border-color:var(--line)}
+.cam-flash{position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none}
+.cam-flash.ya{animation:cam-flash .22s ease-out}
+@keyframes cam-flash{from{opacity:.85} to{opacity:0}}
+@media (prefers-reduced-motion: reduce){.cam-flash.ya{animation:none}}
+.cam-arriba{position:absolute; top:10px; left:10px; right:10px; display:flex; align-items:flex-start; gap:8px; pointer-events:none}
+.cam-arriba > *{pointer-events:auto}
+.cam-pista{margin:0; flex:1; min-width:0; padding:8px 12px; border-radius:10px; background:rgba(0,0,0,.72); color:#fff; font:600 14px/1.3 var(--f-body)}
+.cam-linterna{flex:none; margin-left:auto; padding:8px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.6); background:rgba(0,0,0,.72); color:#fff; font:600 14px/1.3 var(--f-body); cursor:pointer}
+.cam-linterna[aria-pressed=true]{background:#fff; color:#000}
+.cam-vista{position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:#000; cursor:zoom-out}
+.cam-miniaturas img{cursor:zoom-in}
 .ajustes-cuerpo{flex:1; overflow:auto; display:grid; gap:10px; align-content:start; width:100%; max-width:680px; margin:0 auto; padding:16px}
 .ajustes-cuerpo input[type=text],.ajustes-cuerpo input[type=password],.ajustes-cuerpo input[type=number],.ajustes-cuerpo input[type=datetime-local],.ajustes-cuerpo select{width:100%; font:16px/1.3 var(--f-body); padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--ink)}
 .lbl{font-weight:600; font-size:15px; margin-top:6px}
@@ -319,6 +331,12 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
   </div>
   <p class="modal-info" id="camInfo" role="status" aria-live="polite">Abriendo la cámara…</p>
   <div class="cam-wrap"><video id="camVideo" playsinline muted autoplay></video>
+    <div class="cam-flash" id="camFlash"></div>
+    <img class="cam-vista" id="camVista" alt="Página en grande: toca para volver a la cámara" hidden>
+    <div class="cam-arriba">
+      <p class="cam-pista" id="camPista" role="status" hidden></p>
+      <button class="cam-linterna" id="camLinterna" type="button" aria-pressed="false" hidden>Linterna</button>
+    </div>
     <div class="cam-aviso" id="camAviso" role="alert" hidden>
       <p id="camAvisoTxt"></p>
       <div class="fila"><button class="btn chico" id="camRepetir" type="button">Sacarla de nuevo</button><button class="btn sec chico" id="camUsar" type="button">Usar igual</button></div>
@@ -326,7 +344,7 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
   </div>
   <div class="cam-pie">
     <div class="cam-miniaturas" id="camMini"></div>
-    <label class="btn sec chico" for="camaraNativa" id="camSistema" hidden>Usar la cámara del sistema</label>
+    <label class="btn sec chico" for="camaraNativa" id="camSistema">Cámara del sistema</label>
     <button class="cam-disparo" id="camDisparo" type="button" aria-label="Capturar página" disabled></button>
   </div>
 </div>
@@ -347,6 +365,7 @@ th{font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase
       <option value="no">No avisar</option>
     </select>
     <p class="nota">El aviso muestra la medida de la foto (el ancho de los bordes de las letras, en píxeles: más alto, más borrosa). Si te avisa de fotos que se leen bien, elige «Poco sensible».</p>
+    <label class="check"><input type="checkbox" id="ajParalelo"><span><b>Lectura en paralelo</b><br><span class="nota" id="ajParaleloNota"></span></span></label>
     <label class="check"><input type="checkbox" id="ajCamaraInicio"><span><b>Abrir la cámara al iniciar la app</b><br><span class="nota">Al tocar el ícono de Velo en la pantalla de inicio, la cámara queda lista para fotografiar (al volver a la app desde otra, no). También abre la cámara la dirección de la app terminada en «?camara».</span></span></label>
     <label class="lbl" for="ajProv">Proveedor</label>
     <select id="ajProv"></select>
@@ -3444,6 +3463,36 @@ function nitidez(gris, w, h){
   return {ancho: q.reduce((x, y) => x + y, 0) / q.length, bordes: anchos.length, tenues};
 }
 
+/* ---------- calidad de una lectura: ¿el lector leyó de verdad o adivinó? ---------- */
+// palabras: lo que devolvió el lector ([{texto, conf}], conf de 0 a 100). Solo cuentan las "palabras" con dos o más
+// letras o cifras seguidas (no los guiones ni las rayas sueltas). Devuelve {n: cuántas, conf: su confianza media,
+// puntaje: letras de las palabras bien leídas (confianza 75 o más, con tres letras seguidas o más)}.
+// El puntaje sirve para comparar la misma hoja en distintos giros: al derecho, el lector reconoce muchas más palabras y
+// con más confianza que de lado o al revés.
+function calidadLectura(palabras){
+  let n = 0, suma = 0, puntaje = 0;
+  for (const p of palabras || []){
+    const t = String(p.texto || "");
+    if (!/[\p{L}\p{N}]{2,}/u.test(t)) continue;
+    const c = p.conf == null ? 0 : p.conf;
+    n++; suma += c;
+    if (c >= 75 && /\p{L}{3,}/u.test(t)) puntaje += t.replace(/[^\p{L}]/gu, "").length;
+  }
+  return {n, conf: n ? suma / n : 0, puntaje};
+}
+// ¿Conviene probar la hoja en otros giros? Casi nada leído, o leído con poca confianza (una hoja al revés se "lee" con
+// confianza media de 60 a 70; una foto corriente al derecho, con 85 o más)
+const lecturaPobre = q => !q || q.n < 12 || q.conf < 78;
+// ¿Se avisa de que la página se leyó con dificultad? (ya probados los giros)
+const lecturaDudosa = q => !q || q.n < 5 || q.conf < 68;
+// De los puntajes de los cuatro giros (0, 90, 180 y 270 grados), cuánto hay que girar la hoja (0: se deja como está).
+// Solo se gira si otro giro es claramente mejor: al menos 5 palabras bien leídas y un puntaje 1,6 veces mayor.
+function elegirGiro(puntajes){
+  let mejor = 0;
+  for (let i = 1; i < 4; i++) if ((puntajes[i] || 0) > (puntajes[mejor] || 0)) mejor = i;
+  return mejor && puntajes[mejor] >= 25 && puntajes[mejor] >= 1.6 * (puntajes[0] || 0) + 10 ? mejor * 90 : 0;
+}
+
 /* ---------- autoprueba: casos FICTICIOS para comprobar en el propio dispositivo que el anonimizador funciona ---------- */
 // (14 quinquies d) de la Ley 21.719: verificar regularmente la eficacia de las medidas). Son los formatos de las fugas
 // reales reportadas (pruebas/fugas.test.mjs) y algunos documentos sintéticos; ningún dato es real.
@@ -3481,7 +3530,7 @@ function autoprueba(){
   return {total: AUTOPRUEBA.length, fallas};
 }
 
-root.Anon = {analizar, construir, restaurar, revisar, validar, proteger, protegerAuto, nombresDe, dvRut, pendienteTexto, filasOcr, zonasATapar, margenesCajas, codigosEnImagen, analizarHoja, detectarHoja, contornoHoja, blanquearFuera, curvaContraste, homografia, aplicarH, tamanoCuad, rectificar, lecturaDeHoja, contornoCaja, ajustarAltoPalabras, unirLecturas, reducir, entidadesDe, coincidencias, distancia, fusionarCajas, dentroCuad, agrandarCuad, aplanarLuz, blanquearFondo, pendienteEn, enderezar, cajaOriginal, textoItemsPdf, leerDocx, plegar, cuentaDigitos, normalizarRut, esCodigo, LISTA_BLANCA, AUTOPRUEBA, autoprueba, leerXlsx, bloquesWord, crearDocx, entradasZip, camposPlantilla, textoPlantilla, rellenarPlantilla, idCampo, nitidez, borrarLineas, RX_WORD_INI, RX_WORD_FIN, TIPOS, ETIQUETA, OPC_DEF};
+root.Anon = {calidadLectura, lecturaPobre, lecturaDudosa, elegirGiro, analizar, construir, restaurar, revisar, validar, proteger, protegerAuto, nombresDe, dvRut, pendienteTexto, filasOcr, zonasATapar, margenesCajas, codigosEnImagen, analizarHoja, detectarHoja, contornoHoja, blanquearFuera, curvaContraste, homografia, aplicarH, tamanoCuad, rectificar, lecturaDeHoja, contornoCaja, ajustarAltoPalabras, unirLecturas, reducir, entidadesDe, coincidencias, distancia, fusionarCajas, dentroCuad, agrandarCuad, aplanarLuz, blanquearFondo, pendienteEn, enderezar, cajaOriginal, textoItemsPdf, leerDocx, plegar, cuentaDigitos, normalizarRut, esCodigo, LISTA_BLANCA, AUTOPRUEBA, autoprueba, leerXlsx, bloquesWord, crearDocx, entradasZip, camposPlantilla, textoPlantilla, rellenarPlantilla, idCampo, nitidez, borrarLineas, RX_WORD_INI, RX_WORD_FIN, TIPOS, ETIQUETA, OPC_DEF};
 })(typeof window !== "undefined" ? window : globalThis);
 </script>
 <script>
@@ -4095,38 +4144,72 @@ function cargarScript(src){
 // Tesseract corre aquí mismo (WebAssembly): la imagen no sale del teléfono para leerla.
 // Solo se usa para ubicar nombres, RUT, fechas, folios y códigos; lo clínico lo sigue leyendo la IA en la foto.
 const OCR_DIR = "ocr/";
-let ocrPromesa = null, ocrCola = Promise.resolve();
+// Varios lectores (uno por hilo) para leer en paralelo las lecturas de una misma página; el 0 es el principal
+let ocrPromesas = [], ocrBase = null, ocrCola = Promise.resolve();
 const soportaSimd = () => { try { return WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,10,1,8,0,65,0,253,15,253,98,11])); } catch(e){ return false; } };
 function base64aBytes(b64){ const t = atob(b64), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u; }
-function cargarOcr(){
-  if (!ocrPromesa){
-    ocrPromesa = (async () => {
+// Cuántos lectores a la vez. En un computador, hasta 3 (la mitad de los núcleos); en un teléfono, 1, salvo que tenga
+// memoria de sobra (cada lector ocupa memoria y iOS cierra las páginas que usan demasiada). Se puede forzar en Ajustes.
+function hilosOcr(){
+  if (window.__velo && window.__velo.hilos) return window.__velo.hilos;
+  if (aj.paralelo === false) return 1;
+  const nucleos = navigator.hardwareConcurrency || 2, tope = Math.min(3, Math.max(1, nucleos >> 1));
+  const telefono = matchMedia("(pointer: coarse)").matches && !matchMedia("(pointer: fine)").matches;
+  if (aj.paralelo === true) return telefono ? 2 : Math.max(2, tope);
+  if (telefono) return navigator.deviceMemory >= 6 ? Math.min(2, tope) : 1;
+  return navigator.deviceMemory && navigator.deviceMemory < 4 ? 1 : tope;
+}
+function cargarOcr(i){
+  i = i || 0;
+  if (!ocrPromesas[i]){
+    const p = (async () => {
       if (typeof WebAssembly !== "object" || !soportaSimd()) throw new Error("este navegador no puede leer imágenes");
       const ruta = f => new URL(OCR_DIR + f, document.baseURI).href;
-      if (!window.Tesseract) await cargarScript(ruta("tesseract.min.js"));
-      if (!window.VELO_SPA) await cargarScript(ruta("spa.traineddata.js"));
+      if (!ocrBase){
+        ocrBase = (async () => {
+          if (!window.Tesseract) await cargarScript(ruta("tesseract.min.js"));
+          if (!window.VELO_SPA) await cargarScript(ruta("spa.traineddata.js"));
+        })();
+        ocrBase.catch(() => { ocrBase = null; });
+      }
+      await ocrBase;
       const w = await window.Tesseract.createWorker([{code:"spa", data: base64aBytes(window.VELO_SPA)}], 1, {
         workerPath: ruta("worker.min.js"), corePath: ruta("tesseract-core-simd-lstm.wasm.js"),
         workerBlobURL: false, cacheMethod: "none", logger: () => {}
       });
       // Modo 11: busca todo el texto suelto de la página (rótulos, columnas, pies de página)
       await w.setParameters({tessedit_pageseg_mode: "11"});
+      w.veloHilo = i; w.veloCola = Promise.resolve();
       return w;
     })();
-    ocrPromesa.catch(() => { ocrPromesa = null; });
+    ocrPromesas[i] = p;
+    p.catch(() => { if (ocrPromesas[i] === p) ocrPromesas[i] = null; });
   }
-  return ocrPromesa;
+  return ocrPromesas[i];
+}
+// El lector para la lectura número k de una página: se reparten entre los hilos; si un hilo extra no se pudo cargar
+// (poca memoria), lee el principal
+async function lectorPara(k){
+  const i = (k || 0) % hilosOcr();
+  if (i){ try { return await cargarOcr(i); } catch(e){} }
+  return cargarOcr(0);
 }
 function encolarLectura(f){
   f.ocr = "espera"; f.ocrDesde = Date.now();
   ocrCola = ocrCola.then(() => leerFoto(f), () => leerFoto(f));
 }
-// Lee una imagen con el lector; si se cuelga, se descarta y la próxima lectura lo vuelve a cargar
-async function leerImagen(w, imagen, modo){
+// Lee una imagen con el lector; si se cuelga, se descarta y la próxima lectura lo vuelve a cargar.
+// Cada lector lee de a una imagen (su propia fila): dos lecturas pedidas a la vez al mismo lector no se mezclan.
+function leerImagen(w, imagen, modo){
+  const p = w.veloCola.then(() => leerImagenYa(w, imagen, modo));
+  w.veloCola = p.catch(() => {});
+  return p;
+}
+async function leerImagenYa(w, imagen, modo){
   let reloj;
   await w.setParameters({tessedit_pageseg_mode: modo || "11"});
   const {data} = await Promise.race([w.recognize(imagen, {}, {blocks: true}),
-    new Promise((_, rej) => { reloj = setTimeout(() => { ocrPromesa = null; try { w.terminate(); } catch(e){} rej(new Error("la lectura tardó demasiado")); }, 90000); })])
+    new Promise((_, rej) => { reloj = setTimeout(() => { if (ocrPromesas[w.veloHilo]) ocrPromesas[w.veloHilo] = null; try { w.terminate(); } catch(e){} rej(new Error("la lectura tardó demasiado")); }, 90000); })])
     .finally(() => clearTimeout(reloj));
   const palabras = []; let li = 0;
   for (const b of data.blocks || []) for (const pa of b.paragraphs || []) for (const l of pa.lines || []){
@@ -4140,6 +4223,8 @@ async function leerImagen(w, imagen, modo){
   }
   return palabras;
 }
+// Un lienzo como archivo de imagen (JPEG salvo que se pida PNG, sin pérdida)
+const lienzoABlob = (c, tipo, calidad) => new Promise(r => c.toBlob(r, tipo || "image/jpeg", calidad));
 function grisDe(ctx, W, H){
   const d = ctx.getImageData(0, 0, W, H).data, g = new Uint8Array(W * H);
   for (let i = 0, j = 0; j < g.length; i += 4, j++) g[j] = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
@@ -4210,7 +4295,7 @@ async function imagenParaLeer(fuente, q, paso, mascara, lectura){
     const oc = o.getContext("2d"), id = oc.createImageData(L.W, L.H), px = id.data;
     for (let i = 0, j = 0; i < im.length; i++, j += 4){ const v = im[i]; px[j] = v; px[j + 1] = v; px[j + 2] = v; px[j + 3] = 255; }
     oc.putImageData(id, 0, 0);
-    const b = await new Promise(r => o.toBlob(r, "image/jpeg", 0.95));
+    const b = await lienzoABlob(o, "image/jpeg", 0.95);
     o.width = o.height = 0;
     if (!b) throw new Error("no se pudo preparar la imagen");
     blobs.push(b);
@@ -4225,31 +4310,36 @@ async function imagenParaLeer(fuente, q, paso, mascara, lectura){
 // Varias lecturas con modos distintos del lector (11: texto suelto; 4: columna; 6: bloque) sobre la imagen de
 // contraste suave o, si el modo lleva "+", la de contraste fuerte: cada combinación se salta cosas distintas
 // (lecturas: si se pasa un objeto, ahí quedan las palabras de cada modo por separado)
-async function leerVarias(w, blob, blob2, modos, lecturas){
+// extra: otra lectura (un modo más) que se hace a la vez y queda en lecturas, sin unirse a las demás
+async function leerVarias(blob, blob2, modos, lecturas, extra){
+  modos = modos || ["11", "4+"];
+  const todos = extra && !modos.includes(extra) ? modos.concat(extra) : modos;
+  // (cada lectura va a un lector distinto si hay más de uno; con uno solo, quedan en fila en el mismo orden)
+  const ps = todos.map(async (m, k) => leerImagen(await lectorPara(k), m.endsWith("+") ? (blob2 || blob) : blob, m.replace("+", "")));
+  ps.forEach(q => q.catch(() => {}));   // (si una falla, las demás no quedan como error sin atender)
+  const rs = await Promise.all(ps);
   let out = null;
-  for (const m of modos || ["11", "4+"]){
-    const ws = await leerImagen(w, m.endsWith("+") ? (blob2 || blob) : blob, m.replace("+", ""));
-    if (lecturas) lecturas[m] = ws;
-    out = out ? Anon.unirLecturas(out, ws) : ws;
-  }
+  todos.forEach((m, k) => { if (lecturas) lecturas[m] = rs[k]; if (k < modos.length) out = out ? Anon.unirLecturas(out, rs[k]) : rs[k]; });
   return out || [];
 }
 // El texto de una sola lectura, en renglones (para enviarlo: la unión de lecturas repite las palabras dudosas)
 // (lectura.texto: el modo del lector para ese texto; si no se leyó ya con ese modo, se lee una vez más)
-async function textoDeUnaLectura(w, lecturas, modo, blob, blob2, pendiente){
-  const ws = lecturas[modo] || await leerImagen(w, modo.endsWith("+") ? (blob2 || blob) : blob, modo.replace("+", ""));
+// Devuelve {texto, calidad}: la calidad de esa lectura (Anon.calidadLectura) dice si la página se leyó bien
+async function textoDeUnaLectura(lecturas, modo, blob, blob2, pendiente){
+  const ws = lecturas[modo] || await leerImagen(await lectorPara(0), modo.endsWith("+") ? (blob2 || blob) : blob, modo.replace("+", ""));
   const bien = ws.filter(p => p.conf == null || p.conf >= 30);
   if (window.__velo) (window.__velo.palabrasTexto = window.__velo.palabrasTexto || []).push(bien);   // solo en las pruebas automáticas
-  return Anon.filasOcr(bien, pendiente == null ? Anon.pendienteTexto(bien) : pendiente).texto;
+  return {texto: Anon.filasOcr(bien, pendiente == null ? Anon.pendienteTexto(bien) : pendiente).texto, calidad: Anon.calidadLectura(ws)};
 }
 // Lee una imagen: si hay hoja, la lee enderezada; si no, tal cual. Devuelve palabras y recuadros en coordenadas del lienzo.
 async function leerHoja(fuente, lienzo, q, paso, opc, mascara, lectura){
-  const w = await cargarOcr();
+  await cargarOcr();
+  const modoTexto = lectura && lectura.texto;
   if (q){
     try {
       const L = await imagenParaLeer(fuente, q, paso, mascara, lectura), lecturas = {};
-      let palabras = Anon.ajustarAltoPalabras(await leerVarias(w, L.blob, L.blob2, lectura && lectura.modos, lecturas), L.gris, L.W, L.H, L.paso);
-      const texto = lectura && lectura.texto ? await textoDeUnaLectura(w, lecturas, lectura.texto, L.blob, L.blob2, 0) : null;
+      let palabras = Anon.ajustarAltoPalabras(await leerVarias(L.blob, L.blob2, lectura && lectura.modos, lecturas, modoTexto), L.gris, L.W, L.H, L.paso);
+      const leido = modoTexto ? await textoDeUnaLectura(lecturas, modoTexto, L.blob, L.blob2, 0) : null, texto = leido && leido.texto;
       // "Palabras" de poca confianza fuera del papel: la textura de la alfombra o de la mesa junto a la orilla.
       // No son texto: no se tapan ni cuentan para decidir si el encabezado se leyó mal.
       if (mascara !== false && fuente.casco) palabras = palabras.filter(p => {
@@ -4257,6 +4347,7 @@ async function leerHoja(fuente, lienzo, q, paso, opc, mascara, lectura){
         const r = L.aLienzo(p.caja);
         return dentroPoligono({x: (r.x0 + r.x1) / 2, y: (r.y0 + r.y1) / 2}, fuente.casco);
       });
+      const calidadTodo = Anon.calidadLectura(palabras);
       const zt = Anon.zonasATapar(palabras, 0, opc);
       // Los recuadros de un mismo dato se juntan donde el renglón ya está derecho; en la foto siguen su curva
       const cajas = Anon.fusionarCajas(zt.cajas).map(c => {
@@ -4272,27 +4363,69 @@ async function leerHoja(fuente, lienzo, q, paso, opc, mascara, lectura){
         const m = margenes[i];
         const poli = Anon.contornoCaja({x0: p.caja.x0 - m.izq, x1: p.caja.x1 + m.der, y0: p.caja.y0 - m.arriba, y1: p.caja.y1 + m.abajo}, L.aPunto);
         return {texto: p.texto, conf: p.conf, caja: L.aLienzo(p.caja), poli};
-      }), analisis: zt.res, texto};
+      }), analisis: zt.res, texto, calidad: leido ? leido.calidad : calidadTodo};
     } catch(err){ if (/tardó/.test(String(err && err.message))) throw err; }
   }
   // Sin hoja reconocible (o si falló lo anterior): se lee la imagen completa tal cual. Para el texto del modo
   // automático, sin las líneas de las tablas y en PNG (sin pérdida: la compresión borraba puntos decimales)
-  if (lectura && lectura.texto){
-    const lc = lienzo.getContext("2d", {willReadFrequently: true}), W = lienzo.width, H = lienzo.height, id = lc.getImageData(0, 0, W, H), px = id.data;
-    const g = new Uint8Array(W * H); for (let i = 0, j = 0; j < g.length; i += 4, j++) g[j] = (px[i] * 299 + px[i + 1] * 587 + px[i + 2] * 114) / 1000;
-    if (Anon.borrarLineas(g, W, H)){ for (let i = 0, j = 0; j < g.length; i += 4, j++) if (g[j] === 255){ px[i] = px[i + 1] = px[i + 2] = 255; } lc.putImageData(id, 0, 0); }
+  if (modoTexto){
+    const lc = lienzo.getContext("2d", {willReadFrequently: true}), W = lienzo.width, H = lienzo.height, g = grisDe(lc, W, H);
+    if (Anon.borrarLineas(g, W, H)){
+      const id = lc.getImageData(0, 0, W, H), px = id.data; for (let i = 0, j = 0; j < g.length; i += 4, j++) if (g[j] === 255){ px[i] = px[i + 1] = px[i + 2] = 255; } lc.putImageData(id, 0, 0); }
   }
-  const imagen = await new Promise(r => lectura && lectura.texto ? lienzo.toBlob(r, "image/png") : lienzo.toBlob(r, "image/jpeg", 0.92));
+  const imagen = await (modoTexto ? lienzoABlob(lienzo, "image/png") : lienzoABlob(lienzo, "image/jpeg", 0.92));
   if (window.__velo) window.__velo.imagenTexto = imagen;   // solo en las pruebas automáticas
   if (!imagen) throw new Error("no se pudo preparar la imagen");
-  const lecturas = {}, palabras = await leerVarias(await cargarOcr(), imagen, null, lectura && lectura.modos, lecturas);
+  const lecturas = {}, palabras = await leerVarias(imagen, null, lectura && lectura.modos, lecturas, modoTexto);
   const zt = Anon.zonasATapar(palabras, null, opc);
-  const texto = lectura && lectura.texto ? await textoDeUnaLectura(await cargarOcr(), lecturas, lectura.texto, imagen, null, null) : null;
+  const leido = modoTexto ? await textoDeUnaLectura(lecturas, modoTexto, imagen, null, null) : null, texto = leido && leido.texto;
   const hs = palabras.map(p => p.caja.y1 - p.caja.y0).sort((a, b) => a - b), margenes = Anon.margenesCajas(palabras, hs[hs.length >> 1] || 20);
   return {cajas: Anon.fusionarCajas(zt.cajas), palabras: palabras.map((p, i) => {
     const m = margenes[i], c = p.caja, x0 = c.x0 - m.izq, x1 = c.x1 + m.der, y0 = c.y0 - m.arriba, y1 = c.y1 + m.abajo;
     return Object.assign({}, p, {poli: [{x: x0, y: y0}, {x: x1, y: y0}, {x: x1, y: y1}, {x: x0, y: y1}]});
-  }), analisis: zt.res, completa: true, texto};
+  }), analisis: zt.res, completa: true, texto, calidad: leido ? leido.calidad : Anon.calidadLectura(palabras)};
+}
+// Dónde está la hoja en la imagen: sus bordes (para recortar y corregir la perspectiva), el alto de sus renglones y cómo
+// se curvan. Solo píxeles, sin leer. cuad: el cuadrilátero de la hoja, o null si llena la foto (se usa entera)
+function hojaEnImagen(ctx, w, h){
+  try {
+    const gris = grisDe(ctx, w, h), hoja = Anon.analizarHoja(gris, w, h); let cuad = null;
+    if (hoja.zona && Math.max(w, h) >= 1000){
+      const z = hoja.zona;
+      cuad = Anon.detectarHoja(gris, w, h, hoja) || cuadDe(z.x0, z.y0, z.x1, z.y1);
+      const t = Anon.tamanoCuad(cuad);
+      if (t.ancho * t.alto >= w * h * 0.92){ cuad = null; hoja.contorno = hoja.casco = null; }
+    }
+    return {hoja, cuad};
+  } catch(e){ return {hoja: null, cuad: null}; }
+}
+/* ---------- hojas giradas: de lado o al revés ---------- */
+// Una hoja fotografiada de lado o al revés se "lee" como letras sueltas sin sentido (y un nombre al revés no se
+// reconoce como nombre: no se ocultaría). Cuando una página se lee mal, se prueba a leerla en los cuatro giros, en
+// pequeño, y si otro giro es claramente mejor, se gira la imagen y se lee de nuevo.
+// La imagen girada (0, 90, 180 o 270 grados en el sentido del reloj), con lado mayor de hasta `lado` píxeles
+function lienzoGirado(img, giro, lado){
+  const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height, k = lado ? Math.min(1, lado / Math.max(w0, h0)) : 1;
+  const w = Math.max(1, Math.round(w0 * k)), h = Math.max(1, Math.round(h0 * k)), deLado = giro % 180 !== 0;
+  const c = document.createElement("canvas"); c.width = deLado ? h : w; c.height = deLado ? w : h;
+  const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+  g.translate(c.width / 2, c.height / 2); g.rotate(giro * Math.PI / 180); g.drawImage(img, -w / 2, -h / 2, w, h);
+  return c;
+}
+// (la prueba de giros se lee en pequeño; la imagen girada queda con hasta 4096 px de lado: más no cabe en el lienzo de
+// algunos teléfonos, y para leer sobra)
+const LADO_PRUEBA_GIRO = 1500, LADO_GIRADA = 4096;
+// Cuánto hay que girar la imagen para que el texto quede al derecho (0 si ya lo está o no se puede saber)
+async function mejorGiro(img){
+  try {
+    const puntajes = await Promise.all([0, 90, 180, 270].map(async (giro, k) => {
+      const c = lienzoGirado(img, giro, LADO_PRUEBA_GIRO), b = await lienzoABlob(c, "image/jpeg", 0.9); c.width = c.height = 0;
+      return b ? Anon.calidadLectura(await leerImagen(await lectorPara(k), b, "11")).puntaje : 0;
+    }));
+    if (window.__velo) window.__velo.puntajesGiro = puntajes;   // solo en las pruebas automáticas
+    return Anon.elegirGiro(puntajes);
+  } catch(e){ return 0; }
 }
 // ¿El punto cae dentro del recuadro? (siguiendo su contorno si lo tiene)
 const cubrePunto = (t, x, y) => t.poli ? dentroPoligono({x, y}, t.poli) : (x >= t.x0 && x <= t.x1 && y >= t.y0 && y <= t.y1);
@@ -4305,19 +4438,7 @@ async function leerFoto(f){
   // Dónde está la hoja: sus bordes (para recortar y corregir la perspectiva), el alto de sus renglones y cómo se curvan.
   // Solo píxeles, sin leer; se hace una vez por imagen.
   const completa = cuadDe(0, 0, f.w, f.h);
-  if (f.hoja === undefined){
-    f.hoja = null; f.cuadHoja = null;
-    try {
-      const gris = grisDe(cc, f.w, f.h);
-      f.hoja = Anon.analizarHoja(gris, f.w, f.h);
-      if (f.hoja.zona && Math.max(f.w, f.h) >= 1000){
-        const z = f.hoja.zona;
-        f.cuadHoja = Anon.detectarHoja(gris, f.w, f.h, f.hoja) || cuadDe(z.x0, z.y0, z.x1, z.y1);
-        const t = Anon.tamanoCuad(f.cuadHoja);
-        if (t.ancho * t.alto >= f.w * f.h * 0.92){ f.cuadHoja = null; f.hoja.contorno = f.hoja.casco = null; }   // la hoja llena la foto: se usa entera
-      }
-    } catch(e){ f.hoja = null; f.cuadHoja = null; }
-  }
+  if (f.hoja === undefined){ const r = hojaEnImagen(cc, f.w, f.h); f.hoja = r.hoja; f.cuadHoja = r.cuad; }
   // Recorte propuesto: la hoja, sin la mesa o la alfombra de alrededor (se puede cambiar al revisar)
   if (f.cuadHoja && f.pendiente && !f.pts && !(ed.gesto && caso.fotos[ed.idx] === f)){ f.pts = f.cuadHoja.map(p => ({x: p.x, y: p.y})); avisarLectura(f); }
   // Qué se lee: la hoja o, si el médico amplió el recorte más allá de lo leído, el recorte nuevo
@@ -4332,6 +4453,13 @@ async function leerFoto(f){
     const blanco = !pedido && f.hoja && f.hoja.contorno ? f.hoja.contorno : null;
     const L = await leerHoja({img: f.img, w: f.w, h: f.h, casco: f.hoja && f.hoja.casco, blanco}, c, q, f.hoja && f.hoja.paso, {ocultar: caso.ocultar}, !pedido);
     if (!caso.fotos.includes(f)) return;   // la quitaron mientras se leía
+    // La primera lectura salió mal: ¿la hoja está de lado o al revés? Si es así, se gira la foto y se lee de nuevo
+    if (!f.giroVisto && !pedido){
+      f.giroVisto = true;
+      const giro = Anon.lecturaPobre(L.calidad) ? await mejorGiro(f.img) : 0;
+      if (giro && caso.fotos.includes(f) && await girarFoto(f, giro)){ c.width = c.height = 0; toast("Giré una foto que estaba de lado o al revés."); encolarLectura(f); avisarLectura(f); return; }
+    }
+    f.calidad = L.calidad;
     const leido = L.completa ? completa : q;
     // Nunca un recuadro fuera de lo leído (la hoja): ahí solo hay fondo
     const adentro = k => Anon.dentroCuad(agrandar(leido, 12), (k.x0 + k.x1) / 2, (k.y0 + k.y1) / 2);
@@ -4373,6 +4501,23 @@ async function leerFoto(f){
   propagarEntidades();
   // Si mientras se leía el recorte volvió a crecer más allá de lo leído, se lee de nuevo
   if (f.ocr === "listo" && excedeLectura(f)) releer(f);
+}
+// Reemplaza la foto del caso por la misma girada (a su resolución completa); lo detectado antes ya no vale
+async function girarFoto(f, giro){
+  try {
+    const c = lienzoGirado(f.img, giro, LADO_GIRADA), b = await lienzoABlob(c, "image/jpeg", 0.95); c.width = c.height = 0;
+    if (!b) return false;
+    const {im, u} = await cargarImagenBlob(b);
+    if (!caso.fotos.includes(f)){ URL.revokeObjectURL(u); return false; }
+    URL.revokeObjectURL(f.src); if (f.url) URL.revokeObjectURL(f.url);
+    const k = Math.min(1, MAXL / Math.max(im.naturalWidth, im.naturalHeight));
+    Object.assign(f, {img: im, src: u, w: Math.max(1, Math.round(im.naturalWidth * k)), h: Math.max(1, Math.round(im.naturalHeight * k)),
+      pts: null, blob: null, url: null, pendiente: true, tapas: [], hoja: undefined, cuadHoja: null, cuadPedido: null, cuadLeido: null,
+      palabras: null, analisis: null, contorno: null, contornoJusto: null, verif: null, fugas: [], girada: giro});
+    // (si se está revisando justo esta imagen, el editor pasa a la girada)
+    if (!$("editor").hidden && caso.fotos[ed.idx] === f){ ed.gesto = null; ed.respaldo = null; ed.respaldoTapas = []; lz.width = f.w; lz.height = f.h; ajustarLienzo(); }
+    return true;
+  } catch(e){ return false; }
 }
 // Corre los lados de un cuadrilátero m píxeles hacia afuera
 function agrandar(q, m){ return Anon.agrandarCuad ? Anon.agrandarCuad(q, m) : q; }
@@ -4524,7 +4669,7 @@ async function paginaComoImagen(pdf, n, paraLeer){
     const g2 = c2.getContext("2d"); g2.imageSmoothingEnabled = true; g2.imageSmoothingQuality = "high"; g2.drawImage(c, 0, 0, c2.width, c2.height);
     c.width = c.height = 0; c = c2;
   }
-  const b = await new Promise(r => paraLeer ? c.toBlob(r, "image/png") : c.toBlob(r, "image/jpeg", 0.9));
+  const b = await (paraLeer ? lienzoABlob(c, "image/png") : lienzoABlob(c, "image/jpeg", 0.9));
   if (b && baja) b.bajaResolucion = true;
   // (una página de PDF es plana y derecha: se lee tal cual, sin buscar la hoja ni enderezar renglones; enderezar una
   // tabla desplazaba las columnas de la derecha una fila y la IA asignaba valores al examen equivocado)
@@ -4619,6 +4764,7 @@ function pintarFotos(){
       : "Lista para enviar" + (n ? " · " + n + (n === 1 ? " dato tapado" : " datos tapados") : "") + (f.verif === "ok" ? " · comprobada" : f.verif === "aceptada" ? " · enviada tal como la dejaste" : "");
     return '<div class="foto-item' + (f.pendiente ? " pend" : "") + (fugas ? " fuga" : "") + '"><img src="' + esc(f.url || f.src) + '" alt="Imagen ' + (i + 1) + '">' +
       (f.borrosa ? '<span class="estado aviso">⚠ Salió borrosa: conviene quitarla y sacarla de nuevo</span>' : "") +
+      (!f.borrosa && f.ocr === "listo" && f.calidad && Anon.lecturaDudosa(f.calidad) ? '<span class="estado aviso">⚠ Se leyó con dificultad: revisa bien que no quede un dato a la vista, o sácala de nuevo</span>' : "") +
       '<span class="nota">' + info + '</span><div class="fila">' +
       '<button class="btn sec chico" type="button" data-tachar="' + i + '">Revisar</button>' +
       '<button class="btn sec chico" type="button" data-quitar="' + i + '">Quitar</button></div></div>';
@@ -4957,7 +5103,7 @@ async function exportarFoto(f, relleno){
   o.getContext("2d").putImageData(new ImageData(R.img, Wo, Ho), 0, 0);
   // Para ubicar en la foto lo que la comprobación encuentre: imagen enviada → lienzo
   if (!relleno) f.exportacion = {h: R.h, bx0, by0, e};
-  const blob = await new Promise(r => o.toBlob(r, "image/jpeg", 0.9));
+  const blob = await lienzoABlob(o, "image/jpeg", 0.9);
   o.width = o.height = 0;
   return blob;
 }
@@ -5068,7 +5214,7 @@ const bloqueoInst = via => viaPermitida(via) ? null : "Modo institucional: «" +
 const LS_AJ = "velo_ajustes";
 const ajustesBase = () => ({auto: true, prov: enMarco ? "claude-app" : "compartir", modelos: {}, claves: {}, recordar: true, tarea: "exam",
   avisar: true, plazoBorrado: 24, conservarFotos: false, camaraAlIniciar: false, fechasSinRotulo: "edad", usos: {},
-  inst: false, vias: [], responsable: "", contacto: "", nitidez: "media", porTarea: true});
+  inst: false, vias: [], responsable: "", contacto: "", nitidez: "media", porTarea: true, paralelo: null});
 function leerAjustes(){
   let g = null;
   try { g = JSON.parse(localStorage.getItem(LS_AJ) || "null"); } catch(e){}
@@ -5082,6 +5228,7 @@ function leerAjustes(){
   a.auto = a.auto !== false; a.avisar = a.avisar !== false; a.conservarFotos = a.conservarFotos === true; a.camaraAlIniciar = a.camaraAlIniciar === true;
   if (!["alta", "media", "baja", "no"].includes(a.nitidez)) a.nitidez = "media";
   a.porTarea = a.porTarea !== false;
+  if (a.paralelo !== true && a.paralelo !== false) a.paralelo = null;   // (null: lo decide la app según el dispositivo)
   if (![0, 1, 24, 168].includes(a.plazoBorrado)) a.plazoBorrado = 24;
   a.inst = a.inst === true; a.vias = Array.isArray(a.vias) ? a.vias.filter(v => VIAS[v]) : [];
   a.responsable = String(a.responsable || "").slice(0, 120); a.contacto = String(a.contacto || "").slice(0, 120);
@@ -5104,6 +5251,9 @@ const nombreTarea = id => { const t = TAREAS.find(x => x.id === id); return t ? 
 function pintarAjustes(){
   const p = aj.prov, P = PROV[p];
   $("ajAuto").checked = aj.auto; $("ajCamaraInicio").checked = aj.camaraAlIniciar;
+  { const n = hilosOcr(); $("ajParalelo").checked = n > 1;
+    $("ajParaleloNota").textContent = "Las lecturas de cada página se hacen a la vez con varios lectores: la página se lee 2 a 3 veces más rápido, pero usa más memoria. " +
+      (n > 1 ? "Ahora: " + n + " lectores. Si la app se cierra sola al leer, apágalo." : "Ahora: 1 lector. En un teléfono viene apagado; enciéndelo si tiene memoria de sobra."); }
   $("ajProv").innerHTML = Object.keys(PROV).filter(k => k !== "claude-app" || enMarco)
     .map(k => '<option value="' + k + '"' + (k === p ? " selected" : "") + ">" + esc(PROV[k].nombre) + (viaPermitida(viaDeProv(k)) ? "" : " — sin contrato") + "</option>").join("");
   const esClaude = p === "claude" || p === "claude-app", porPrompt = esClaude && aj.porTarea;
@@ -5140,7 +5290,7 @@ function cerrarAjustes(){ $("ajustes").hidden = true; document.body.classList.re
 $("btnAjustes").addEventListener("click", abrirAjustes);
 // Aviso de privacidad (desde Ajustes o desde el pie de la página), con su versión y fecha y el responsable que se
 // configuró en Ajustes (Ley 21.719, art. 14 ter a, b y c)
-const VERSION_APP = "velo-v21";
+const VERSION_APP = "velo-v22";
 const AVISO = {version: "2.1", fecha: "6 de noviembre de 2026"};
 function abrirPrivacidad(){
   $("pvVersion").textContent = "Versión " + AVISO.version + " del " + AVISO.fecha + " · " + VERSION_APP;
@@ -5408,6 +5558,7 @@ $("ajRecordar").addEventListener("change", () => {
   guardarAjustes();
 });
 $("ajTarea").addEventListener("change", () => { aj.tarea = $("ajTarea").value || null; guardarAjustes(); aplicarModo(); });
+$("ajParalelo").addEventListener("change", () => { aj.paralelo = $("ajParalelo").checked; guardarAjustes(); pintarAjustes(); });
 $("ajCamaraInicio").addEventListener("change", () => { aj.camaraAlIniciar = $("ajCamaraInicio").checked; guardarAjustes(); });
 $("ajFechas").addEventListener("change", () => { aj.fechasSinRotulo = $("ajFechas").value; guardarAjustes(); analizar(); });
 $("ajAvisar").addEventListener("change", () => { aj.avisar = $("ajAvisar").checked; guardarAjustes(); pedirPermisoAvisos(); });
@@ -5544,9 +5695,13 @@ const NOTA_AUTO_ESCRITO = NOTA_AUTO.replace(/el texto del médico se leyó en su
   "el texto del médico se anonimizó en su dispositivo antes de enviártelo. No se adjuntan imágenes.");
 // bajas: páginas que venían de un PDF escaneado con poca resolución (la lectura suele perder decimales y filas de tablas)
 const NOTA_BAJA_RES = " Algunas páginas venían de un PDF escaneado con poca resolución: es probable que la lectura haya perdido puntos decimales («293» por «2.93»), corrido columnas o saltado filas de tablas. Transcribe todo lo que esté, página por página, y marca con «(?)» cada valor dudoso o fisiológicamente implausible, diciendo cuál podría ser; no lo corrijas en silencio ni lo omitas.";
-function mensajeAuto(salida, tareaId, directa, escrito, bajas){
+// dudosas: números de las páginas que el lector leyó con poca confianza (foto borrosa, oscura o letra muy chica)
+const notaDudosas = (ds, total) => !ds || !ds.length ? "" : " El lector tuvo poca confianza al leer " + (total === 1 ? "la página" : ds.length === 1 ? "la página " + ds[0] : "las páginas " + listaY(ds)) +
+  ": ahí puede haber palabras y cifras mal leídas o faltantes. Transcribe lo que esté y marca con «(?)» lo dudoso o incoherente; no lo corrijas en silencio ni lo completes.";
+const listaY = l => l.length > 1 ? l.slice(0, -1).join(", ") + " y " + l[l.length - 1] : String(l[0] || "");
+function mensajeAuto(salida, tareaId, directa, escrito, bajas, dudosas, total){
   const t = TAREAS.find(x => x.id === tareaId);
-  return (escrito ? NOTA_AUTO_ESCRITO : NOTA_AUTO) + (bajas ? NOTA_BAJA_RES : "") + (directa ? NOTA_SIN_ARCHIVOS : "") + NOTA_WORD +
+  return (escrito ? NOTA_AUTO_ESCRITO : NOTA_AUTO) + (bajas ? NOTA_BAJA_RES : "") + notaDudosas(dudosas, total) + (directa ? NOTA_SIN_ARCHIVOS : "") + NOTA_WORD +
     "\n\n=== PREFERENCIAS GENERALES DEL MÉDICO ===\n" + P.preferencias.trim() +
     (t ? "\n\n=== INSTRUCCIONES DEL PROYECTO «" + t.nombre.toUpperCase() + "» ===\n" + P[t.id].trim() + textoArchivosProyecto(t) : "") +
     "\n\n=== TEXTO DEL MÉDICO ===\n" + salida;
@@ -5564,7 +5719,8 @@ function leerFotoAuto(blob){
   ocrCola = p.catch(() => {});
   return p;
 }
-async function leerFotoTexto(blob){
+// sinGiro: la imagen ya se giró (no se prueba de nuevo). Devuelve además la calidad de la lectura y cuánto se giró
+async function leerFotoTexto(blob, sinGiro){
   const {im, u} = await cargarImagenBlob(blob);
   const c = document.createElement("canvas");
   try {
@@ -5574,20 +5730,18 @@ async function leerFotoTexto(blob){
     const cc = c.getContext("2d", {willReadFrequently: true}); cc.drawImage(im, 0, 0, w, h);
     // La hoja en la foto (bordes, perspectiva, renglones), igual que al tapar una foto en el modo manual. Una página de
     // PDF ya es plana y derecha: se lee tal cual
-    let hoja = null, cuad = null;
-    if (!blob.dePdf) try {
-      const gris = grisDe(cc, w, h);
-      hoja = Anon.analizarHoja(gris, w, h);
-      if (hoja.zona && Math.max(w, h) >= 1000){
-        const z = hoja.zona;
-        cuad = Anon.detectarHoja(gris, w, h, hoja) || cuadDe(z.x0, z.y0, z.x1, z.y1);
-        const t = Anon.tamanoCuad(cuad);
-        if (t.ancho * t.alto >= w * h * 0.92){ cuad = null; hoja.contorno = hoja.casco = null; }
-      }
-    } catch(e){ hoja = null; cuad = null; }
+    const {hoja, cuad} = blob.dePdf ? {hoja: null, cuad: null} : hojaEnImagen(cc, w, h);
     const q = cuad || (hoja && hoja.zona ? cuadDe(0, 0, w, h) : null);
     const L = await leerHoja({img: im, w, h, casco: hoja && hoja.casco, blanco: hoja && hoja.contorno}, c, q, hoja && hoja.paso, {}, true, {texto: (window.__velo && window.__velo.modoTexto) || MODO_TEXTO});
-    return {texto: L.texto || "", analisis: L.analisis};
+    // La página se leyó mal: ¿está de lado o al revés? Si otro giro se lee claramente mejor, se gira y se lee de nuevo
+    if (!sinGiro && Anon.lecturaPobre(L.calidad)){
+      const giro = await mejorGiro(im);
+      if (giro){
+        const cg = lienzoGirado(im, giro, LADO_GIRADA), b = await lienzoABlob(cg, blob.dePdf ? "image/png" : "image/jpeg", 0.95); cg.width = cg.height = 0;
+        if (b){ b.dePdf = blob.dePdf; b.bajaResolucion = blob.bajaResolucion; return Object.assign(await leerFotoTexto(b, true), {girada: giro}); }
+      }
+    }
+    return {texto: L.texto || "", analisis: L.analisis, calidad: L.calidad};
   } finally { c.width = c.height = 0; URL.revokeObjectURL(u); }
 }
 // Modo del lector para el texto que se envía (6: un bloque de texto; en las pruebas conserva mejor las fechas y cada
@@ -5595,9 +5749,16 @@ async function leerFotoTexto(blob){
 const MODO_TEXTO = "6";
 // Fotos, PDF o Word de un caso → texto por página, más lo que la lectura doble encontró para ocultar
 async function leerArchivosAuto(archivos, avance){
-  const paginas = [], analisis = []; let fotos = 0, omitidas = 0;
+  const paginas = [], analisis = [], dudosas = [], giradas = []; let fotos = 0, omitidas = 0;
   let bajas = 0;
-  const deFoto = async b => { if (b && b.bajaResolucion) bajas++; fotos++; avance(paginas.length + 1); const r = await leerFotoAuto(b); paginas.push(r.texto); if (r.analisis) analisis.push(r.analisis); };
+  const deFoto = async b => {
+    if (b && b.bajaResolucion) bajas++; fotos++; avance(paginas.length + 1);
+    const r = await leerFotoAuto(b);
+    paginas.push(r.texto); if (r.analisis) analisis.push(r.analisis);
+    // (páginas que el lector leyó con poca confianza, y las que venían de lado o al revés y se giraron)
+    if (Anon.lecturaDudosa(r.calidad)) dudosas.push(paginas.length);
+    if (r.girada) giradas.push(paginas.length);
+  };
   for (const f of archivos){
     const n = (f.name || "").toLowerCase(), tipo = f.type || "";
     if (tipo === "application/pdf" || n.endsWith(".pdf")){
@@ -5630,7 +5791,7 @@ async function leerArchivosAuto(archivos, avance){
   }
   const texto = paginas.map((t, i) => (paginas.length > 1 ? "--- Página " + (i + 1) + " ---\n" : "") + String(t || "").trim()).join("\n\n");
   // (escrito: nada se leyó de una foto; si hubo alguna, rigen las reglas de fotos)
-  return {texto, ocultar, nombres: [...nombres], escrito: fotos === 0, paginas: paginas.length, omitidas, bajas};
+  return {texto, ocultar, nombres: [...nombres], escrito: fotos === 0, paginas: paginas.length, omitidas, bajas, dudosas, giradas};
 }
 /* ---------- la cola de casos, guardada en el dispositivo (IndexedDB) ---------- */
 // Si iOS cierra la app (al bloquear el teléfono o al pasar a otra), cada caso sigue donde quedó al volver a abrirla.
@@ -5668,7 +5829,7 @@ async function bdHacer(modo, fn, almacen){
     });
   } catch(e){ return null; }
 }
-const CAMPOS_CASO = ["id", "n", "creado", "terminado", "estado", "prov", "modelo", "tarea", "archivos", "enviado", "respuesta", "truncado", "usado", "mapa", "fechasOcultas", "residuos", "error", "conteo", "registrado", "avisoNitidez", "paginas", "omitidas", "bajas"];
+const CAMPOS_CASO = ["id", "n", "creado", "terminado", "estado", "prov", "modelo", "tarea", "archivos", "enviado", "respuesta", "truncado", "usado", "mapa", "fechasOcultas", "residuos", "error", "conteo", "registrado", "avisoNitidez", "paginas", "omitidas", "bajas", "dudosas", "giradas"];
 
 /* ---------- cifrado de los casos guardados (Ley 21.719, art. 14 quinquies a: seudonimización y cifrado) ---------- */
 // Una llave AES-GCM de 256 bits creada en este dispositivo, no exportable (ni la propia página puede leerla), guardada
@@ -5789,8 +5950,8 @@ async function procesarCaso(c){
         if (c.archivos && !c.archivos.length) c.archivos = null;
       }
       c.fechasOcultas = [...p.fechasOcultas];
-      c.paginas = lect.paginas; c.omitidas = lect.omitidas || 0; c.bajas = lect.bajas || 0;
-      if (p.ok){ c.mapa = Object.assign({}, p.cons.mapa); c.conteo = Object.assign({}, p.cons.conteo); c.enviado = mensajeAuto(p.cons.salida, c.tarea, c.prov !== "compartir", lect.escrito, lect.bajas); }
+      c.paginas = lect.paginas; c.omitidas = lect.omitidas || 0; c.bajas = lect.bajas || 0; c.dudosas = lect.dudosas || []; c.giradas = lect.giradas || [];
+      if (p.ok){ c.mapa = Object.assign({}, p.cons.mapa); c.conteo = Object.assign({}, p.cons.conteo); c.enviado = mensajeAuto(p.cons.salida, c.tarea, c.prov !== "compartir", lect.escrito, lect.bajas, lect.dudosas, lect.paginas); }
       else { c.estado = "revision"; c.residuos = [...p.residuos].map(r => ({tipo: r.tipo, texto: r.texto})); c.paso = ""; }
     }
     // Compartir: el caso queda listo para que el médico lo comparta con su app de IA (la app no envía nada)
@@ -5923,6 +6084,9 @@ function pintarCasos(){
     if (c.estado === "revision") h += '<p class="estado error">' + esc(MSG_REVISION_AUTO(c.residuos)) + "</p>";
     // (las páginas que no se leyeron se dicen siempre: el médico debe saber que la respuesta no las incluye)
     if (c.bajas) h += '<p class="estado aviso">' + (c.bajas === 1 ? "Una página del PDF es una imagen" : c.bajas + " páginas del PDF son imágenes") + " de baja resolución: la lectura puede equivocarse en decimales y tablas. Compara los valores con el original o, si lo tienes, usa el PDF original del laboratorio (con texto).</p>";
+    if (c.dudosas && c.dudosas.length) h += '<p class="estado aviso">' + (c.paginas === 1 ? "La página se leyó" : c.dudosas.length === 1 ? "La página " + c.dudosas[0] + " se leyó" : "Las páginas " + listaY(c.dudosas) + " se leyeron") +
+      " con dificultad (foto borrosa, oscura o letra muy chica): compara los valores con el original o sácala de nuevo, más cerca y con buena luz.</p>";
+    if (c.giradas && c.giradas.length) h += '<p class="nota">' + (c.paginas === 1 ? "La página venía" : c.giradas.length === 1 ? "La página " + c.giradas[0] + " venía" : "Las páginas " + listaY(c.giradas) + " venían") + " de lado o al revés: se " + (c.giradas.length === 1 ? "giró" : "giraron") + " antes de leer.</p>";
     if (c.omitidas) h += '<p class="estado aviso">Se leyeron ' + c.paginas + " páginas; " + c.omitidas + (c.omitidas === 1 ? " página quedó" : " páginas quedaron") + " fuera (máximo " + MAX_PAGINAS_AUTO + " por caso). Envíalas en otro caso.</p>";
     if (c.estado === "error") h += '<p class="estado error">' + esc(c.error) + "</p>";
     // Compartir: el médico lo lleva a su app de IA y trae la respuesta de vuelta (para verla con los datos reales)
@@ -6030,46 +6194,96 @@ $("casos").addEventListener("toggle", e => { const d = e.target; if (d.dataset &
 // pierden. Modo manual: al tocar «Listo» las fotos pasan al caso, como si se hubieran adjuntado.
 // Cada foto se revisa apenas se saca: si salió borrosa, la app avisa en el momento para sacarla de nuevo.
 let camStream = null, camCaso = null, camUrls = [], camDestino = "auto", camManual = [], camBorrosas = [], camPendientes = [];
+// camFija: para sacar la foto con toda la resolución del sensor (donde el navegador lo permite); camOcupada: se está
+// sacando una foto; camLuz: el reloj que mira si hay poca luz
+let camPista = null, camFija = null, camOcupada = false, camLuz = null, camLinternaOn = false;
+const CAM_VIDEO = {facingMode: {ideal: "environment"}, width: {ideal: 3264}, height: {ideal: 2448}};
 const camPaginas = () => camDestino === "manual" ? camManual : ((camCaso && camCaso.archivos) || []);
 // (en el modo automático se envía solo el texto: caben más páginas que en el manual, que envía las imágenes)
 const maxCam = () => camDestino === "manual" ? Math.max(0, MAX_FOTOS - caso.fotos.length) : MAX_PAGINAS_AUTO;
 function pintarCam(){
-  $("camMini").innerHTML = camUrls.map((u, i) => '<span class="cam-mini' + (camBorrosas[i] ? " borrosa" : "") + '"><img src="' + esc(u) + '" alt="Página ' + (i + 1) + (camBorrosas[i] ? " (borrosa)" : "") + '">' +
+  $("camMini").innerHTML = camUrls.map((u, i) => '<span class="cam-mini' + (camBorrosas[i] ? " borrosa" : "") + '"><img src="' + esc(u) + '" data-ver-pagina="' + i + '" alt="Página ' + (i + 1) + (camBorrosas[i] ? " (borrosa)" : "") + ': toca para verla en grande">' +
     '<button type="button" data-quitar-pagina="' + i + '" aria-label="Quitar la página ' + (i + 1) + '">×</button></span>').join("");
   const n = camPaginas().length;
-  $("camListo").disabled = !n || camPendientes.length > 0;
+  $("camListo").disabled = !n || camPendientes.length > 0 || camOcupada;
   $("camListo").textContent = n ? "Listo (" + n + ")" : "Listo";
-  $("camDisparo").disabled = !camStream || n >= maxCam();
+  $("camDisparo").disabled = !camStream || n >= maxCam() || camOcupada;
+  $("camDisparo").classList.toggle("ocupada", camOcupada);
 }
+const TXT_CAMARA = "Encuadra la hoja completa, con buena luz, y toca el botón. Saca todas las páginas seguidas; al terminar, «Listo».";
 async function abrirCamara(destino){
   camDestino = destino === "manual" ? "manual" : "auto";
-  camCaso = null; camUrls = []; camManual = []; camBorrosas = []; camPendientes = []; $("camSistema").hidden = true; $("camAviso").hidden = true;
+  camCaso = null; camUrls = []; camManual = []; camBorrosas = []; camPendientes = []; camOcupada = false; $("camAviso").hidden = true;
+  $("camPista").hidden = true; $("camLinterna").hidden = true; $("camVista").hidden = true;
   $("camara").hidden = false; document.body.classList.add("modal-abierto");
   $("camInfo").textContent = "Abriendo la cámara…"; pintarCam();
+  // (el lector se va cargando mientras se sacan las fotos: la primera página no espera por él)
+  cargarOcr().catch(() => {});
   try {
     if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) throw new Error("sin cámara");
-    camStream = await navigator.mediaDevices.getUserMedia({audio: false, video: {facingMode: {ideal: "environment"}, width: {ideal: 3264}, height: {ideal: 2448}}});
+    camStream = await navigator.mediaDevices.getUserMedia({audio: false, video: CAM_VIDEO});
     if ($("camara").hidden){ detenerCamara(); return; }
     $("camVideo").srcObject = camStream;
     try { await $("camVideo").play(); } catch(e){}
-    $("camInfo").textContent = "Encuadra la hoja completa, con buena luz, y toca el botón. Saca todas las páginas seguidas; al terminar, «Listo».";
+    $("camInfo").textContent = TXT_CAMARA;
+    afinarCamara(camStream.getVideoTracks()[0]);
   } catch(e){
     camStream = null;
     // Sin permiso de cámara aquí (por ejemplo, dentro de otra app): la cámara del sistema, una foto por vez, pero sin
     // salir de aquí: cada foto se suma a las anteriores hasta tocar «Listo»
-    $("camInfo").textContent = "No se pudo abrir la cámara en la app. Usa «Usar la cámara del sistema» para cada página (se van sumando) y al terminar, «Listo».";
-    $("camSistema").hidden = false;
+    $("camInfo").textContent = "No se pudo abrir la cámara en la app. Usa «Cámara del sistema» para cada página (se van sumando) y al terminar, «Listo».";
   }
   pintarCam();
 }
+// Lo que la cámara de este teléfono permita: enfoque continuo, linterna y foto fija a resolución completa. Nada de esto
+// es obligatorio: si el navegador no lo tiene, la cámara funciona igual (con el cuadro del video).
+async function afinarCamara(pista){
+  camPista = pista || null; camFija = null; camLinternaOn = false;
+  if (!pista) return;
+  let caps = {};
+  try { caps = (pista.getCapabilities && pista.getCapabilities()) || {}; } catch(e){}
+  if (Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous")) try { await pista.applyConstraints(Object.assign({}, CAM_VIDEO, {advanced: [{focusMode: "continuous"}]})); } catch(e){}
+  if (camPista !== pista) return;   // (la cámara se cerró mientras tanto)
+  $("camLinterna").hidden = !caps.torch; $("camLinterna").setAttribute("aria-pressed", "false");
+  if (typeof window.ImageCapture === "function") try { camFija = new window.ImageCapture(pista); } catch(e){ camFija = null; }
+  // Con poca resolución (el video de algunos teléfonos es de 2 megapíxeles), la letra chica no se lee bien
+  let st = {}; try { st = pista.getSettings ? pista.getSettings() : {}; } catch(e){}
+  if (!camFija && st.width && st.height && st.width * st.height < 3e6 && $("camInfo").textContent === TXT_CAMARA)
+    $("camInfo").textContent = TXT_CAMARA + " Para letra chica, acércate o usa «Cámara del sistema», que tiene más resolución.";
+  clearInterval(camLuz); camLuz = setInterval(mirarLuz, 1500);
+}
+// ¿Hay poca luz? Se mira el video en pequeño cada 1,5 segundos (el promedio de gris de un cuadro de 64 px)
+const LUZ_MINIMA = 55;
+function mirarLuz(){
+  const v = $("camVideo");
+  if ($("camara").hidden || !camStream){ clearInterval(camLuz); camLuz = null; return; }
+  if (!v.videoWidth || camOcupada) return;
+  try {
+    const c = document.createElement("canvas"); c.width = 64; c.height = 48;
+    const g = c.getContext("2d", {willReadFrequently: true}); g.drawImage(v, 0, 0, 64, 48);
+    const gr = grisDe(g, 64, 48); let suma = 0; for (let i = 0; i < gr.length; i++) suma += gr[i];
+    const oscuro = suma / gr.length < LUZ_MINIMA && !camLinternaOn;
+    $("camPista").hidden = !oscuro;
+    if (oscuro) $("camPista").textContent = "Hay poca luz: la foto puede salir borrosa. " + ($("camLinterna").hidden ? "Acércate a una ventana o enciende una luz." : "Enciende la linterna o acércate a una ventana.");
+  } catch(e){}
+}
+$("camLinterna").addEventListener("click", async () => {
+  if (!camPista) return;
+  const on = !camLinternaOn;
+  try {
+    await camPista.applyConstraints(Object.assign({}, CAM_VIDEO, {advanced: [{torch: on}]}));
+    camLinternaOn = on; $("camLinterna").setAttribute("aria-pressed", String(on)); if (on) $("camPista").hidden = true;
+  } catch(e){ toast("No se pudo " + (on ? "encender" : "apagar") + " la linterna."); }
+});
 function detenerCamara(){
+  clearInterval(camLuz); camLuz = null; camPista = null; camFija = null; camLinternaOn = false;
   if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
   $("camVideo").srcObject = null;
 }
 // Cierra la cámara; devuelve el caso que se estaba capturando (si había)
 function cerrarCamara(){
-  detenerCamara(); camUrls.forEach(u => URL.revokeObjectURL(u)); camUrls = []; camBorrosas = []; camPendientes = [];
-  $("camara").hidden = true; $("camAviso").hidden = true; document.body.classList.remove("modal-abierto");
+  detenerCamara(); camUrls.forEach(u => URL.revokeObjectURL(u)); camUrls = []; camBorrosas = []; camPendientes = []; camOcupada = false;
+  $("camara").hidden = true; $("camAviso").hidden = true; $("camVista").hidden = true; $("camVista").removeAttribute("src"); document.body.classList.remove("modal-abierto");
   const c = camCaso; camCaso = null; pintarCasos();
   return c;
 }
@@ -6088,9 +6302,9 @@ function revisarNitidez(img, w, h){
     const r = Anon.nitidez(grisDe(g, W, H), W, H); c.width = c.height = 0;
     // (sin bordes fuertes: si quedan bordes tenues, las letras se borronearon; si tampoco, no hay texto en la foto)
     const sinTexto = r.bordes < 50 && r.tenues < 50, umbral = umbralNitidez();
-    if (umbral === Infinity) return {borrosa: false, sinTexto: false, valor: r.ancho, umbral};
-    return {borrosa: !sinTexto && (r.bordes < 50 || r.ancho >= umbral), sinTexto, valor: r.ancho, umbral};
-  } catch(e){ return {borrosa: false, sinTexto: false, valor: null}; }
+    if (umbral === Infinity) return {borrosa: false, sinTexto: false, valor: r.ancho, umbral, bordes: r.bordes};
+    return {borrosa: !sinTexto && (r.bordes < 50 || r.ancho >= umbral), sinTexto, valor: r.ancho, umbral, bordes: r.bordes};
+  } catch(e){ return {borrosa: false, sinTexto: false, valor: null, bordes: 0}; }
 }
 async function nitidezDeArchivo(f){
   if (!/^image\//.test(f.type || "")) return null;
@@ -6115,15 +6329,71 @@ function mostrarPendiente(){
   }
   pintarCam();
 }
-async function capturar(){
-  const v = $("camVideo"); if (!camStream || !v.videoWidth || camPaginas().length >= maxCam()) return;
-  // (sacar otra foto mientras se avisa de una borrosa es sacarla de nuevo)
-  camPendientes = [];
+// Un cuadro del video, con su medida de nitidez
+function cuadroDeVideo(v){
   const cv = document.createElement("canvas"); cv.width = v.videoWidth; cv.height = v.videoHeight;
   cv.getContext("2d").drawImage(v, 0, 0);
-  const r = revisarNitidez(cv, cv.width, cv.height);
-  const b = await new Promise(res => cv.toBlob(res, "image/jpeg", 0.92)); cv.width = cv.height = 0;
-  if (!b) return;
+  return {cv, r: revisarNitidez(cv, cv.width, cv.height)};
+}
+// ¿a es más nítida que b? (con texto a la vista, la de bordes más finos)
+const masNitida = (a, b) => {
+  const ta = a.bordes >= 50, tb = b.bordes >= 50;
+  return ta !== tb ? ta : ta ? a.valor < b.valor : a.bordes > b.bordes;
+};
+const esperarCuadro = v => new Promise(ok => {
+  if (window.__velo && window.__velo.esperaCuadro){ setTimeout(ok, window.__velo.esperaCuadro); return; }   // (en las pruebas, la espera se fija)
+  const t = setTimeout(ok, 160);
+  if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(() => { clearTimeout(t); setTimeout(ok, 60); });
+});
+// Ráfaga: tres cuadros seguidos del video y queda el más nítido (el pulso al tocar el botón mueve el teléfono: el
+// primer cuadro suele ser el peor)
+const RAFAGA = 3;
+async function rafaga(v){
+  let mejor = null;
+  for (let i = 0; i < RAFAGA; i++){
+    if (i) await esperarCuadro(v);
+    if (!v.videoWidth) break;
+    const c = cuadroDeVideo(v);
+    if (!mejor || masNitida(c.r, mejor.r)){ if (mejor) mejor.cv.width = mejor.cv.height = 0; mejor = c; }
+    else c.cv.width = c.cv.height = 0;
+    // (un cuadro ya nítido no necesita más intentos)
+    if (mejor.r.bordes >= 50 && mejor.r.valor && mejor.r.valor < 5.5) break;
+  }
+  if (!mejor) return null;
+  const b = await lienzoABlob(mejor.cv, "image/jpeg", 0.92); mejor.cv.width = mejor.cv.height = 0;
+  return b ? {b, r: mejor.r} : null;
+}
+// Foto fija con toda la resolución del sensor (varias veces la del video): la letra chica se lee mucho mejor. Si el
+// teléfono no responde en 2,5 segundos o falla, se usa el video
+const ESPERA_FOTO_FIJA = 2500;
+async function fotoFija(){
+  if (!camFija) return null;
+  const fija = camFija;
+  try {
+    const b = await Promise.race([fija.takePhoto(), new Promise((_, no) => setTimeout(() => no(new Error("tardó")), ESPERA_FOTO_FIJA))]);
+    if (!b || !b.size) throw new Error("vacía");
+    const r = await nitidezDeArchivo(b.type ? b : new Blob([b], {type: "image/jpeg"}));
+    if (!r) throw new Error("no se pudo abrir");
+    return {b: b.type ? b : new Blob([b], {type: "image/jpeg"}), r};
+  } catch(e){
+    if (camFija === fija) camFija = null;   // (no se intenta de nuevo en esta sesión de cámara: no demora las fotos siguientes)
+    return null;
+  }
+}
+async function capturar(){
+  const v = $("camVideo"); if (camOcupada || !camStream || !v.videoWidth || camPaginas().length >= maxCam()) return;
+  // (sacar otra foto mientras se avisa de una borrosa es sacarla de nuevo)
+  camPendientes = []; camOcupada = true; pintarCam();
+  const sesion = camStream;
+  // (el destello y la vibración confirman que la foto se sacó)
+  if (!reducido()){ const fl = $("camFlash"); fl.classList.remove("ya"); void fl.offsetWidth; fl.classList.add("ya"); }
+  if (navigator.vibrate) try { navigator.vibrate(30); } catch(e){}
+  let foto = null;
+  try { foto = await fotoFija() || await rafaga(v); } catch(e){ foto = null; }
+  camOcupada = false;
+  if (camStream !== sesion || $("camara").hidden) return;   // (la cámara se cerró mientras se sacaba)
+  if (!foto){ $("camInfo").textContent = "No se pudo sacar la foto. Inténtalo de nuevo."; pintarCam(); return; }
+  const {b, r} = foto;
   if (r.borrosa || r.sinTexto){ camPendientes.push({b, sinTexto: r.sinTexto, valor: r.valor, umbral: r.umbral}); mostrarPendiente(); return; }
   $("camAviso").hidden = true;
   agregarPagina(b, false);
@@ -6132,7 +6402,11 @@ $("camRepetir").addEventListener("click", () => { camPendientes.shift(); mostrar
 $("camUsar").addEventListener("click", () => { const p = camPendientes.shift(); if (p) agregarPagina(p.b, true); mostrarPendiente(); });
 // Quitar una página ya sacada (por ejemplo, la que salió borrosa)
 $("camMini").addEventListener("click", e => {
+  // (tocar una miniatura la muestra en grande, para comprobar que se lee; otro toque vuelve a la cámara)
+  const ver = e.target.closest("[data-ver-pagina]");
+  if (ver && camUrls[+ver.dataset.verPagina]){ $("camVista").src = camUrls[+ver.dataset.verPagina]; $("camVista").hidden = false; return; }
   const b = e.target.closest("[data-quitar-pagina]"); if (!b) return;
+  $("camVista").hidden = true;
   const i = +b.dataset.quitarPagina, lista = camPaginas(); if (!lista[i]) return;
   lista.splice(i, 1); URL.revokeObjectURL(camUrls[i]); camUrls.splice(i, 1); camBorrosas.splice(i, 1);
   if (camCaso) actualizar(camCaso);
@@ -6144,6 +6418,7 @@ function terminarCamara(){
   if (fotos){ if (fotos.length) procesarArchivos(fotos.map((b, i) => new File([b], "foto-" + (i + 1) + ".jpg", {type: "image/jpeg"}))); return; }
   if (c){ contarUso(c.tarea); c.estado = "procesando"; actualizar(c); procesarCaso(c); }
 }
+$("camVista").addEventListener("click", () => { $("camVista").hidden = true; });
 $("btnCamara").addEventListener("click", () => { pedirPermisoAvisos(); abrirCamara("auto"); });
 $("btnFotosManual").addEventListener("click", () => abrirCamara("manual"));
 $("camDisparo").addEventListener("click", capturar);

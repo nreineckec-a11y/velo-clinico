@@ -4,7 +4,17 @@ MODO AUTOMÁTICO (activado por omisión; se apaga en Ajustes)
 - Arrastras el PDF a la zona «Adjuntar PDF» (o a cualquier parte de la página) o haces clic en ella para elegirlo; varios archivos juntos son un solo caso. También sirven fotos y Word. Con «Tomar foto» sacas todas las páginas seguidas y tocas «Listo»: van juntas, como un solo documento.
 - Cada foto se revisa apenas se saca. Si salió borrosa (o no se ve texto), la app avisa en el momento: «Sacarla de nuevo» la descarta y «Usar igual» la suma marcada en rojo. Una página ya sacada se quita con la × de su miniatura. Las fotos elegidas de la galería también se revisan: si alguna salió borrosa, el caso espera («Procesar igual» o «Borrar») antes de leerla.
 - La sensibilidad del aviso se elige en Ajustes: «Sensible», «Normal» (por omisión: avisa si la foto está claramente desenfocada o movida), «Poco sensible» o «No avisar». El aviso muestra la medida de la foto: el ancho de los bordes de las letras en píxeles (más alto, más borrosa) y desde cuánto avisa.
-- Sin permiso de cámara en la app, «Usar la cámara del sistema» saca una foto por vez, pero cada una se suma a las anteriores hasta tocar «Listo».
+- «Cámara del sistema» está siempre a mano en la cámara de la app: saca una foto por vez, con toda la resolución, el enfoque y el flash del teléfono, y cada una se suma a las anteriores hasta tocar «Listo». Es también la salida cuando la app no tiene permiso de cámara.
+- La cámara de la app, al tocar el botón:
+  - Si el teléfono lo permite, saca una foto fija con toda la resolución del sensor (varias veces la del video): la letra chica se lee mucho mejor. Si no responde en 2,5 segundos o falla, usa el video.
+  - Con el video, saca una ráfaga de tres cuadros y se queda con el más nítido (el pulso al tocar el botón mueve el teléfono).
+  - Un destello y una vibración corta confirman que la foto se sacó; mientras se saca, el botón queda en espera.
+  - Enfoque continuo y botón «Linterna», solo en los teléfonos que los ofrecen a una página web.
+  - Si hay poca luz, avisa mientras encuadras. Si el video del teléfono tiene poca resolución, lo dice y sugiere acercarse o usar «Cámara del sistema».
+  - Tocar una miniatura muestra la página en grande para comprobar que se lee; otro toque vuelve a la cámara.
+- Hojas de lado o al revés: si una página se lee mal, la app la prueba en los cuatro giros y, si otro se lee claramente mejor, la gira y la lee de nuevo (en el modo manual, la foto girada reemplaza a la original y se avisa). Antes, una hoja al revés se «leía» como letras sin sentido que se enviaban igual, y un nombre al revés no se reconocía como nombre.
+- Calidad de la lectura: si el lector leyó una página con poca confianza (foto borrosa, oscura o letra muy chica), el caso lo dice con el número de página y la IA recibe la indicación de marcar con «(?)» lo dudoso de esa página. En el modo manual, la imagen se marca «Se leyó con dificultad».
+- Lectura en paralelo (Ajustes): las tres lecturas de cada página se reparten entre varios lectores y la página se lee 2 a 3 veces más rápido. En un computador viene encendida (hasta 3 lectores); en un teléfono, apagada salvo que tenga memoria de sobra, porque cada lector ocupa memoria. El texto que resulta es el mismo. El lector se empieza a cargar al abrir la cámara.
 - En el modo manual, «Tomar fotos» abre la misma cámara; al tocar «Listo», las fotos pasan al caso para revisarlas y taparlas.
 - Documentos largos: en el modo automático un caso puede tener hasta 40 páginas (fotos o PDF escaneado), porque se envía solo el texto. En el modo manual, que envía las imágenes, caben hasta 20 por caso (la cámara y «Adjuntar» juntas). Si un PDF trae más, el caso dice cuántas quedaron fuera; nunca se omiten en silencio.
 - PDF escaneado con poca resolución (la imagen de la página tiene unos 100 ppi o menos, típico de un PDF armado con capturas):
@@ -42,7 +52,7 @@ MODO AUTOMÁTICO (activado por omisión; se apaga en Ajustes)
   - Apagado: un solo modelo (el que escribas, por omisión claude-opus-5-5), con esfuerzo alto. ChatGPT y Gemini usan siempre el modelo de Ajustes.
 - El texto leído en el teléfono puede traer errores (decimales, unidades, tablas): la IA recibe ese aviso. Revisa «Ver lo enviado» cuando un valor no te cuadre.
 - Acceso rápido en iPhone: en Ajustes, «Abrir la cámara al iniciar la app»; así, al tocar el ícono de Velo en la pantalla de inicio la cámara queda lista. La dirección de la app terminada en «?camara» hace lo mismo. (Una app web no puede tener App Intents, botón de acción ni extensión para compartir: son exclusivos de las apps nativas. Un Atajo que abre la dirección la abre en Safari, que no comparte los ajustes ni los casos con la app instalada.)
-- Dentro de la app de Claude la cámara puede no estar disponible: usa «Usar la cámara del sistema» o «Adjuntar PDF».
+- Dentro de la app de Claude la cámara puede no estar disponible: usa «Cámara del sistema» o «Adjuntar PDF».
 
 MODO MANUAL
 Pegas o dictas el caso (o adjuntas foto, PDF o Word), la app oculta nombres, RUT, fecha de nacimiento, teléfonos, direcciones, folios y números de orden en el mismo teléfono, y la IA responde con los datos reales repuestos.
